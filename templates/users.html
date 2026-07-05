@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Пользователи · Киллер / Папарацци</title>
+<style>
+  :root {
+    --bg: #eaeef4; --surface: #ffffff; --btn-bg: #f4f6fa; --btn-bg-hover: #eef2f7;
+    --text: #171a21; --text-dim: #6a7280; --border: #e2e7ef;
+    --accent: #e23b4e; --accent-soft: rgba(226,59,78,.10);
+    --shadow: 0 6px 24px rgba(23,26,40,.10); --shadow-sm: 0 2px 6px rgba(23,26,40,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1116; --surface: #191d24; --btn-bg: #222831; --btn-bg-hover: #2a313b;
+      --text: #e9ecf1; --text-dim: #9aa4b2; --border: #2a313b;
+      --accent: #ff5069; --accent-soft: rgba(255,80,105,.14);
+      --shadow: 0 8px 30px rgba(0,0,0,.45); --shadow-sm: 0 2px 8px rgba(0,0,0,.35);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+                 "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+    line-height: 1.5; min-height: 100dvh; display: flex; justify-content: center;
+    padding: 18px 12px calc(18px + env(safe-area-inset-bottom));
+  }
+  .app { width: 100%; max-width: 620px; display: flex; flex-direction: column; gap: 14px; }
+
+  .topbar { display: flex; align-items: center; gap: 12px; }
+  .logo {
+    width: 42px; height: 42px; flex: 0 0 42px; border-radius: 13px;
+    display: grid; place-items: center; font-size: 21px;
+    background: linear-gradient(135deg, var(--accent), #8a1f2b); box-shadow: var(--shadow-sm);
+  }
+  .titles { display: flex; flex-direction: column; }
+  .titles .name { font-weight: 700; font-size: 16px; }
+  .titles .sub { font-size: 13px; color: var(--text-dim); }
+  .back { margin-left: auto; text-decoration: none; color: var(--accent); font-weight: 600; font-size: 13px; }
+
+  h2 { margin: 6px 2px 0; font-size: 15px; }
+  .section {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    box-shadow: var(--shadow-sm); overflow: hidden;
+  }
+  .scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; white-space: nowrap; }
+  th, td { padding: 9px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+  th { font-size: 11.5px; text-transform: uppercase; letter-spacing: .4px; color: var(--text-dim); font-weight: 700; }
+  tr:last-child td { border-bottom: none; }
+  td.st { font-size: 16px; }
+  td.num { color: var(--text-dim); font-variant-numeric: tabular-nums; }
+  td.name { white-space: normal; font-weight: 600; }
+  td.nick { color: var(--text-dim); }
+  .empty { padding: 16px; text-align: center; color: var(--text-dim); font-size: 14px; }
+  .legend { font-size: 12px; color: var(--text-dim); margin: 2px; line-height: 1.7; }
+</style>
+</head>
+<body>
+  <main class="app">
+    <div class="topbar">
+      <div class="logo">👥</div>
+      <div class="titles">
+        <span class="name">Пользователи</span>
+        <span class="sub">игроков: {{ total_players }} из {{ total_users }}</span>
+      </div>
+      <a class="back" href="/app?role=admin">← в меню админа</a>
+    </div>
+
+    <h2>🎯 Активные игроки ({{ players | length }})</h2>
+    <div class="section scroll">
+      {% if players %}
+      <table>
+        <thead><tr><th>ℹ️</th><th>#</th><th>Order</th><th>🔪</th><th>Ник</th><th>Имя</th></tr></thead>
+        <tbody>
+        {% for u in players %}
+          <tr>
+            <td class="st">{{ u.status }}</td>
+            <td class="num">{{ u.id }}</td>
+            <td class="num">{{ u.order if u.order is not none else '—' }}</td>
+            <td class="num">{{ u.kills }}</td>
+            <td class="nick">{{ u.nick }}</td>
+            <td class="name">{{ u.name }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="empty">Пока нет активных игроков.</div>
+      {% endif %}
+    </div>
+
+    <h2>👀 Вне игры ({{ non_players | length }})</h2>
+    <div class="section scroll">
+      {% if non_players %}
+      <table>
+        <thead><tr><th>ℹ️</th><th>#</th><th>Ник</th><th>Имя</th></tr></thead>
+        <tbody>
+        {% for u in non_players %}
+          <tr>
+            <td class="st">{{ u.status }}</td>
+            <td class="num">{{ u.id }}</td>
+            <td class="nick">{{ u.nick }}</td>
+            <td class="name">{{ u.name }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="empty">Все пользователи в игре.</div>
+      {% endif %}
+    </div>
+
+    <p class="legend">
+      👑 админ · 👤 обычный · 🚫 отключил уведомления &nbsp;|&nbsp;
+      ✅ в игре · 🔴 не в игре · 👀 зритель · 💚 жив · 💛 под прицелом · ☠️ выбыл · ♻️ ждёт воскрешения
+    </p>
+  </main>
+</body>
+</html>

@@ -122,12 +122,29 @@ class User:
                 return nm
         return f"Игрок #{self.id}"
 
+    def get_username(self):
+        """Первый доступный username из привязанных каналов (@nick)."""
+        for ident in self.identities():
+            un = ident.get_username()
+            if un:
+                return un
+        return None
+
     # --- роль / статус ----------------------------------------------------
 
     def is_admin(self) -> bool:  return bool(self._get("is_admin"))
     def is_player(self) -> bool: return bool(self._get("is_player"))
     def is_alive(self) -> bool:  return bool(self._get("is_alive"))
     def get_score(self) -> int:  return self._get("kill_count") or 0
+
+    def get_game_order(self):    return self._get("game_order")
+    def get_target(self):        return self._get("target")
+    def get_killed_by(self):     return self._get("killed_by")
+
+    def is_queued_for_revival(self) -> bool:
+        return query_one(
+            "SELECT 1 FROM revive_queue WHERE user_id = ? LIMIT 1", (self.id,)
+        ) is not None
 
     def set_admin(self, value: bool):  self._set("is_admin", int(value))
     def set_player(self, value: bool): self._set("is_player", int(value))

@@ -129,9 +129,46 @@ def admin_view(user: User):
     else:
         buttons.append(_btn("✅ Открыть регистрацию", "open_reg"))
 
+    buttons.append(_btn("👥 Список пользователей", href="/app/users", full=True))
     buttons.append(_btn("📋 Журнал (admin log)", href="/admin-log", full=True))
     buttons.append(_btn("🔄 Обновить", "noop", full=True))
     return message, buttons
+
+
+# ---------------------------------------------------------------------------
+# Статусы пользователя для списка (эмодзи как в боте, h_list.py)
+# ---------------------------------------------------------------------------
+
+def bot_status_emoji(user: User) -> str:
+    if user.is_admin():
+        return "👑"
+    idents = user.identities()
+    if idents and all(i.is_muted() for i in idents):
+        return "🚫"
+    return "👤"
+
+
+def game_status_emoji(user: User, game: Game) -> str:
+    if not game.is_started():
+        return "✅" if user.is_player() else "🔴"
+    if not user.is_player():
+        return "👀"
+    if user.is_alive():
+        return "💛" if user.get_killed_by() else "💚"
+    return "♻️" if user.is_queued_for_revival() else "☠️"
+
+
+def user_row(user: User, game: Game) -> dict:
+    un = user.get_username()
+    return {
+        "id": user.id,
+        "status": bot_status_emoji(user) + game_status_emoji(user, game),
+        "order": user.get_game_order() if user.is_player() else None,
+        "kills": user.get_score() if user.is_player() else None,
+        "nick": f"@{un}" if un else "—",
+        "name": user.get_name(),
+        "is_admin": user.is_admin(),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -274,6 +311,32 @@ def dashboard(request: Request, role: str = "player"):
             "message_html": message,
             "buttons": buttons,
             "support_contact": SUPPORT_CONTACT,
+        },
+    )
+
+
+@app.get("/app/users", response_class=HTMLResponse)
+def users_list(request: Request):
+    user = current_user(request)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+    if not user.is_admin():
+        return RedirectResponse(url="/app", status_code=303)
+
+    game = Game()
+    all_users = User.all()
+    players = [u for u in all_users if u.is_player()]
+    players.sort(key=lambda u: (u.get_game_order() is None, u.get_game_order() or 0, u.id))
+    non_players = [u for u in all_users if not u.is_player()]
+
+    return templates.TemplateResponse(
+        request, "users.html",
+        {
+            "total_users": len(all_users),
+            "total_players": len(players),
+            "game_started": game.is_started(),
+            "players": [user_row(u, game) for u in players],
+            "non_players": [user_row(u, game) for u in non_players],
         },
     )
 
