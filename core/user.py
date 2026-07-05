@@ -8,7 +8,7 @@ import random
 
 from db import query_one, query_all, execute
 from core.identity import Identity
-from config import DEFAULT_ADMINS
+from config import DEFAULT_ADMINS, CONFIRM_KILLS
 
 
 def _is_default_admin(username) -> bool:
@@ -290,6 +290,104 @@ class User:
     def is_being_caught(self) -> bool:
         """Жив, но кто-то уже заявил о его поимке (ждёт подтверждения)."""
         return self.is_alive() and self._get("killed_by") is not None
+
+    def is_awaiting_confirmation(self) -> bool:
+        """Игрок заявил о поимке своей цели и ждёт её подтверждения."""
+        target = self.get_target_user()
+        murderer = target.get_murderer() if target else None
+        return bool(target and target.is_being_caught()
+                    and murderer and murderer.id == self.id)
+
+    # --- поимки (основной игровой цикл) -----------------------------------
+
+    def _log(self, text):
+        from core import admin_log
+        admin_log.log(text)
+
+    def attempt_capture(self):
+        """Игрок сообщает о поимке своей текущей цели. (ok, сообщение)."""
+        if not self.is_alive():
+            return False, "Вы выбыли из игры."
+        victim = self.get_target_user()
+        if victim is None or not victim.is_alive():
+            return False, "Сейчас у вас нет активной цели."
+        if victim.is_being_caught():
+            return False, "По этой цели уже есть заявка на поимку."
+
+        if not CONFIRM_KILLS:
+            self.capture(victim)
+            return True, "Поимка засчитана."
+
+        victim.set_murderer(self)
+        self._log(f"📸 {self.get_name()} заявил(а) о поимке {victim.get_name()} "
+                  "(ждёт подтверждения)")
+        self.notify(f"📸 Вы заявили о поимке цели ({victim.get_name()}).\n"
+                    "⏳ Ожидайте подтверждения от игрока.")
+        victim.notify("📸 Другой игрок заявил, что поймал вас.\n"
+                      "Пожалуйста, подтвердите или опровергните это на сайте.")
+        return True, "Заявка отправлена, ждём подтверждения цели."
+
+    def cancel_capture(self):
+        """Отозвать свою заявку о поимке цели (пока цель не ответила)."""
+        victim = self.get_target_user()
+        if victim and self.is_awaiting_confirmation():
+            victim.set_murderer(None)
+            self._log(f"✖️ {self.get_name()} отозвал(а) заявку о поимке "
+                      f"{victim.get_name()}")
+            self.notify("✖️ Вы отозвали заявку о поимке.")
+            victim.notify("✅ Заявка о вашей поимке отозвана — тревога отменена.")
+            return True, "Заявка отозвана."
+        return False, "Нет активной заявки для отмены."
+
+    def confirm_capture(self):
+        """Жертва подтверждает, что её поймали → устранение."""
+        murderer = self.get_murderer()
+        if murderer is None or not self.is_being_caught():
+            return False, "Сейчас никто не заявлял о вашей поимке."
+        self._log(f"✅ {self.get_name()} подтвердил(а) поимку игроком "
+                  f"{murderer.get_name()}")
+        murderer.capture(self)
+        return True, "Поимка подтверждена."
+
+    def deny_capture(self):
+        """Жертва опровергает поимку → остаётся в игре."""
+        murderer = self.get_murderer()
+        if not self.is_being_caught():
+            return False, "Сейчас никто не заявлял о вашей поимке."
+        self.set_murderer(None)
+        self._log(f"🚫 {self.get_name()} не подтвердил(а) поимку игроком "
+                  f"{murderer.get_name() if murderer else '?'}")
+        self.notify("💚 Вы отклонили заявку о поимке — остаётесь в игре.")
+        if murderer:
+            murderer.notify(f"🚫 Игрок {self.get_name()} не подтвердил(а) поимку. "
+                            "Попробуйте ещё раз.")
+        return True, "Поимка отклонена."
+
+    def capture(self, victim: "User"):
+        """Засчитать поимку victim игроком self: устранение, счёт, новая цель."""
+        self._log(f"📸 {self.get_name()} поймал(а) {victim.get_name()}")
+        self.increment_score()
+        victim.set_alive(False)
+        victim.set_target_id(None)
+        victim.set_murderer(self)
+
+        victim.notify(f"🗿 Увы, вас поймал(а) {self.get_name()}. Вы выбыли из игры.\n"
+                      "Спасибо за игру!")
+
+        from core.game import Game
+        game = Game()
+        finished = game.check_finished()
+
+        if self.is_alive() and not finished:
+            self.update_target_quiet()
+            new_target = self.get_target_user()
+            self.notify(f"📸 Поздравляем! Вы поймали {victim.get_name()}.\n"
+                        f"🎯 Ваша новая цель: {new_target.get_name() if new_target else '—'}")
+        elif self.is_alive():
+            self.notify(f"📸 Поздравляем! Вы поймали {victim.get_name()}.")
+
+        if finished:
+            game.announce_winner()
 
     # --- уведомления ------------------------------------------------------
 

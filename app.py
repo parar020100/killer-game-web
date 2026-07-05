@@ -218,7 +218,16 @@ def _awaiting_confirmation(user: User) -> bool:
 
 
 def _player_game_buttons(user: User):
-    """Кнопки для игрока в идущей игре (интерактив включается в цикле поимок)."""
+    """Кнопки для игрока в идущей игре — зависят от его состояния в цикле поимок."""
+    if not user.is_alive():
+        return []
+    if user.is_being_caught():
+        return [_btn("✅ Подтвердить поимку", "confirm_capture", "primary", full=True),
+                _btn("🚫 Это не так", "deny_capture", "danger", full=True)]
+    if user.is_awaiting_confirmation():
+        return [_btn("✖️ Отменить заявку о поимке", "cancel_capture", full=True)]
+    if user.get_target_user():
+        return [_btn("📸 Сообщить о поимке цели", "report_capture", "primary", full=True)]
     return []
 
 
@@ -348,6 +357,14 @@ def apply_action(action: str, user: User):
             user.leave()
             admin_log.log(f"➖ {who} вышел(ла) из игры")
             user.notify("🚪 Вы вышли из игры.")
+    elif action == "report_capture":
+        user.attempt_capture()
+    elif action == "cancel_capture":
+        user.cancel_capture()
+    elif action == "confirm_capture":
+        user.confirm_capture()
+    elif action == "deny_capture":
+        user.deny_capture()
     # "noop" / незнакомое — просто перерисовать
 
 

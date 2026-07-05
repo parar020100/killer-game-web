@@ -108,6 +108,19 @@ class Game:
             return True
         return False
 
+    def announce_winner(self):
+        """Объявить, что остался один игрок: уведомить победителя и остальных."""
+        from core import admin_log
+        winner = self.get_winner()
+        if winner:
+            admin_log.log(f"🏆 {winner.get_name()} остался(ась) последним игроком!")
+            winner.notify("🏆 Вы остались последним игроком! Поздравляем!\n"
+                          "Ожидайте подведения итогов от организаторов.")
+        for p in User.all_players():
+            if not winner or p.id != winner.id:
+                p.notify("🏁 В живых остался один игрок. Игра на паузе — "
+                         "ждём подведения итогов от организаторов.")
+
     def _top_grouped(self, alive: bool, limit: int = 3):
         """Списки игроков по убыванию счёта: [[лидеры], [вторые], [третьи]]."""
         rows = query_all(
