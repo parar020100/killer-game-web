@@ -262,15 +262,14 @@ def capture_prompt(user: User):
         return None
     # ВАЖНО: имя «охотника» раскрывать нельзя — анонимность преследователя
     # ключевая механика игры (как в боте: «Другой игрок сообщил…»).
-    message = ("📸 <strong>Другой игрок сообщил, что ему удалось вас поймать.</strong>\n"
-               "Если это правда — подтвердите поимку. Если нет — отклоните.")
     return {
         "hint": "— вас поймали? —",
-        "message": message,
+        "message": "📸 <strong>Другой игрок сообщил, что поймал(а) вас.</strong>",
         "kind": "alert",
+        # Половинные кнопки в одну строку (сетка .keyboard — 2 колонки).
         "buttons": [
-            _btn("✅ Подтвердить поимку", "confirm_capture", "primary", full=True),
-            _btn("🚫 Это не так", "deny_capture", "danger", full=True),
+            _btn("✅ Подтвердить", "confirm_capture", "primary"),
+            _btn("🚫 Это не так", "deny_capture", "danger"),
         ],
     }
 

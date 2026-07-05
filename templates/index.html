@@ -153,8 +153,8 @@
 
     {% for s in sections %}
       {% if s.message or s.buttons %}
-      {% if s.message %}<div class="bubble{% if s.kind %} {{ s.kind }}{% endif %}">{{ s.message | safe }}</div>{% endif %}
       <p class="section-hint">{{ s.hint }}</p>
+      {% if s.message %}<div class="bubble{% if s.kind %} {{ s.kind }}{% endif %}">{{ s.message | safe }}</div>{% endif %}
       <div class="keyboard">
         {% for b in s.buttons %}
           {% if b.href %}
