@@ -133,9 +133,9 @@ def linkify(text: str) -> Markup:
 # Кнопки и экраны игрового дашборда
 # ---------------------------------------------------------------------------
 
-def _btn(label, action=None, kind="", full=False, href=None, todo=False):
+def _btn(label, action=None, kind="", full=False, href=None, todo=False, toggle=None):
     return {"label": label, "action": action, "kind": kind, "full": full,
-            "href": href, "todo": todo}
+            "href": href, "todo": todo, "toggle": toggle}
 
 
 # --- правила игры (HTML-файл из config.RULES_FILENAME) ----------------------
@@ -310,6 +310,9 @@ def admin_management_buttons(user: User):
         b.append(_btn("▶️ Продолжить", "resume", "primary"))
     else:
         b.append(_btn("⏸️ Пауза", "pause"))
+    # Показать/скрыть встроенный список игроков (рядом с паузой; состояние —
+    # в localStorage, поэтому кнопка-переключатель на клиенте, а не форма).
+    b.append(_btn("👥 Список игроков", toggle="userlist"))
     # Регистрация: закрыть, если открыта; открыть — только вне активной игры/на паузе.
     if game.is_registration_open():
         b.append(_btn("🚫 Закрыть регистрацию", "close_reg"))
@@ -319,10 +322,10 @@ def admin_management_buttons(user: User):
     if game.is_paused():
         b.append(_btn("🏁 Завершить (итоги)", "end_game", "danger"))
         b.append(_btn("♻️ Сбросить игру", "reset_game", "danger"))
-    # Инструменты (тоже по две в ряд).
+    # Инструменты (тоже по две в ряд). Список игроков — встроенный на этом же
+    # экране (кнопка-переключатель выше), отдельная страница-ссылка не нужна.
     if game.is_started():
         b.append(_btn("📊 Промежуточные итоги", href="/app/results"))
-    b.append(_btn("👥 Список пользователей", href="/app/users"))
     b.append(_btn("📢 Рассылка", href="/broadcast"))
     b.append(_btn("⚙️ Настройки игры", href="/app/settings"))
     b.append(_btn("📋 Журнал", href="/admin-log"))
@@ -647,6 +650,9 @@ def dashboard(request: Request):
             notifications=recent_notifications(user),
             sections=sections,
             user_list=user_list,
+            # состояние переключателя списка игроков (кука → корректная подпись
+            # кнопки даже при живом обновлении, когда меню перерисовывается)
+            show_userlist=request.cookies.get("userlist") == "1",
             support_contact=SUPPORT_CONTACT,
         ),
     )

@@ -10,7 +10,7 @@
       {% if u.nick and u.nick != '—' %}<span class="unick">{{ u.nick }}</span>{% endif %}
       {% if u.order is not none %}<span class="ubadge">#{{ u.order }}</span>{% endif %}
       {% if u.kills is not none %}<span class="ubadge">🔪 {{ u.kills }}</span>{% endif %}
-      <span class="chev">⚙️ управлять ▾</span>
+      <span class="chev">⚙️<span class="cw"> управлять</span> ▾</span>
     </summary>
     <div class="uactions">
       {% for b in u.buttons %}
