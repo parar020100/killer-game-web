@@ -146,6 +146,18 @@ def init_db():
     );
     """)
 
+    # Постоянная (переиспользуемая) ссылка входа — по одной на КАНАЛ (identity),
+    # т.к. у пользователя может быть и Telegram, и VK, каждый со своей ссылкой.
+    # Хранится только SHA-256-хеш токена; перевыпуск заменяет строку (старая ссылка
+    # перестаёт работать). В отличие от login_token, не имеет срока и не «сгорает».
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS persistent_login (
+        identity_id INTEGER PRIMARY KEY REFERENCES identity(id) ON DELETE CASCADE,
+        token_hash  TEXT NOT NULL UNIQUE,
+        created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+
     _migrate_flat_to_identity(cur)
 
     if cur.execute("SELECT COUNT(*) FROM game").fetchone()[0] == 0:

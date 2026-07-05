@@ -72,6 +72,7 @@
     padding: 13px; border-radius: 13px; cursor: pointer;
   }
   .cmd:hover { filter: brightness(1.05); }
+  .cmd.alt { background: var(--btn-bg); color: var(--text-dim); border-color: var(--border); font-weight: 600; }
 </style>
 </head>
 <body>
@@ -100,6 +101,9 @@
     <div class="composer">
       <form method="post" action="/chat/{{ username }}/start">
         <button type="submit" class="cmd">/start</button>
+      </form>
+      <form method="post" action="/chat/{{ username }}/link">
+        <button type="submit" class="cmd alt" title="постоянная ссылка для входа">🔗 /link</button>
       </form>
     </div>
   </main>

@@ -40,7 +40,7 @@ def create_login_token(user_id: int, ttl_minutes: int = DEFAULT_TTL_MINUTES) -> 
 
 
 def consume_token(token: str):
-    """Проверить и «сжечь» токен. Возвращает user_id или None, если недействителен."""
+    """Проверить и «сжечь» одноразовый токен. Возвращает user_id или None."""
     if not token:
         return None
     row = query_one(
@@ -54,3 +54,40 @@ def consume_token(token: str):
         return None
     execute("UPDATE login_token SET used_at = ? WHERE token = ?", (now, _hash(token)))
     return row["user_id"]
+
+
+# --- постоянная (переиспользуемая) ссылка, по одной на identity -------------
+
+def set_permanent_token(identity_id: int) -> str:
+    """Создать/перевыпустить постоянный токен для канала (старый перестаёт работать).
+
+    Возвращает сырое значение — показать его нужно один раз, в БД хранится лишь хеш.
+    """
+    token = secrets.token_urlsafe(32)
+    execute(
+        "INSERT OR REPLACE INTO persistent_login (identity_id, token_hash) VALUES (?, ?)",
+        (identity_id, _hash(token)),
+    )
+    return token
+
+
+def resolve_permanent_token(token: str):
+    """Вернуть user_id по постоянному токену канала (без «сжигания») или None."""
+    if not token:
+        return None
+    row = query_one(
+        "SELECT i.user_id AS user_id FROM persistent_login p "
+        "JOIN identity i ON i.id = p.identity_id WHERE p.token_hash = ?",
+        (_hash(token),),
+    )
+    return row["user_id"] if row else None
+
+
+def has_permanent_token(identity_id: int) -> bool:
+    return query_one(
+        "SELECT 1 FROM persistent_login WHERE identity_id = ?", (identity_id,)
+    ) is not None
+
+
+def revoke_permanent_token(identity_id: int):
+    execute("DELETE FROM persistent_login WHERE identity_id = ?", (identity_id,))

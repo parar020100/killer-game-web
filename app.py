@@ -267,9 +267,33 @@ def chat_start(request: Request, username: str):
     return RedirectResponse(url=f"/chat/{username}", status_code=303)
 
 
+@app.post("/chat/{username}/link")
+def chat_link(request: Request, username: str):
+    username = chat.normalize(username)
+    user = User.get_or_create_by_tg(username, username=username, name=username)
+    # Ссылка привязана к каналу (tg-идентичности), а не к пользователю: у него
+    # может быть отдельная постоянная ссылка и для VK.
+    ident = user.identity("tg")
+    reissued = auth.has_permanent_token(ident.id)
+    chat.add_user_message(username, "/link")
+    token = auth.set_permanent_token(ident.id)
+    link = f"{request.base_url}login?token={token}"
+    note = "Прежняя постоянная ссылка больше не работает.\n" if reissued else ""
+    chat.add_bot_message(
+        username,
+        "Ваша постоянная ссылка для входа (можно сохранить в закладки):\n"
+        f"{link}\n"
+        f"{note}Она работает всегда и не сгорает. Никому её не пересылайте — "
+        "по ней входят в вашу учётку. Потеряли/утекла — нажмите /link ещё раз, "
+        "и старая ссылка отключится.",
+    )
+    return RedirectResponse(url=f"/chat/{username}", status_code=303)
+
+
 @app.get("/login")
 def login(request: Request, token: str = ""):
-    uid = auth.consume_token(token)
+    # Сначала одноразовый токен (/start), затем постоянный (/link).
+    uid = auth.consume_token(token) or auth.resolve_permanent_token(token)
     if uid is None:
         return HTMLResponse(
             "<h3>Ссылка недействительна или устарела.</h3>"
