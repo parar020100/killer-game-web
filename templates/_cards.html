@@ -1,0 +1,32 @@
+<script>
+// Карточки игроков: открыта одновременно только ОДНА (аккордеон), и её выбор
+// запоминается между перезагрузками (localStorage). Работает вместе с живым
+// обновлением: data-keep в _live.html сохраняет открытую карточку при подмене.
+(function () {
+  var KEY = 'killer.opencard';
+  function cards() { return Array.prototype.slice.call(document.querySelectorAll('details.ucard')); }
+  function uid(d) { return d.getAttribute('data-keep'); }  // "u<id>"
+
+  var openId = null;
+  try { openId = localStorage.getItem(KEY); } catch (e) {}
+
+  // восстановить открытую карточку из прошлого визита
+  if (openId) {
+    cards().forEach(function (d) { if (uid(d) === openId) d.open = true; });
+  }
+
+  // событие toggle не всплывает — слушаем в фазе перехвата на document
+  document.addEventListener('toggle', function (e) {
+    var d = e.target;
+    if (!(d.classList && d.classList.contains('ucard'))) return;
+    if (d.open) {
+      cards().forEach(function (o) { if (o !== d && o.open) o.open = false; });
+      openId = uid(d);
+      try { localStorage.setItem(KEY, openId); } catch (e) {}
+    } else if (uid(d) === openId) {
+      openId = null;
+      try { localStorage.removeItem(KEY); } catch (e) {}
+    }
+  }, true);
+})();
+</script>

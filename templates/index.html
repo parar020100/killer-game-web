@@ -187,7 +187,6 @@
     html.show-userlist .userpanel {
       flex: 1 1 0; min-width: 0; max-width: 640px;
       position: sticky; top: 18px; align-self: flex-start;
-      max-height: calc(100dvh - 36px); overflow-y: auto;
     }
   }
   .upanel-body { display: flex; flex-direction: column; gap: 8px; }
@@ -203,13 +202,14 @@
      ~сотню игроков. Имя при нехватке места усекается многоточием. */
   .cards { display: flex; flex-direction: column; gap: 5px; }
   .ucard {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 11px; overflow: hidden;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 11px;
   }
   .ucard > summary {
     display: flex; align-items: center; gap: 8px; cursor: pointer;
     padding: 7px 11px; list-style: none; -webkit-user-select: none; user-select: none;
-    flex-wrap: nowrap; min-width: 0;
+    flex-wrap: nowrap; min-width: 0; border-radius: 11px;
   }
+  .ucard[open] > summary { border-radius: 11px 11px 0 0; }
   .ucard > summary::-webkit-details-marker { display: none; }
   .ucard > summary .st { font-size: 15px; flex: 0 0 auto; }
   .ucard > summary .uname {
@@ -236,16 +236,17 @@
   .uactions .btn.muted { color: var(--text-dim); opacity: .5; cursor: not-allowed; background: var(--btn-bg); }
   .uactions .btn.todo { color: var(--text-dim); opacity: .5; cursor: not-allowed; }
   .uactions .btn.todo s { text-decoration: line-through; }
-  .uactions .rowfull, .uactions .mini { flex: 1 0 100%; }
 
+  /* «Изменить позицию»/«Счёт» — обычные чипы; окошко всплывает поверх (popover) */
+  .mini { position: relative; }
   .mini > summary { list-style: none; cursor: pointer; }
   .mini > summary::-webkit-details-marker { display: none; }
-  .mini > summary.chip { width: 100%; }
   .mini[open] > summary { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
   .mini-body {
-    margin-top: 6px; padding: 10px; background: var(--btn-bg);
-    border: 1px solid var(--border); border-radius: 11px;
-    display: flex; flex-direction: column; gap: 7px;
+    position: absolute; top: calc(100% + 5px); left: 0; z-index: 30;
+    width: 210px; max-width: calc(100vw - 32px); padding: 10px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 7px;
   }
   .mini-body form { display: flex; gap: 7px; }
   .mini-body input {
@@ -330,6 +331,7 @@
   {% endif %}
   </div>
   {% include "_live.html" %}
+  {% include "_cards.html" %}
   <script>
   // Один переключатель «Показать/Скрыть игроков»: меняет класс на <html>,
   // текст самой кнопки и запоминает выбор в куке (переживает перезагрузку и

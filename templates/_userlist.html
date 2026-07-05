@@ -48,7 +48,7 @@
         </div>
       </details>
       {% else %}
-      <button class="btn chip muted rowfull" disabled title="доступно на паузе">🔢 Изменить позицию</button>
+      <button class="btn chip muted" disabled title="доступно на паузе">🔢 Изменить позицию</button>
       {% endif %}
 
       {# счёт — компактная кнопка, открывающая «окошко» с вводом #}
@@ -66,7 +66,7 @@
         </div>
       </details>
       {% else %}
-      <button class="btn chip muted rowfull" disabled title="доступно на паузе">💯 Счёт</button>
+      <button class="btn chip muted" disabled title="доступно на паузе">💯 Счёт</button>
       {% endif %}
 
       {% if u.username %}<a class="btn chip" href="/chat/{{ u.username }}" target="_blank" rel="noopener">💬 Сообщения</a>{% endif %}
