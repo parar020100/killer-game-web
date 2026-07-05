@@ -344,7 +344,12 @@ def _player_action_buttons(user: User, game: Game):
     elif user.is_awaiting_confirmation():
         b.append(_btn("✖️ Отменить заявку", "cancel_capture", full=True))
     elif user.get_target_user():
-        b.append(_btn(mode.t("report_btn"), "report_capture", "ok", full=True))
+        # Если включён фото-пруф — ведём на страницу с загрузкой фото, иначе
+        # обычная кнопка-действие (мгновенная заявка).
+        if app_settings.photo_proof():
+            b.append(_btn(mode.t("report_btn"), href="/app/capture", kind="ok", full=True))
+        else:
+            b.append(_btn(mode.t("report_btn"), "report_capture", "ok", full=True))
     else:
         b.append(_btn(mode.t("report_btn"), disabled=True, full=True,
                       note="Сейчас у вас нет активной цели."))
@@ -914,6 +919,7 @@ def _settings_ctx(request, user, saved="", **extra):
         rules_files=_rules_choices(),
         extra_questions=app_settings.extra_questions(),
         confirm_kills=app_settings.confirm_kills(),
+        photo_proof=app_settings.photo_proof(),
         game_mode=mode.current(),
         db_files=db.list_db_files(),
         active_db=db.active_db_name(),
@@ -974,6 +980,13 @@ async def settings_save(request: Request):
                          if new else "отключил(а) подтверждение поимок"))
         saved = ("Теперь поимку подтверждает жертва." if new
                  else "Теперь поимка засчитывается сразу, без подтверждения.")
+    elif action == "photo_proof":
+        new = not app_settings.photo_proof()
+        app_settings.set_photo_proof(new)
+        admin_log.log(f"🖼️ {user.get_name()} "
+                      + ("включил(а) фото-пруф поимок" if new else "отключил(а) фото-пруф поимок"))
+        saved = ("Теперь при поимке нужно приложить фото."
+                 if new else "Фото-пруф поимок отключён.")
     elif action == "extra_questions":
         # Собираем пары label_i / q_i (пустые строки = удалённые вопросы).
         old_labels = {p[0] for p in app_settings.extra_questions()}
@@ -1131,6 +1144,72 @@ async def profile_save(request: Request):
     values = {"real_name": name}
     return _render_profile(request, user, values, {}, "Профиль обновлён.",
                            get_extra_answers(user))
+
+
+_PHOTO_EXTS = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp",
+               "image/gif": ".gif", "image/heic": ".heic"}
+
+
+def _save_capture_photo(user: User, upload) -> bool:
+    """Сохранить фото-пруф поимки в data/photos/ (как файлы бота). True при успехе."""
+    if upload is None or not getattr(upload, "filename", ""):
+        return False
+    import mimetypes
+    ct = getattr(upload, "content_type", "") or ""
+    ext = _PHOTO_EXTS.get(ct) or (Path(upload.filename).suffix.lower() or ".jpg")
+    photos_dir = db.DATA_DIR / "photos"
+    photos_dir.mkdir(parents=True, exist_ok=True)
+    import time
+    un = user.get_username() or f"id{user.id}"
+    safe = re.sub(r"[^A-Za-z0-9_.-]", "_", un)
+    dest = photos_dir / f"{safe}_{int(time.time())}{ext}"
+    data = upload.file.read()
+    if not data:
+        return False
+    dest.write_bytes(data)
+    return True
+
+
+@app.get("/app/capture", response_class=HTMLResponse)
+def capture_form(request: Request):
+    user = current_user(request)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+    # Форма фото-пруфа доступна только когда пруф включён и есть активная цель.
+    game = Game()
+    target = user.get_target_user()
+    if not (app_settings.photo_proof() and user.is_player() and user.is_alive()
+            and game.is_started() and target and not user.is_awaiting_confirmation()):
+        return _redirect(request, "/app")
+    return templates.TemplateResponse(
+        request, "capture.html",
+        _ctx(request, target_name=target.get_name(), report_label=mode.t("report_btn"),
+             error=""),
+    )
+
+
+@app.post("/app/capture", response_class=HTMLResponse)
+async def capture_submit(request: Request):
+    user = current_user(request)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+    game = Game()
+    target = user.get_target_user()
+    if not (app_settings.photo_proof() and user.is_player() and user.is_alive()
+            and game.is_started() and target and not user.is_awaiting_confirmation()):
+        return _redirect(request, "/app")
+
+    form = await request.form()
+    photo = form.get("photo")
+    if not _save_capture_photo(user, photo):
+        return templates.TemplateResponse(
+            request, "capture.html",
+            _ctx(request, target_name=target.get_name(), report_label=mode.t("report_btn"),
+                 error="Пожалуйста, прикрепите фотографию поимки."),
+        )
+    admin_log.log(f"🖼️ {user.get_name()} приложил(а) фото-пруф поимки цели")
+    user.attempt_capture()
+    return _redirect(request, "/app")
 
 
 @app.get("/app/secret", response_class=HTMLResponse)

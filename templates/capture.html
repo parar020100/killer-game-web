@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Фото-пруф · Киллер / Папарацци</title>
+<style>
+  :root {
+    --bg: #eaeef4; --surface: #ffffff; --btn-bg: #f4f6fa;
+    --text: #171a21; --text-dim: #6a7280; --border: #e2e7ef;
+    --accent: #e23b4e; --accent-soft: rgba(226,59,78,.10); --accent-border: rgba(226,59,78,.28);
+    --ok: #2e9b57; --ok-soft: rgba(46,155,87,.12); --ok-border: rgba(46,155,87,.4);
+    --danger: #d64550;
+    --shadow: 0 6px 24px rgba(23,26,40,.10); --shadow-sm: 0 2px 6px rgba(23,26,40,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1116; --surface: #191d24; --btn-bg: #222831;
+      --text: #e9ecf1; --text-dim: #9aa4b2; --border: #2a313b;
+      --accent: #ff5069; --accent-soft: rgba(255,80,105,.14); --accent-border: rgba(255,80,105,.35);
+      --ok: #55c98a; --ok-soft: rgba(85,201,138,.14); --ok-border: rgba(85,201,138,.4);
+      --danger: #ff6161;
+      --shadow: 0 8px 30px rgba(0,0,0,.45); --shadow-sm: 0 2px 8px rgba(0,0,0,.35);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+                 "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+    line-height: 1.5; min-height: 100dvh; display: flex; justify-content: center; align-items: flex-start;
+    padding: 20px 14px calc(20px + env(safe-area-inset-bottom));
+  }
+  .app { width: 100%; max-width: 460px; display: flex; flex-direction: column; gap: 14px; }
+  .head { display: flex; align-items: center; gap: 10px; }
+  .head h1 { margin: 0; font-size: 17px; }
+  .head .back { margin-left: auto; text-decoration: none; color: var(--accent); font-weight: 600; font-size: 13px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    box-shadow: var(--shadow); padding: 16px 16px; display: flex; flex-direction: column; gap: 12px;
+  }
+  .hint { margin: 0; font-size: 13.5px; color: var(--text-dim); }
+  .target { font-size: 15px; }
+  .target strong { font-weight: 700; }
+  input[type=file] {
+    font: inherit; font-size: 13.5px; padding: 10px; width: 100%;
+    border: 1px dashed var(--border); border-radius: 11px; background: var(--btn-bg); color: var(--text);
+  }
+  .err { color: var(--danger); font-size: 13px; font-weight: 500; }
+  .btn {
+    appearance: none; border: 1px solid var(--ok-border); background: var(--ok-soft);
+    color: var(--ok); font: inherit; font-weight: 650; font-size: 15px; padding: 13px;
+    border-radius: 12px; cursor: pointer;
+  }
+</style>
+</head>
+<body>
+  <main class="app">
+    <div class="head">
+      <h1>📸 Подтверждение поимки</h1>
+      <a class="back" href="{{ link('/app') }}">← в меню</a>
+    </div>
+
+    <form class="card" method="post" action="{{ link('/app/capture') }}" enctype="multipart/form-data">
+      <p class="target">🎯 Ваша цель: <strong>{{ target_name }}</strong></p>
+      <p class="hint">Приложите фотографию (селфи) с целью как доказательство поимки.
+         Фото сохранится у организаторов. После отправки цель должна будет подтвердить поимку.</p>
+      {% if error %}<div class="err">{{ error }}</div>{% endif %}
+      <input type="file" name="photo" accept="image/*" capture="environment" required>
+      <button type="submit" class="btn">{{ report_label }}</button>
+    </form>
+  </main>
+</body>
+</html>

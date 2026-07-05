@@ -263,6 +263,11 @@ def drop_db():
     admin_log = DATA_DIR / "admin_log.txt"
     if admin_log.exists():
         admin_log.unlink()
+    photos_dir = DATA_DIR / "photos"
+    if photos_dir.exists():
+        for f in photos_dir.glob("*"):
+            if f.is_file():
+                f.unlink()
     print("[db] Файл базы данных удалён.")
 
 

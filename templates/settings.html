@@ -153,6 +153,15 @@
       <button type="submit" class="btn ghost">{{ '⚡ Засчитывать сразу' if confirm_kills else '✅ Требовать подтверждение' }}</button>
     </form>
 
+    <form class="card" method="post" action="{{ link('/app/settings') }}">
+      <input type="hidden" name="action" value="photo_proof">
+      <h2>🖼️ Фото-пруф поимки</h2>
+      <p class="hint">Если включено — при поимке игрок обязан приложить фотографию,
+         она сохраняется в файлах бота (папка <code>data/photos/</code>).</p>
+      <p class="state">Сейчас: {{ '📸 фото обязательно' if photo_proof else '➖ без фото' }}</p>
+      <button type="submit" class="btn ghost">{{ '➖ Не требовать фото' if photo_proof else '📸 Требовать фото' }}</button>
+    </form>
+
     <form class="card" method="post" action="{{ link('/app/settings') }}"
           onsubmit="return confirm('Перезапустить приложение? На пару секунд сайт будет недоступен, данные игры сохранятся.')">
       <input type="hidden" name="action" value="restart">

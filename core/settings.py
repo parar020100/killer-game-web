@@ -61,6 +61,16 @@ def set_confirm_kills(on: bool):
     _set_raw("confirm_kills", "1" if on else "0")
 
 
+# --- фото-пруф поимки -------------------------------------------------------
+
+def photo_proof() -> bool:
+    return _raw("photo_proof") == "1"
+
+
+def set_photo_proof(on: bool):
+    _set_raw("photo_proof", "1" if on else "0")
+
+
 # --- доп. вопросы при регистрации -------------------------------------------
 
 def _normalize_pairs(raw) -> list:
