@@ -527,6 +527,27 @@ def _tg_name(user: User):
     return None
 
 
+# Порядок платформ в списке привязанных профилей: сначала Telegram, потом VK.
+_PLATFORM_ORDER = {"tg": 0, "vk": 1}
+
+
+def _account_list(user: User):
+    """Привязанные профили пользователя (tg/vk) для карточки — tg первым, vk потом."""
+    from core.identity import PLATFORM_ICON, PLATFORM_LABEL
+    out = []
+    idents = sorted(user.identities(),
+                    key=lambda i: _PLATFORM_ORDER.get(i.get_platform(), 9))
+    for i in idents:
+        pl = i.get_platform()
+        out.append({
+            "icon": PLATFORM_ICON.get(pl, "•"),
+            "platform": PLATFORM_LABEL.get(pl, pl),
+            "username": i.get_username(),
+            "name": i.get_name(),
+        })
+    return out
+
+
 def user_row(user: User, game: Game) -> dict:
     un = user.get_username()
     murderer = user.get_murderer()
@@ -547,6 +568,7 @@ def user_row(user: User, game: Game) -> dict:
         "real_name": user.get_real_name(),
         "extra": extra_answer_pairs(user),  # [(метка, ответ)] доп. вопросов
         "tg_name": _tg_name(user),
+        "accounts": _account_list(user),  # привязанные профили (tg/vk)
         "is_player": user.is_player(),
     }
 
