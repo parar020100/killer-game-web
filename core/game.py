@@ -100,6 +100,42 @@ class Game:
         alive = User.alive_players()
         return alive[0] if len(alive) == 1 else None
 
+    def reassign_targets(self):
+        """Пересчитать цель каждого живого игрока = следующий живой по кругу.
+
+        Идемпотентно: меняет только те цели, которые реально должны измениться
+        (следующий-живой детерминирован по game_order).
+        """
+        for ply in User.alive_players():
+            ply.update_target_quiet()
+
+    # --- очередь на возрождение (подаренные жизни) ------------------------
+
+    def revive_queue_next(self):
+        """Следующий выбывший игрок из очереди на возрождение или None."""
+        row = query_one(
+            "SELECT rq.user_id FROM revive_queue rq JOIN user u ON u.id = rq.user_id "
+            "WHERE u.is_alive = 0 AND u.is_player = 1 ORDER BY rq.id ASC LIMIT 1")
+        return User(row["user_id"]) if row else None
+
+    def try_revive_one(self):
+        """Вернуть в игру одного игрока из очереди (при выбытии освободилось место)."""
+        p = self.revive_queue_next()
+        if p is None:
+            return None
+        from core import admin_log
+        p.set_alive(True)
+        p.set_murderer(None)
+        p.revive_queue_remove()
+        if p.get_game_order_raw() is None:
+            p.randomize_game_order()
+        self.reassign_targets()
+        admin_log.log(f"🧟 Игрок {p.get_name()} автоматически возрождён из очереди.")
+        target = p.get_target_user()
+        p.notify(f"🧟 Вы снова в игре! Ваша цель: "
+                 f"{target.get_name() if target else '—'}")
+        return p
+
     def check_finished(self) -> bool:
         """Если живых ≤ 1 — поставить игру на паузу (ожидание итогов). True, если конец."""
         if self.count_alive() <= 1:

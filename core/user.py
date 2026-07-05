@@ -376,10 +376,11 @@ class User:
 
         from core.game import Game
         game = Game()
+        game.try_revive_one()      # освободилось место — вернём одного из очереди
+        game.reassign_targets()
         finished = game.check_finished()
 
         if self.is_alive() and not finished:
-            self.update_target_quiet()
             new_target = self.get_target_user()
             self.notify(f"📸 Поздравляем! Вы поймали {victim.get_name()}.\n"
                         f"🎯 Ваша новая цель: {new_target.get_name() if new_target else '—'}")
@@ -388,6 +389,131 @@ class User:
 
         if finished:
             game.announce_winner()
+
+    # --- очередь на возрождение -------------------------------------------
+
+    def revive_queue_push(self):
+        if not self.is_queued_for_revival():
+            execute("INSERT INTO revive_queue (user_id) VALUES (?)", (self.id,))
+
+    def revive_queue_remove(self):
+        execute("DELETE FROM revive_queue WHERE user_id = ?", (self.id,))
+
+    # --- действия администратора над игроком ------------------------------
+
+    def _finish_structural_change(self, was_alive: bool):
+        """Общий хвост админ-действий, меняющих состав живых: возрождение/круг/итог."""
+        from core.game import Game
+        game = Game()
+        if was_alive and game.is_started():
+            game.try_revive_one()      # освободилось место — вернём одного из очереди
+            game.reassign_targets()
+            if game.check_finished():
+                game.announce_winner()
+
+    def admin_kill(self, admin: "User") -> str:
+        """Устранить игрока (остаётся выбывшим игроком — можно оживить, учтётся в итогах)."""
+        if not self.is_player():
+            return "Пользователь не участвует в игре."
+        was_alive = self.is_alive()
+        self._log(f"💀 {admin.get_name()} устранил(а) игрока {self.get_name()}")
+        self.notify("💀 Администратор устранил вас из игры.")
+        self.set_alive(False)
+        self.set_target_id(None)
+        self.set_murderer(None)
+        self._finish_structural_change(was_alive)
+        return f"Игрок {self.get_name()} устранён из игры."
+
+    def admin_revive(self, admin: "User") -> str:
+        if not self.is_player():
+            return "Пользователь не участвует в игре."
+        if self.is_alive():
+            return "Игрок уже в игре."
+        self._log(f"🧟 {admin.get_name()} оживил(а) игрока {self.get_name()}")
+        self.set_alive(True)
+        self.set_murderer(None)
+        self.revive_queue_remove()
+        if self.get_game_order_raw() is None:
+            self.randomize_game_order()
+        from core.game import Game
+        game = Game()
+        if game.is_started():
+            game.reassign_targets()
+        target = self.get_target_user()
+        self.notify("🧟 Администратор вернул вас в игру! Ваша цель: "
+                    f"{target.get_name() if target else '—'}")
+        return f"Игрок {self.get_name()} снова в игре."
+
+    def admin_kick(self, admin: "User") -> str:
+        """Полностью убрать из игры (перестаёт быть игроком)."""
+        if not self.is_player():
+            return "Пользователь и так не в игре."
+        was_alive = self.is_alive()
+        self._log(f"👋 {admin.get_name()} удалил(а) игрока {self.get_name()} из игры")
+        self.notify("👋 Администратор удалил вас из игры.")
+        self.leave()
+        self._finish_structural_change(was_alive)
+        return f"Игрок {self.get_name()} удалён из игры."
+
+    def admin_set_score(self, admin: "User", value: int) -> str:
+        self.set_score(value)
+        self._log(f"💯 {admin.get_name()} задал(а) счёт {value} игроку {self.get_name()}")
+        self.notify(f"💯 Администратор изменил ваш счёт поимок: {value}.")
+        return f"Счёт игрока {self.get_name()} = {value}."
+
+    def admin_randomize_order(self, admin: "User") -> str:
+        self.randomize_game_order()
+        self._log(f"🔀 {admin.get_name()} сменил(а) позицию в круге игроку {self.get_name()}")
+        from core.game import Game
+        game = Game()
+        if game.is_started() and self.is_alive():
+            game.reassign_targets()
+        return f"Позиция игрока {self.get_name()} в круге изменена."
+
+    def admin_force_accept(self, admin: "User") -> str:
+        murderer = self.get_murderer()
+        if not self.is_being_caught() or murderer is None:
+            return "По этому игроку нет заявки на поимку."
+        self._log(f"✅ {admin.get_name()} подтвердил(а) поимку {self.get_name()} "
+                  f"игроком {murderer.get_name()}")
+        murderer.capture(self)
+        return f"Поимка игрока {self.get_name()} засчитана."
+
+    def admin_force_deny(self, admin: "User") -> str:
+        murderer = self.get_murderer()
+        if not self.is_being_caught():
+            return "По этому игроку нет заявки на поимку."
+        self.set_murderer(None)
+        self._log(f"❌ {admin.get_name()} отклонил(а) поимку игрока {self.get_name()}")
+        self.notify("💚 Администратор отклонил заявку о вашей поимке — вы в игре.")
+        if murderer:
+            murderer.notify(f"🚫 Администратор отклонил вашу поимку {self.get_name()}.")
+        return f"Поимка игрока {self.get_name()} отклонена."
+
+    def give_life(self, admin: "User") -> str:
+        if self.is_alive():
+            return "Игрок и так в игре."
+        self.revive_queue_push()
+        self._log(f"🎁 {admin.get_name()} подарил(а) жизнь игроку {self.get_name()}")
+        self.notify("🎁 Администратор дал вам ещё один шанс! "
+                    "Возрождение произойдёт при первой возможности.")
+        return f"Игрок {self.get_name()} добавлен в очередь на оживление."
+
+    def take_life(self, admin: "User") -> str:
+        self.revive_queue_remove()
+        self._log(f"🚫 {admin.get_name()} отменил(а) шанс возрождения игроку {self.get_name()}")
+        return f"Игрок {self.get_name()} убран из очереди на оживление."
+
+    def delete_from_system(self, admin: "User") -> str:
+        """Удалить пользователя из БД (identity/логин каскадно, ссылки — обнулить)."""
+        name = self.get_name()
+        was_alive = self.is_alive()
+        self._log(f"🗑️ {admin.get_name()} удалил(а) пользователя {name} из системы")
+        execute("UPDATE user SET target = NULL WHERE target = ?", (self.id,))
+        execute("UPDATE user SET killed_by = NULL WHERE killed_by = ?", (self.id,))
+        execute("DELETE FROM user WHERE id = ?", (self.id,))
+        self._finish_structural_change(was_alive)
+        return f"Пользователь {name} удалён из системы."
 
     # --- уведомления ------------------------------------------------------
 

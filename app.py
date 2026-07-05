@@ -491,22 +491,72 @@ def dashboard(request: Request, role: str = "player"):
 
 
 def user_menu_buttons(target: User):
-    """Все действия админа над пользователем. todo=True → пока не реализовано."""
-    buttons = []
-    # --- реализованные ---
+    """Действия админа над пользователем, зависят от состояния игрока.
+
+    todo=True → пока намеренно не реализовано (зачёркнуто).
+    kind → цвет; иначе обычная кнопка.
+    """
+    b = []
+
+    def add(label, action, kind=""):
+        b.append({"label": label, "action": action, "kind": kind})
+
+    # роль
     if not target.is_admin():
-        buttons.append({"label": "👑 Выдать админа", "action": "promote"})
+        add("👑 Выдать админа", "promote")
     elif not target.is_default_admin():
-        buttons.append({"label": "🧹 Забрать админа", "action": "demote"})
-    # --- запланированные (зачёркнуты) ---
-    todo = [
-        "✍️ Написать игроку", "📊 Инфо о пользователе", "🔪 Устранить", "♻️ Оживить",
-        "🎁 Подарить жизнь", "🚫 Отобрать жизнь", "🔀 Сменить порядок в круге",
-        "💯 Изменить счёт", "✅ Засчитать поимку", "❌ Отклонить поимку",
-        "👋 Удалить из игры", "🗑️ Удалить из системы",
-    ]
-    buttons.extend({"label": t, "todo": True} for t in todo)
-    return buttons
+        add("🧹 Забрать админа", "demote")
+
+    # модерация текущей заявки о поимке
+    if target.is_being_caught():
+        add("✅ Засчитать поимку", "force_accept", "primary")
+        add("❌ Отклонить поимку", "force_deny", "danger")
+
+    # игровые действия (только для участников)
+    if target.is_player():
+        if target.is_alive():
+            add("🔪 Устранить", "kill", "danger")
+        else:
+            add("♻️ Оживить", "revive", "primary")
+            if target.is_queued_for_revival():
+                add("🚫 Отобрать шанс жизни", "take_life")
+            else:
+                add("🎁 Подарить жизнь", "give_life")
+        add("🔀 Сменить порядок в круге", "randomize_order")
+        add("👋 Удалить из игры", "kick", "danger")
+
+    # удаление из системы (нельзя себя и дефолт-админа — проверяется в обработчике)
+    if not target.is_default_admin():
+        add("🗑️ Удалить из системы", "delete", "danger")
+
+    # ещё не реализовано (личные сообщения отложены)
+    b.append({"label": "✍️ Написать игроку", "todo": True})
+    return b
+
+
+# Действия над пользователем: имя → (метод User, меняет ли состав живых)
+_USER_ACTIONS = {
+    "kill":          (User.admin_kill,          True),
+    "revive":        (User.admin_revive,        True),
+    "kick":          (User.admin_kick,          True),
+    "give_life":     (User.give_life,           False),
+    "take_life":     (User.take_life,           False),
+    "randomize_order": (User.admin_randomize_order, True),
+    "force_accept":  (User.admin_force_accept,  True),
+    "force_deny":    (User.admin_force_deny,    False),
+}
+
+
+def _snapshot_targets():
+    return {u.id: u.get_target_id() for u in User.alive_players()}
+
+
+def _notify_retargets(before):
+    """Сообщить новую цель тем живым игрокам, у кого она изменилась."""
+    for u in User.alive_players():
+        new = u.get_target_id()
+        if new and before.get(u.id) != new:
+            notify_target(u)
 
 
 @app.get("/app/users/{uid}", response_class=HTMLResponse)
@@ -542,12 +592,14 @@ def user_detail(request: Request, uid: int):
     }
     return templates.TemplateResponse(
         request, "user_detail.html",
-        _ctx(request, u=info, buttons=user_menu_buttons(target)),
+        _ctx(request, u=info, buttons=user_menu_buttons(target),
+             can_set_score=target.is_player()),
     )
 
 
 @app.post("/app/users/{uid}/act")
-def user_action(request: Request, uid: int, action: str = Form(...)):
+def user_action(request: Request, uid: int, action: str = Form(...),
+                value: str = Form("")):
     admin = current_user(request)
     if admin is None:
         return RedirectResponse(url="/", status_code=303)
@@ -565,6 +617,24 @@ def user_action(request: Request, uid: int, action: str = Form(...)):
         target.set_admin(False)
         admin_log.log(f"🧹 {admin.get_name()} снял(а) права админа: {target.get_name()}")
         target.notify("Права администратора сняты.")
+    elif action == "set_score" and target.is_player():
+        try:
+            target.admin_set_score(admin, max(0, int(value)))
+        except (ValueError, TypeError):
+            pass
+    elif action == "delete":
+        # нельзя удалить себя или дефолт-админа
+        if target.id != admin.id and not target.is_default_admin():
+            before = _snapshot_targets()
+            target.delete_from_system(admin)
+            _notify_retargets(before)
+            return _redirect(request, "/app/users")
+    elif action in _USER_ACTIONS:
+        method, structural = _USER_ACTIONS[action]
+        before = _snapshot_targets() if structural else None
+        method(target, admin)
+        if structural:
+            _notify_retargets(before)
     return _redirect(request, f"/app/users/{uid}")
 
 

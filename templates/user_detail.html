@@ -66,9 +66,20 @@
   }
   .btn:hover { background: var(--btn-bg-hover); }
   .btn.primary { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-weight: 650; }
+  .btn.danger { background: rgba(214,69,80,.09); border-color: rgba(214,69,80,.3); color: #d64550; }
+  @media (prefers-color-scheme: dark) { .btn.danger { color: #ff6161; } }
   .btn.full { grid-column: 1 / -1; }
   .btn.todo { cursor: not-allowed; color: var(--text-dim); opacity: .75; }
   .btn.todo s { text-decoration: line-through; }
+  .score {
+    grid-column: 1 / -1; display: flex; gap: 8px; align-items: stretch;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 8px;
+  }
+  .score input {
+    flex: 1; min-width: 0; font: inherit; font-size: 14px; padding: 8px 10px;
+    border: 1px solid var(--border); border-radius: 9px; background: var(--btn-bg); color: var(--text);
+  }
+  .score button { flex: 0 0 auto; }
 </style>
 </head>
 <body>
@@ -116,14 +127,22 @@
     <div class="keyboard">
       {% for b in buttons %}
         {% if b.todo %}
-        <button class="btn todo" disabled title="ещё не реализовано"><s>{{ b.label }}</s></button>
+        <button class="btn todo full" disabled title="ещё не реализовано"><s>{{ b.label }}</s></button>
         {% else %}
         <form method="post" action="{{ link('/app/users/' ~ u.id ~ '/act') }}">
           <input type="hidden" name="action" value="{{ b.action }}">
-          <button type="submit" class="btn primary full">{{ b.label }}</button>
+          <button type="submit" class="btn full {{ b.kind or '' }}">{{ b.label }}</button>
         </form>
         {% endif %}
       {% endfor %}
+
+      {% if can_set_score %}
+      <form class="score" method="post" action="{{ link('/app/users/' ~ u.id ~ '/act') }}">
+        <input type="hidden" name="action" value="set_score">
+        <input type="number" name="value" min="0" value="{{ u.score }}" aria-label="Счёт поимок">
+        <button type="submit" class="btn primary">💯 Задать счёт</button>
+      </form>
+      {% endif %}
     </div>
   </main>
 </body>
