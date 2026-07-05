@@ -95,7 +95,9 @@ killer_game_web/
 ├── templates/
 │   ├── chat_entry.html  # страница входа в чат (поле id)
 │   ├── chat.html        # переписка с ботом (история + /start)
-│   ├── index.html       # игровой дашборд (light/dark)
+│   ├── index.html       # игровой дашборд (секции, лента уведомлений, встроенный список)
+│   ├── _userlist.html   # макросы карточек игроков (общие для /app/users и дашборда)
+│   ├── settings.html    # «⚙️ Настройки игры» (пароль регистрации + заготовки)
 │   ├── _live.html       # скрипт живого обновления блоков [data-live] (include)
 │   └── admin_log.html   # страница общего журнала администраторов
 ├── requirements.txt

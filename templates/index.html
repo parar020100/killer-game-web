@@ -1,3 +1,4 @@
+{% import "_userlist.html" as ul with context %}
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -19,6 +20,9 @@
     --danger: #d64550;
     --danger-soft: rgba(214, 69, 80, .09);
     --danger-border: rgba(214, 69, 80, .25);
+    --ok: #2e9b57;
+    --ok-soft: rgba(46, 155, 87, .12);
+    --ok-border: rgba(46, 155, 87, .42);
     --shadow: 0 6px 24px rgba(23, 26, 40, .10);
     --shadow-sm: 0 2px 6px rgba(23, 26, 40, .06);
   }
@@ -37,6 +41,9 @@
       --danger: #ff6161;
       --danger-soft: rgba(255, 97, 97, .12);
       --danger-border: rgba(255, 97, 97, .32);
+      --ok: #55c98a;
+      --ok-soft: rgba(85, 201, 138, .14);
+      --ok-border: rgba(85, 201, 138, .4);
       --shadow: 0 8px 30px rgba(0, 0, 0, .45);
       --shadow-sm: 0 2px 8px rgba(0, 0, 0, .35);
     }
@@ -57,7 +64,17 @@
     padding: 20px 14px calc(20px + env(safe-area-inset-bottom));
   }
 
+  /* На узких экранах — колонкой (список снизу); на широких — рядом (список справа,
+     заметно шире меню — примерно вдвое, растягивается по свободному месту). */
+  .layout { display: flex; flex-direction: column; align-items: center; gap: 16px; width: 100%; }
+  @media (min-width: 980px) {
+    body { align-items: flex-start; }
+    .layout { flex-direction: row; align-items: flex-start; justify-content: center;
+              max-width: 1500px; margin: 0 auto; gap: 22px; }
+  }
+
   .app { width: 100%; max-width: 460px; display: flex; flex-direction: column; gap: 14px; }
+  @media (min-width: 980px) { .app { flex: 0 0 460px; } }
 
   .topbar { display: flex; align-items: center; gap: 12px; padding: 4px 2px; }
   .logo {
@@ -81,8 +98,11 @@
   }
   .bubble details.spoiler summary::-webkit-details-marker { display: none; }
   .bubble details.spoiler summary::marker { content: ""; }
-  .bubble details.spoiler[open] summary { margin-bottom: 8px; }
-  .bubble details.spoiler .reveal { font-size: 18px; font-weight: 700; }
+  /* кнопка «динамична»: закрыто — «Показать цель», открыто — имя цели */
+  .bubble details.spoiler .reveal-show { display: none; }
+  .bubble details.spoiler[open] summary .reveal-hide { display: none; }
+  .bubble details.spoiler[open] summary .reveal-show { display: inline; }
+  .bubble details.spoiler .reveal-show strong { font-weight: 700; }
 
   .bubble {
     background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
@@ -98,6 +118,28 @@
     border-top: 1px dashed var(--border); color: var(--text-dim); font-size: 13.5px;
   }
   .bubble a { color: var(--accent); text-decoration: none; }
+
+  /* лента уведомлений (то, что бот присылал в чат) */
+  .notifs {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    box-shadow: var(--shadow-sm); overflow: hidden;
+  }
+  .notifs > summary {
+    display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 12px 16px;
+    font-weight: 600; font-size: 14px; list-style: none; -webkit-user-select: none; user-select: none;
+  }
+  .notifs > summary::-webkit-details-marker { display: none; }
+  .notifs > summary .cnt { color: var(--text-dim); font-weight: 500; }
+  .notifs > summary .chev { margin-left: auto; color: var(--text-dim); font-size: 13px; }
+  .notifs[open] > summary { border-bottom: 1px solid var(--border); }
+  .notif-list { max-height: 320px; overflow-y: auto; }
+  .notif {
+    padding: 10px 16px; border-bottom: 1px solid var(--border);
+    font-size: 13.5px; white-space: pre-wrap; word-break: break-word;
+  }
+  .notif:last-child { border-bottom: none; }
+  .notif .nt { display: block; font-size: 11px; color: var(--text-dim); margin-bottom: 2px; }
+  .notif a { color: var(--accent); text-decoration: none; }
 
   .keyboard { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
   .keyboard form { display: contents; }
@@ -116,6 +158,9 @@
   .btn.full { grid-column: 1 / -1; }
   .btn.primary { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-weight: 650; }
   .btn.danger { background: var(--danger-soft); border-color: var(--danger-border); color: var(--danger); }
+  .btn.ok { background: var(--ok-soft); border-color: var(--ok-border); color: var(--ok); font-weight: 650; }
+  .btn.todo { cursor: not-allowed; color: var(--text-dim); opacity: .7; box-shadow: none; }
+  .btn.todo s { text-decoration: line-through; }
 
   .devbar {
     display: flex; justify-content: space-between; align-items: center; gap: 8px;
@@ -127,12 +172,71 @@
   .devbar a { color: var(--accent); text-decoration: none; padding: 0 3px; font-weight: 700; }
 
   .section-hint { text-align: center; font-size: 12px; color: var(--text-dim); margin: 2px 0 -2px; }
-  .foot { text-align: center; color: var(--text-dim); font-size: 12px; margin-top: 4px; opacity: .8; }
 
-  @media (min-width: 500px) { body { align-items: center; } .bubble { font-size: 15.5px; } }
+  /* ── правая панель со списком игроков (на широких экранах — рядом) ── */
+  .userpanel { width: 100%; max-width: 460px; }
+  @media (min-width: 980px) { .userpanel { flex: 1 1 0; min-width: 0; max-width: 960px; } }
+  .upanel {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 18px;
+    box-shadow: var(--shadow-sm); overflow: hidden;
+  }
+  .upanel > summary {
+    display: flex; align-items: center; gap: 9px; cursor: pointer; padding: 14px 16px;
+    font-weight: 650; font-size: 15px; list-style: none; -webkit-user-select: none; user-select: none;
+  }
+  .upanel > summary::-webkit-details-marker { display: none; }
+  .upanel > summary .chev { margin-left: auto; color: var(--text-dim); font-size: 13px; }
+  .upanel[open] > summary { border-bottom: 1px solid var(--border); background: var(--btn-bg-hover); }
+  .upanel .open-lbl { display: none; }
+  .upanel[open] .closed-lbl { display: none; }
+  .upanel[open] .open-lbl { display: inline; }
+  .upanel-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+
+  /* карточки внутри встроенного списка (те же классы, что на /app/users) */
+  .upanel-body h2 { margin: 4px 2px 0; font-size: 14px; }
+  .upanel-body .section.empty, .upanel-body .empty {
+    padding: 14px; text-align: center; color: var(--text-dim); font-size: 14px;
+    background: var(--btn-bg); border-radius: 12px;
+  }
+  .upanel-body .legend { font-size: 11.5px; color: var(--text-dim); margin: 2px; line-height: 1.7; }
+  .cards { display: flex; flex-direction: column; gap: 8px; }
+  /* на широком экране список шире — раскладываем игроков в две колонки */
+  @media (min-width: 980px) {
+    .upanel-body .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: start; }
+  }
+  .ucard {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 13px; overflow: hidden;
+  }
+  .ucard > summary {
+    display: flex; align-items: center; gap: 9px; cursor: pointer;
+    padding: 10px 12px; list-style: none; -webkit-user-select: none; user-select: none;
+  }
+  .ucard > summary::-webkit-details-marker { display: none; }
+  .ucard > summary .st { font-size: 16px; }
+  .ucard > summary .uname { font-weight: 650; font-size: 14px; }
+  .ucard > summary .unick { color: var(--text-dim); font-size: 12.5px; }
+  .ucard > summary .ubadge {
+    font-size: 11.5px; color: var(--text-dim); font-variant-numeric: tabular-nums;
+    background: var(--btn-bg); border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px;
+  }
+  .ucard > summary .chev { margin-left: auto; color: var(--text-dim); font-size: 13px; }
+  .ucard[open] > summary { border-bottom: 1px solid var(--border); background: var(--btn-bg-hover); }
+  .ucard[open] > summary .chev { color: var(--accent); }
+  .uactions { display: flex; flex-direction: column; gap: 7px; padding: 11px 12px; }
+  .uactions .btn { min-height: 42px; box-shadow: none; }
+  .uactions form { display: flex; gap: 7px; }
+  .uactions form .btn { width: 100%; }
+  .score input {
+    flex: 1; min-width: 0; font: inherit; font-size: 14px; padding: 8px 10px;
+    border: 1px solid var(--border); border-radius: 9px; background: var(--btn-bg); color: var(--text);
+  }
+  .score .btn { width: auto; flex: 0 0 auto; }
+
+  @media (min-width: 500px) { .bubble { font-size: 15.5px; } }
 </style>
 </head>
 <body>
+  <div class="layout">
   <main class="app">
 
     <div class="topbar">
@@ -151,13 +255,26 @@
     <div data-live="4000" style="display:contents">
     <div class="bubble">{{ message_html | safe }}<span class="support">ℹ️ В случае ошибок, вопросов или разногласий, напишите сообщение этому боту (желательно) или <a href="#">{{ support_contact }}</a>.</span></div>
 
+    {% if notifications %}
+    <details class="notifs" data-keep="notif">
+      <summary>🔔 Уведомления <span class="cnt">({{ notifications | length }})</span><span class="chev">развернуть ▾</span></summary>
+      <div class="notif-list">
+        {% for n in notifications %}
+        <div class="notif"><span class="nt">{{ n.ts }}</span>{{ n.html | safe }}</div>
+        {% endfor %}
+      </div>
+    </details>
+    {% endif %}
+
     {% for s in sections %}
       {% if s.message or s.buttons %}
       <p class="section-hint">{{ s.hint }}</p>
       {% if s.message %}<div class="bubble{% if s.kind %} {{ s.kind }}{% endif %}">{{ s.message | safe }}</div>{% endif %}
       <div class="keyboard">
         {% for b in s.buttons %}
-          {% if b.href %}
+          {% if b.todo %}
+          <button class="btn todo{% if b.full %} full{% endif %}" disabled title="ещё не реализовано"><s>{{ b.label }}</s></button>
+          {% elif b.href %}
           <a class="btn{% if b.kind %} {{ b.kind }}{% endif %}{% if b.full %} full{% endif %}" href="{{ link(b.href) }}">{{ b.label }}</a>
           {% elif b.action %}
           <form method="post" action="{{ link('/act') }}">
@@ -173,6 +290,27 @@
     {% endfor %}
     </div>
   </main>
+
+  {% if is_admin and user_list %}
+  <aside class="userpanel">
+    <div data-live="5000" style="display:contents">
+    <details class="upanel" data-keep="userlist">
+      <summary>
+        <span class="closed-lbl">👥 Показать список игроков</span>
+        <span class="open-lbl">🙈 Скрыть список игроков</span>
+        <span class="chev">({{ user_list.total_players }}/{{ user_list.total_users }})</span>
+      </summary>
+      <div class="upanel-body">
+        {% if user_list.game_started and not user_list.game_paused %}
+        <p class="legend">⏸️ Устранение / оживление / счёт / порядок — на паузе.</p>
+        {% endif %}
+        {{ ul.userlist(user_list.players, user_list.non_players) }}
+      </div>
+    </details>
+    </div>
+  </aside>
+  {% endif %}
+  </div>
   {% include "_live.html" %}
 </body>
 </html>

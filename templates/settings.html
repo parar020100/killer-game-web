@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Настройки игры · Киллер / Папарацци</title>
+<style>
+  :root {
+    --bg: #eaeef4; --surface: #ffffff; --btn-bg: #f4f6fa;
+    --text: #171a21; --text-dim: #6a7280; --border: #e2e7ef;
+    --accent: #e23b4e; --accent-soft: rgba(226,59,78,.10); --accent-border: rgba(226,59,78,.28);
+    --ok: #2e9b57; --ok-soft: rgba(46,155,87,.12); --ok-border: rgba(46,155,87,.4);
+    --shadow: 0 6px 24px rgba(23,26,40,.10); --shadow-sm: 0 2px 6px rgba(23,26,40,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1116; --surface: #191d24; --btn-bg: #222831;
+      --text: #e9ecf1; --text-dim: #9aa4b2; --border: #2a313b;
+      --accent: #ff5069; --accent-soft: rgba(255,80,105,.14); --accent-border: rgba(255,80,105,.35);
+      --ok: #55c98a; --ok-soft: rgba(85,201,138,.14); --ok-border: rgba(85,201,138,.4);
+      --shadow: 0 8px 30px rgba(0,0,0,.45); --shadow-sm: 0 2px 8px rgba(0,0,0,.35);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+                 "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+    line-height: 1.5; min-height: 100dvh; display: flex; justify-content: center; align-items: flex-start;
+    padding: 20px 14px calc(20px + env(safe-area-inset-bottom));
+  }
+  .app { width: 100%; max-width: 460px; display: flex; flex-direction: column; gap: 14px; }
+  .head { display: flex; align-items: center; gap: 10px; }
+  .head h1 { margin: 0; font-size: 18px; }
+  .head .back { margin-left: auto; text-decoration: none; color: var(--accent); font-weight: 600; font-size: 13px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 18px;
+    box-shadow: var(--shadow); padding: 18px 18px; display: flex; flex-direction: column; gap: 12px;
+  }
+  .card h2 { margin: 0; font-size: 15px; display: flex; align-items: center; gap: 7px; }
+  .hint { margin: 0; font-size: 13.5px; color: var(--text-dim); }
+  label { display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600; }
+  input {
+    font: inherit; font-size: 15px; font-weight: 400; padding: 11px 13px;
+    border: 1px solid var(--border); border-radius: 11px; background: var(--btn-bg); color: var(--text);
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .btn {
+    appearance: none; border: 1px solid var(--accent-border); background: var(--accent-soft);
+    color: var(--accent); font: inherit; font-weight: 650; font-size: 15px; padding: 12px;
+    border-radius: 12px; cursor: pointer; align-self: flex-start;
+  }
+  .note {
+    background: var(--ok-soft); border: 1px solid var(--ok-border); color: var(--ok);
+    border-radius: 12px; padding: 10px 14px; font-size: 14px; font-weight: 550;
+  }
+  .state { font-size: 13px; color: var(--text-dim); }
+  .card.soon { opacity: .85; }
+  .soon .lock { font-size: 12px; color: var(--text-dim); }
+  .soon s { color: var(--text-dim); }
+</style>
+</head>
+<body>
+  <main class="app">
+    <div class="head">
+      <h1>⚙️ Настройки игры</h1>
+      <a class="back" href="{{ link('/app') }}">← в меню</a>
+    </div>
+
+    <form class="card" method="post" action="{{ link('/app/settings') }}" autocomplete="off">
+      <h2>🔑 Пароль регистрации</h2>
+      <p class="hint">Если задан, игроки при регистрации должны ввести этот пароль.
+         Оставьте поле пустым и сохраните, чтобы убрать пароль.</p>
+      {% if saved %}<div class="note">✅ Сохранено.</div>{% endif %}
+      <p class="state">Сейчас: {{ ('«' ~ current ~ '»') if current else 'пароль не задан (регистрация свободная)' }}</p>
+      <label>
+        Новый пароль
+        <input type="text" name="password" value="{{ current or '' }}" placeholder="без пароля" maxlength="100">
+      </label>
+      <button type="submit" class="btn">💾 Сохранить</button>
+    </form>
+
+    <div class="card soon">
+      <h2>❓ <s>Доп. вопросы при регистрации</s> <span class="lock">скоро</span></h2>
+      <p class="hint"><s>Настроить один или несколько дополнительных вопросов, которые
+         игрок заполняет при регистрации (комната, номер телефона и т.п.).</s></p>
+    </div>
+
+    <div class="card soon">
+      <h2>📋 <s>Уведомления администратора (ADMIN LOG)</s> <span class="lock">скоро</span></h2>
+      <p class="hint"><s>Включить/выключить получение журнала значимых событий игры
+         в свой канал.</s></p>
+    </div>
+  </main>
+</body>
+</html>

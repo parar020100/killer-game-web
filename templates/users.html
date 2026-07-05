@@ -1,43 +1,4 @@
-{% macro manage(u) -%}
-  <span style="display:inline-flex; gap:6px; white-space:nowrap">
-    <a class="rowbtn" href="{{ link('/app/users/' ~ u.id) }}">⚙️ Управление</a>
-    {% if allow_dev %}<a class="rowbtn ghost" href="/app?user={{ u.username or u.id }}" target="_blank" rel="noopener" title="открыть игру от лица этого игрока в новой вкладке">🕶 Войти как ↗</a>{% endif %}
-  </span>
-{%- endmacro %}
-{% macro card(u) -%}
-  <details class="ucard" data-keep="u{{ u.id }}">
-    <summary>
-      <span class="st">{{ u.status }}</span>
-      <span class="uname">{{ u.name }}</span>
-      {% if u.nick and u.nick != '—' %}<span class="unick">{{ u.nick }}</span>{% endif %}
-      {% if u.order is not none %}<span class="ubadge">#{{ u.order }}</span>{% endif %}
-      {% if u.kills is not none %}<span class="ubadge">🔪 {{ u.kills }}</span>{% endif %}
-      <span class="chev">⚙️ управлять ▾</span>
-    </summary>
-    <div class="uactions">
-      {% for b in u.buttons %}
-        {% if b.todo %}
-        <button class="btn todo" disabled title="ещё не реализовано"><s>{{ b.label }}</s></button>
-        {% else %}
-        <form method="post" action="{{ link('/app/users/' ~ u.id ~ '/act') }}">
-          <input type="hidden" name="action" value="{{ b.action }}">
-          <button type="submit" class="btn {{ b.kind or '' }}">{{ b.label }}</button>
-        </form>
-        {% endif %}
-      {% endfor %}
-      {% if u.can_set_score %}
-      <form class="score" method="post" action="{{ link('/app/users/' ~ u.id ~ '/act') }}">
-        <input type="hidden" name="action" value="set_score">
-        <input type="number" name="value" min="0" value="{{ u.score }}" aria-label="Счёт поимок">
-        <button type="submit" class="btn primary">💯 Счёт</button>
-      </form>
-      {% endif %}
-      <a class="btn" href="{{ link('/app/users/' ~ u.id) }}">⚙️ Полная страница управления</a>
-      {% if u.username %}<a class="btn" href="/chat/{{ u.username }}" target="_blank" rel="noopener">💬 История сообщений</a>{% endif %}
-      {% if allow_dev %}<a class="btn" href="/app?user={{ u.username or u.id }}" target="_blank" rel="noopener">🕶 Войти как этот игрок ↗</a>{% endif %}
-    </div>
-  </details>
-{%- endmacro %}
+{% import "_userlist.html" as ul with context %}
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -50,6 +11,7 @@
     --text: #171a21; --text-dim: #6a7280; --border: #e2e7ef;
     --accent: #e23b4e; --accent-soft: rgba(226,59,78,.10); --accent-border: rgba(226,59,78,.28);
     --danger: #d64550; --danger-soft: rgba(214,69,80,.09); --danger-border: rgba(214,69,80,.25);
+    --warn: #b7791f; --warn-soft: rgba(183,121,31,.12); --warn-border: rgba(183,121,31,.35);
     --shadow: 0 6px 24px rgba(23,26,40,.10); --shadow-sm: 0 2px 6px rgba(23,26,40,.06);
   }
   @media (prefers-color-scheme: dark) {
@@ -58,6 +20,7 @@
       --text: #e9ecf1; --text-dim: #9aa4b2; --border: #2a313b;
       --accent: #ff5069; --accent-soft: rgba(255,80,105,.14); --accent-border: rgba(255,80,105,.35);
       --danger: #ff6161; --danger-soft: rgba(255,97,97,.12); --danger-border: rgba(255,97,97,.32);
+      --warn: #e3b341; --warn-soft: rgba(227,179,65,.12); --warn-border: rgba(227,179,65,.35);
       --shadow: 0 8px 30px rgba(0,0,0,.45); --shadow-sm: 0 2px 8px rgba(0,0,0,.35);
     }
   }
@@ -83,46 +46,18 @@
   .titles .sub { font-size: 13px; color: var(--text-dim); }
   .back { margin-left: auto; text-decoration: none; color: var(--accent); font-weight: 600; font-size: 13px; }
 
-  .viewswitch {
-    display: flex; background: var(--surface); border: 1px solid var(--border);
-    border-radius: 12px; padding: 4px; gap: 4px; box-shadow: var(--shadow-sm);
-  }
-  .viewswitch a {
-    flex: 1; text-align: center; text-decoration: none;
-    color: var(--text-dim); font-weight: 600; font-size: 14px;
-    padding: 9px 10px; border-radius: 9px;
-  }
-  .viewswitch a.active { background: var(--accent-soft); color: var(--accent); }
-
   h2 { margin: 6px 2px 0; font-size: 15px; }
   .section {
     background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
     box-shadow: var(--shadow-sm); overflow: hidden;
   }
-  .scroll { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; font-size: 14px; white-space: nowrap; }
-  th, td { padding: 9px 10px; text-align: left; border-bottom: 1px solid var(--border); }
-  th { font-size: 11.5px; text-transform: uppercase; letter-spacing: .4px; color: var(--text-dim); font-weight: 700; }
-  tr:last-child td { border-bottom: none; }
-  td.st { font-size: 16px; }
-  td.num { color: var(--text-dim); font-variant-numeric: tabular-nums; }
-  td.name { white-space: normal; font-weight: 600; }
-  td.nick { color: var(--text-dim); }
-  tbody tr:hover { background: var(--btn-bg-hover); }
   .empty { padding: 16px; text-align: center; color: var(--text-dim); font-size: 14px; }
   .legend { font-size: 12px; color: var(--text-dim); margin: 2px; line-height: 1.7; }
-
-  /* маленькая кнопка «управление» прямо в строке таблицы (вид «меню») */
-  .rowbtn {
-    display: inline-flex; align-items: center; gap: 5px; text-decoration: none;
-    padding: 6px 11px; border-radius: 9px; font-size: 13px; font-weight: 650;
-    background: var(--accent-soft); border: 1px solid var(--accent-border); color: var(--accent);
-    white-space: nowrap;
+  .pausehint {
+    font-size: 13px; color: var(--warn); background: var(--warn-soft);
+    border: 1px solid var(--warn-border); border-radius: 12px; padding: 9px 13px; margin: 0;
   }
-  .rowbtn:hover { filter: brightness(1.05); }
-  .rowbtn.ghost { background: var(--btn-bg); border-color: var(--border); color: var(--text-dim); font-weight: 600; }
 
-  /* вид «кнопки в строке»: раскрывающиеся карточки */
   .cards { display: flex; flex-direction: column; gap: 8px; }
   .ucard {
     background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
@@ -156,9 +91,8 @@
   .btn.danger { background: var(--danger-soft); border-color: var(--danger-border); color: var(--danger); }
   .btn.todo { cursor: not-allowed; color: var(--text-dim); opacity: .75; }
   .btn.todo s { text-decoration: line-through; }
-  .uactions form { display: flex; }
+  .uactions form { display: flex; gap: 8px; }
   .uactions form .btn { width: 100%; }
-  .score { display: flex; gap: 8px; }
   .score input {
     flex: 1; min-width: 0; font: inherit; font-size: 14px; padding: 8px 10px;
     border: 1px solid var(--border); border-radius: 9px; background: var(--btn-bg); color: var(--text);
@@ -177,80 +111,18 @@
       <a class="back" href="{{ link('/app') }}">← в меню</a>
     </div>
 
-    <nav class="viewswitch" aria-label="Вид списка">
-      <a href="{{ link('/app/users?view=menu') }}" class="{{ 'active' if view == 'menu' else '' }}">🗂 Меню управления</a>
-      <a href="{{ link('/app/users?view=inline') }}" class="{{ 'active' if view == 'inline' else '' }}">⚡ Кнопки в строке</a>
-    </nav>
-
     {% if allow_dev %}
-    <p class="legend" style="margin:-4px 2px 2px">🕶 <b>Отладка:</b> «войти как» открывает игрока в <b>новой вкладке</b> —
+    <p class="legend" style="margin:-2px 2px 2px">🕶 <b>Отладка:</b> «войти как» открывает игрока в <b>новой вкладке</b> —
       так можно держать несколько пользователей одновременно в одном браузере.</p>
     {% endif %}
 
-    <div data-live="5000" style="display:contents">
-    {% if view == 'inline' %}
-    {# ─────────── версия «кнопки в строке»: раскрывающиеся карточки ─────────── #}
-      <h2>🎯 Активные игроки ({{ players | length }})</h2>
-      {% if players %}
-      <div class="cards">
-        {% for u in players %}{{ card(u) }}{% endfor %}
-      </div>
-      {% else %}<div class="section empty">Пока нет активных игроков.</div>{% endif %}
-
-      <h2>👀 Вне игры ({{ non_players | length }})</h2>
-      {% if non_players %}
-      <div class="cards">
-        {% for u in non_players %}{{ card(u) }}{% endfor %}
-      </div>
-      {% else %}<div class="section empty">Все пользователи в игре.</div>{% endif %}
-
-    {% else %}
-    {# ─────────── версия «меню управления»: таблицы с кнопкой ─────────── #}
-      <h2>🎯 Активные игроки ({{ players | length }})</h2>
-      <div class="section scroll">
-        {% if players %}
-        <table>
-          <thead><tr><th>ℹ️</th><th>Order</th><th>🔪</th><th>Ник</th><th>Имя</th><th>⚙️</th></tr></thead>
-          <tbody>
-          {% for u in players %}
-            <tr>
-              <td class="st">{{ u.status }}</td>
-              <td class="num">{{ u.order if u.order is not none else '—' }}</td>
-              <td class="num">{{ u.kills }}</td>
-              <td class="nick">{{ u.nick }}</td>
-              <td class="name">{{ u.name }}</td>
-              <td>{{ manage(u) }}</td>
-            </tr>
-          {% endfor %}
-          </tbody>
-        </table>
-        {% else %}<div class="empty">Пока нет активных игроков.</div>{% endif %}
-      </div>
-
-      <h2>👀 Вне игры ({{ non_players | length }})</h2>
-      <div class="section scroll">
-        {% if non_players %}
-        <table>
-          <thead><tr><th>ℹ️</th><th>Ник</th><th>Имя</th><th>⚙️</th></tr></thead>
-          <tbody>
-          {% for u in non_players %}
-            <tr>
-              <td class="st">{{ u.status }}</td>
-              <td class="nick">{{ u.nick }}</td>
-              <td class="name">{{ u.name }}</td>
-              <td>{{ manage(u) }}</td>
-            </tr>
-          {% endfor %}
-          </tbody>
-        </table>
-        {% else %}<div class="empty">Все пользователи в игре.</div>{% endif %}
-      </div>
+    {% if game_started and not game_paused %}
+    <p class="pausehint">⏸️ Устранение, оживление, счёт и порядок в круге доступны,
+       когда игра <b>на паузе</b> (поставьте паузу в меню).</p>
     {% endif %}
 
-    <p class="legend">
-      👑 админ · 👤 обычный · 🚫 отключил уведомления &nbsp;|&nbsp;
-      ✅ в игре · 🔴 не в игре · 👀 зритель · 💚 жив · 💛 под прицелом · ☠️ выбыл · ♻️ ждёт воскрешения
-    </p>
+    <div data-live="5000" style="display:contents">
+      {{ ul.userlist(players, non_players) }}
     </div>
   </main>
   {% include "_live.html" %}

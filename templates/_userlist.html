@@ -1,0 +1,63 @@
+{# Раскрывающаяся карточка пользователя с кнопками действий. Общий фрагмент для
+   отдельной страницы /app/users и встроенного списка на дашборде.
+   Импортировать: {% import "_userlist.html" as ul with context %} #}
+
+{% macro card(u) -%}
+  <details class="ucard" data-keep="u{{ u.id }}">
+    <summary>
+      <span class="st">{{ u.status }}</span>
+      <span class="uname">{{ u.name }}</span>
+      {% if u.nick and u.nick != '—' %}<span class="unick">{{ u.nick }}</span>{% endif %}
+      {% if u.order is not none %}<span class="ubadge">#{{ u.order }}</span>{% endif %}
+      {% if u.kills is not none %}<span class="ubadge">🔪 {{ u.kills }}</span>{% endif %}
+      <span class="chev">⚙️ управлять ▾</span>
+    </summary>
+    <div class="uactions">
+      {% for b in u.buttons %}
+        {% if b.todo %}
+        <button class="btn todo" disabled title="ещё не реализовано"><s>{{ b.label }}</s></button>
+        {% else %}
+        <form method="post" action="{{ link('/app/users/' ~ u.id ~ '/act') }}">
+          <input type="hidden" name="action" value="{{ b.action }}">
+          <button type="submit" class="btn {{ b.kind or '' }}">{{ b.label }}</button>
+        </form>
+        {% endif %}
+      {% endfor %}
+      {% if u.can_set_order %}
+      <form class="score" method="post" action="{{ link('/app/users/' ~ u.id ~ '/act') }}">
+        <input type="hidden" name="action" value="set_order">
+        <input type="number" name="value" min="1" value="{{ u.order if u.order is not none else '' }}"
+               placeholder="позиция в круге" aria-label="Позиция в круге">
+        <button type="submit" class="btn">🔢 Позиция</button>
+      </form>
+      {% endif %}
+      {% if u.can_set_score %}
+      <form class="score" method="post" action="{{ link('/app/users/' ~ u.id ~ '/act') }}">
+        <input type="hidden" name="action" value="set_score">
+        <input type="number" name="value" min="0" value="{{ u.score }}" aria-label="Счёт поимок">
+        <button type="submit" class="btn primary">💯 Счёт</button>
+      </form>
+      {% endif %}
+      <a class="btn" href="{{ link('/app/users/' ~ u.id) }}">⚙️ Полная страница управления</a>
+      {% if u.username %}<a class="btn" href="/chat/{{ u.username }}" target="_blank" rel="noopener">💬 История сообщений</a>{% endif %}
+      {% if allow_dev %}<a class="btn" href="/app?user={{ u.username or u.id }}" target="_blank" rel="noopener">🕶 Войти как этот игрок ↗</a>{% endif %}
+    </div>
+  </details>
+{%- endmacro %}
+
+{% macro userlist(players, non_players) -%}
+  <h2>🎯 Активные игроки ({{ players | length }})</h2>
+  {% if players %}
+  <div class="cards">{% for u in players %}{{ card(u) }}{% endfor %}</div>
+  {% else %}<div class="section empty">Пока нет активных игроков.</div>{% endif %}
+
+  <h2>👀 Вне игры ({{ non_players | length }})</h2>
+  {% if non_players %}
+  <div class="cards">{% for u in non_players %}{{ card(u) }}{% endfor %}</div>
+  {% else %}<div class="section empty">Все пользователи в игре.</div>{% endif %}
+
+  <p class="legend">
+    👑 админ · 👤 обычный · 🚫 отключил уведомления &nbsp;|&nbsp;
+    ✅ в игре · 🔴 не в игре · 👀 зритель · 💚 жив · 💛 под прицелом · ☠️ выбыл · ♻️ ждёт воскрешения
+  </p>
+{%- endmacro %}

@@ -491,6 +491,19 @@ class User:
             game.reassign_targets()
         return f"Позиция игрока {self.get_name()} в круге изменена."
 
+    def admin_set_order(self, admin: "User", position: int) -> str:
+        """Поставить игрока на конкретную позицию в круге (при конфликте — сдвиг)."""
+        if not self.is_player():
+            return "Пользователь не участвует в игре."
+        placed = self.set_game_order(position, increase=True)
+        self._log(f"🔢 {admin.get_name()} задал(а) позицию {placed} в круге "
+                  f"игроку {self.get_name()}")
+        from core.game import Game
+        game = Game()
+        if game.is_started() and self.is_alive():
+            game.reassign_targets()
+        return f"Позиция игрока {self.get_name()} в круге: {placed}."
+
     def admin_force_accept(self, admin: "User") -> str:
         murderer = self.get_murderer()
         if not self.is_being_caught() or murderer is None:

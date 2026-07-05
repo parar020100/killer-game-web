@@ -141,6 +141,15 @@
         {% endif %}
       {% endfor %}
 
+      {% if can_set_order %}
+      <form class="score" method="post" action="{{ link('/app/users/' ~ u.id ~ '/act') }}">
+        <input type="hidden" name="action" value="set_order">
+        <input type="number" name="value" min="1" value="{{ u.order if u.order is not none else '' }}"
+               placeholder="позиция в круге" aria-label="Позиция в круге">
+        <button type="submit" class="btn">🔢 Задать позицию</button>
+      </form>
+      {% endif %}
+
       {% if can_set_score %}
       <form class="score" method="post" action="{{ link('/app/users/' ~ u.id ~ '/act') }}">
         <input type="hidden" name="action" value="set_score">

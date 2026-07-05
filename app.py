@@ -133,8 +133,9 @@ def linkify(text: str) -> Markup:
 # Кнопки и экраны игрового дашборда
 # ---------------------------------------------------------------------------
 
-def _btn(label, action=None, kind="", full=False, href=None):
-    return {"label": label, "action": action, "kind": kind, "full": full, "href": href}
+def _btn(label, action=None, kind="", full=False, href=None, todo=False):
+    return {"label": label, "action": action, "kind": kind, "full": full,
+            "href": href, "todo": todo}
 
 
 # --- правила игры (HTML-файл из config.RULES_FILENAME) ----------------------
@@ -217,12 +218,15 @@ def _player_game_lines(user: User):
     tname = escape(target.get_name()) if target else "—"
     lines.append("")
     lines.append('<span class="divider">══ 🎯 Ваша цель ══</span>')
-    # Цель скрыта под спойлером — раскрывается по клику (data-keep сохраняет
-    # раскрытое состояние при живом обновлении страницы, см. templates/_live.html).
+    # Цель скрыта под спойлером-кнопкой: клик раскрывает её прямо на кнопке
+    # (сама кнопка «динамична» — меняет надпись на имя цели). data-keep хранит
+    # раскрытое состояние при живом обновлении страницы (см. templates/_live.html).
     lines.append(
         '<details class="spoiler" data-keep="target">'
-        '<summary>👁️ Показать цель</summary>'
-        f'<span class="reveal">🎯 <strong>{tname}</strong></span>'
+        '<summary>'
+        '<span class="reveal-hide">👁️ Показать цель</span>'
+        f'<span class="reveal-show">🎯 <strong>{tname}</strong></span>'
+        '</summary>'
         '</details>'
     )
     if _awaiting_confirmation(user):
@@ -249,8 +253,24 @@ def _player_game_buttons(user: User):
     if user.is_awaiting_confirmation():
         return [_btn("✖️ Отменить заявку о поимке", "cancel_capture", full=True)]
     if user.get_target_user():
-        return [_btn("📸 Сообщить о поимке цели", "report_capture", "primary", full=True)]
+        return [_btn("📸 Сообщить о поимке цели", "report_capture", "ok", full=True)]
     return []
+
+
+def recent_notifications(user: User, limit: int = 8):
+    """Последние игровые уведомления игроку (то, что бот присылал в чат).
+
+    Возвращает список {ts, html} от новых к старым — компактная лента событий
+    на дашборде (в боте роль этой ленты играл сам чат).
+    """
+    un = user.get_username()
+    if not un:
+        return []
+    msgs = [m for m in chat.read(un) if (m.get("tag") or "bot") == "bot"]
+    out = []
+    for m in reversed(msgs[-limit:]):  # новые сверху
+        out.append({"ts": m["ts"], "html": linkify(m["body"])})
+    return out
 
 
 def capture_prompt(user: User):
@@ -275,30 +295,38 @@ def capture_prompt(user: User):
 
 
 def admin_management_buttons(user: User):
-    """Кнопки раздела «управление игрой» (показываются админу под кнопками игрока)."""
-    game = Game()
-    buttons = []
-    if not game.is_started():
-        buttons.append(_btn("▶️ Запустить игру", "start_game", "primary"))
-    else:
-        if game.is_paused():
-            buttons.append(_btn("▶️ Продолжить", "resume", "primary"))
-        else:
-            buttons.append(_btn("⏸️ Пауза", "pause"))
-        buttons.append(_btn("🏁 Завершить (итоги)", "end_game", "danger"))
-    if game.is_registration_open():
-        buttons.append(_btn("🚫 Закрыть регистрацию", "close_reg"))
-    else:
-        buttons.append(_btn("✅ Открыть регистрацию", "open_reg"))
+    """Кнопки раздела «управление игрой» — компактные, по две в ряд.
 
+    Доступность действий зависит от состояния игры (как в боте, m_builders.py):
+    регистрацию можно открыть только когда игра не идёт или на паузе; завершить
+    и сбросить игру — только на паузе (сначала пауза, потом остановка).
+    """
+    game = Game()
+    b = []
+    # Жизненный цикл: старт / пауза / продолжить.
+    if not game.is_started():
+        b.append(_btn("▶️ Запустить игру", "start_game", "primary"))
+    elif game.is_paused():
+        b.append(_btn("▶️ Продолжить", "resume", "primary"))
+    else:
+        b.append(_btn("⏸️ Пауза", "pause"))
+    # Регистрация: закрыть, если открыта; открыть — только вне активной игры/на паузе.
+    if game.is_registration_open():
+        b.append(_btn("🚫 Закрыть регистрацию", "close_reg"))
+    elif not game.is_started() or game.is_paused():
+        b.append(_btn("✅ Открыть регистрацию", "open_reg"))
+    # Завершение/сброс — только на паузе.
+    if game.is_paused():
+        b.append(_btn("🏁 Завершить (итоги)", "end_game", "danger"))
+        b.append(_btn("♻️ Сбросить игру", "reset_game", "danger"))
+    # Инструменты (тоже по две в ряд).
     if game.is_started():
-        buttons.append(_btn("📊 Промежуточные итоги", href="/app/results", full=True))
-    buttons.append(_btn("👥 Список пользователей", href="/app/users", full=True))
-    buttons.append(_btn("📢 Рассылка", href="/broadcast", full=True))
-    buttons.append(_btn("🔑 Пароль регистрации", href="/app/password", full=True))
-    buttons.append(_btn("📋 Журнал (admin log)", href="/admin-log", full=True))
-    buttons.append(_btn("♻️ Сбросить игру", "reset_game", "danger", full=True))
-    return buttons
+        b.append(_btn("📊 Промежуточные итоги", href="/app/results"))
+    b.append(_btn("👥 Список пользователей", href="/app/users"))
+    b.append(_btn("📢 Рассылка", href="/broadcast"))
+    b.append(_btn("⚙️ Настройки игры", href="/app/settings"))
+    b.append(_btn("📋 Журнал", href="/admin-log"))
+    return b
 
 
 # ---------------------------------------------------------------------------
@@ -595,19 +623,19 @@ def dashboard(request: Request):
     if prompt:
         sections.append(prompt)
 
+    # Действия игрока + общие кнопки профиля (правила сверху, у пользователя).
+    if has_rules():
+        player_buttons.append(_btn("📜 Правила", href="/rules", full=True))
+    player_buttons.append(_btn("👤 Профиль", todo=True))
+    player_buttons.append(_btn("✍️ Написать организаторам", todo=True))
     sections.append({"hint": "— доступные действия —", "buttons": player_buttons})
 
     # Админу — второй раздел с управлением игрой.
+    user_list = None
     if user.is_admin():
         sections.append({"hint": "— управление игрой —",
                          "buttons": admin_management_buttons(user)})
-
-    # Общие кнопки (правила/обновить) — в конец последнего раздела.
-    footer = []
-    if has_rules():
-        footer.append(_btn("📜 Правила", href="/rules", full=True))
-    footer.append(_btn("🔄 Обновить", "noop", full=True))
-    sections[-1]["buttons"] = sections[-1].get("buttons", []) + footer
+        user_list = _user_list_data()
 
     return templates.TemplateResponse(
         request, "index.html",
@@ -616,7 +644,9 @@ def dashboard(request: Request):
             is_admin=user.is_admin(),
             user_name=user.get_name(),
             message_html=message,
+            notifications=recent_notifications(user),
             sections=sections,
+            user_list=user_list,
             support_contact=SUPPORT_CONTACT,
         ),
     )
@@ -661,12 +691,56 @@ def password_save(request: Request, password: str = Form("")):
     )
 
 
-def user_menu_buttons(target: User):
-    """Действия админа над пользователем, зависят от состояния игрока.
+def can_set_score(target: User, game: Game) -> bool:
+    """Изменить счёт можно только на паузе (как в боте)."""
+    return target.is_player() and game.is_paused()
 
-    todo=True → пока намеренно не реализовано (зачёркнуто).
-    kind → цвет; иначе обычная кнопка.
+
+def can_set_order(target: User, game: Game) -> bool:
+    """Сменить позицию в круге — на паузе или пока игра не запущена (как в боте)."""
+    return target.is_player() and (game.is_paused() or not game.is_started())
+
+
+@app.get("/app/settings", response_class=HTMLResponse)
+def settings_form(request: Request):
+    user = current_user(request)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+    if not user.is_admin():
+        return _redirect(request, "/app")
+    return templates.TemplateResponse(
+        request, "settings.html",
+        _ctx(request, current=Game().get_password(), saved=False),
+    )
+
+
+@app.post("/app/settings", response_class=HTMLResponse)
+def settings_save(request: Request, password: str = Form("")):
+    user = current_user(request)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+    if not user.is_admin():
+        return _redirect(request, "/app")
+    value = password.strip()
+    Game().set_password(value)
+    admin_log.log(f"🔑 {user.get_name()} "
+                  + ("задал(а) пароль регистрации" if value else "убрал(а) пароль регистрации"))
+    return templates.TemplateResponse(
+        request, "settings.html", _ctx(request, current=value, saved=True),
+    )
+
+
+def user_menu_buttons(target: User):
+    """Действия админа над пользователем — доступность зависит от состояния игры.
+
+    Порт условий из бота (menu/m_profile.py): устранить/оживить/счёт — на паузе;
+    порядок в круге и удаление из игры — на паузе или пока игра не запущена;
+    подарить/отобрать жизнь — пока игрок мёртв; засчитать/отклонить поимку —
+    когда есть заявка. `todo=True` → ещё не реализовано (зачёркнуто).
     """
+    game = Game()
+    paused = game.is_paused()
+    started = game.is_started()
     b = []
 
     def add(label, action, kind=""):
@@ -678,7 +752,7 @@ def user_menu_buttons(target: User):
     elif not target.is_default_admin():
         add("🧹 Забрать админа", "demote")
 
-    # модерация текущей заявки о поимке
+    # модерация текущей заявки о поимке (пока идёт игра)
     if target.is_being_caught():
         add("✅ Засчитать поимку", "force_accept", "primary")
         add("❌ Отклонить поимку", "force_deny", "danger")
@@ -686,18 +760,21 @@ def user_menu_buttons(target: User):
     # игровые действия (только для участников)
     if target.is_player():
         if target.is_alive():
-            add("🔪 Устранить", "kill", "danger")
+            if paused:
+                add("🔪 Устранить", "kill", "danger")
         else:
-            add("♻️ Оживить", "revive", "primary")
+            if paused:
+                add("♻️ Оживить", "revive", "primary")
             if target.is_queued_for_revival():
                 add("🚫 Отобрать шанс жизни", "take_life")
             else:
                 add("🎁 Подарить жизнь", "give_life")
-        add("🔀 Сменить порядок в круге", "randomize_order")
-        add("👋 Удалить из игры", "kick", "danger")
+        if paused or not started:
+            add("🎲 Случайный порядок", "randomize_order")
+            add("👋 Удалить из игры", "kick", "danger")
 
-    # удаление из системы (нельзя себя и дефолт-админа — проверяется в обработчике)
-    if not target.is_default_admin():
+    # удаление из системы — только для не-игроков (нельзя себя/дефолт-админа)
+    if not target.is_player() and not target.is_default_admin():
         add("🗑️ Удалить из системы", "delete", "danger")
 
     # ещё не реализовано (личные сообщения отложены)
@@ -764,7 +841,8 @@ def user_detail(request: Request, uid: int):
     return templates.TemplateResponse(
         request, "user_detail.html",
         _ctx(request, u=info, buttons=user_menu_buttons(target),
-             can_set_score=target.is_player()),
+             can_set_score=can_set_score(target, game),
+             can_set_order=can_set_order(target, game)),
     )
 
 
@@ -793,6 +871,13 @@ def user_action(request: Request, uid: int, action: str = Form(...),
             target.admin_set_score(admin, max(0, int(value)))
         except (ValueError, TypeError):
             pass
+    elif action == "set_order" and target.is_player():
+        try:
+            before = _snapshot_targets()
+            target.admin_set_order(admin, int(value))
+            _notify_retargets(before)
+        except (ValueError, TypeError):
+            pass
     elif action == "delete":
         # нельзя удалить себя или дефолт-админа
         if target.id != admin.id and not target.is_default_admin():
@@ -809,19 +894,12 @@ def user_action(request: Request, uid: int, action: str = Form(...),
     return _redirect(request, f"/app/users/{uid}")
 
 
-@app.get("/app/users", response_class=HTMLResponse)
-def users_list(request: Request, view: str = "menu"):
-    user = current_user(request)
-    if user is None:
-        return RedirectResponse(url="/", status_code=303)
-    if not user.is_admin():
-        return _redirect(request, "/app")
+def _user_list_data():
+    """Данные для списка пользователей (раскрывающиеся карточки с действиями).
 
-    # Две версии списка: "menu" — компактная таблица с кнопкой «Управление»
-    # (открывает отдельную страницу); "inline" — раскрывающиеся строки с
-    # кнопками действий прямо на месте.
-    view = "inline" if view == "inline" else "menu"
-
+    Используется и на отдельной странице `/app/users`, и встроенным блоком на
+    дашборде (`_userlist.html`). Кнопки действий зависят от состояния игры.
+    """
     game = Game()
     all_users = User.all()
     players = [u for u in all_users if u.is_player()]
@@ -830,23 +908,32 @@ def users_list(request: Request, view: str = "menu"):
 
     def row(u: User) -> dict:
         r = user_row(u, game)
-        if view == "inline":  # кнопки действий считаем только для inline-версии
-            r["buttons"] = user_menu_buttons(u)
-            r["can_set_score"] = u.is_player()
-            r["score"] = u.get_score()
+        r["buttons"] = user_menu_buttons(u)
+        r["can_set_score"] = can_set_score(u, game)
+        r["can_set_order"] = can_set_order(u, game)
+        r["score"] = u.get_score()
         return r
 
+    return {
+        "total_users": len(all_users),
+        "total_players": len(players),
+        "game_started": game.is_started(),
+        "game_paused": game.is_paused(),
+        "players": [row(u) for u in players],
+        "non_players": [row(u) for u in non_players],
+    }
+
+
+@app.get("/app/users", response_class=HTMLResponse)
+def users_list(request: Request):
+    user = current_user(request)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+    if not user.is_admin():
+        return _redirect(request, "/app")
+
     return templates.TemplateResponse(
-        request, "users.html",
-        _ctx(
-            request,
-            view=view,
-            total_users=len(all_users),
-            total_players=len(players),
-            game_started=game.is_started(),
-            players=[row(u) for u in players],
-            non_players=[row(u) for u in non_players],
-        ),
+        request, "users.html", _ctx(request, **_user_list_data()),
     )
 
 
