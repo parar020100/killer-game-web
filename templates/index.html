@@ -148,8 +148,8 @@
     {% endif %}
 
     <div class="devbar">
-      <span>Вы вошли как <b>{{ user_name }}</b>{% if as_uid %} <span title="Вкладка привязана к id {{ as_uid }} через ?as= — своя на каждую вкладку, независимо от cookie">🕶 #{{ as_uid }}</span>{% endif %}</span>
-      <span class="as-links">{% if as_uid %}<span title="Вкладка в отладочном входе ?as=; чтобы «выйти», просто закройте её">отладочная вкладка</span>{% else %}<a href="/logout">выйти</a>{% endif %}</span>
+      <span>Вы вошли как <b>{{ user_name }}</b>{% if dev_user %} <span title="Вкладка привязана к {{ dev_user }} через ?user= — своя на каждую вкладку, независимо от cookie">🕶 {{ dev_user }}</span>{% endif %}</span>
+      <span class="as-links">{% if dev_user %}<span title="Вкладка в отладочном входе ?user=; чтобы «выйти», просто закройте её">отладочная вкладка</span>{% else %}<a href="/logout">выйти</a>{% endif %}</span>
     </div>
 
     <div class="bubble">{{ message_html | safe }}<span class="support">ℹ️ В случае ошибок, вопросов или разногласий, напишите сообщение этому боту (желательно) или <a href="#">{{ support_contact }}</a>.</span></div>

@@ -119,7 +119,7 @@
     </div>
 
     {% if allow_dev %}
-    <a class="btn full" href="/app?as={{ u.id }}" target="_blank" rel="noopener"
+    <a class="btn full" href="/app?user={{ u.username or u.id }}" target="_blank" rel="noopener"
        title="откроется в новой вкладке, независимо от вашей cookie-сессии">🕶 Открыть как этот пользователь (новая вкладка)</a>
     {% endif %}
 

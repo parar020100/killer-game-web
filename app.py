@@ -13,6 +13,7 @@
 import re
 from html import escape
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import FastAPI, Request, Form, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -53,54 +54,67 @@ def validate_real_name(raw: str):
 
 
 # ---------------------------------------------------------------------------
-# Текущий пользователь (по сессии или отладочному ?as=<id>)
+# Текущий пользователь (по сессии или отладочному ?user=<id|username>)
 # ---------------------------------------------------------------------------
 
-def _dev_as(request: Request):
-    """id пользователя из ?as= (только если включён ALLOW_DEV_LOGIN), иначе None.
+def _resolve_user_param(raw):
+    """Пользователь по значению ?user= — это может быть внутренний id ИЛИ username."""
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    if raw.isdigit():
+        return User.by_id(int(raw))
+    return User.by_username(raw)
+
+
+def _dev_user_param(request: Request):
+    """Сырое значение ?user= (id или username), если dev-режим включён и оно валидно.
 
     Это ключ к «разным вкладкам»: identity живёт в URL, а не в общей на браузер
     cookie, поэтому каждая вкладка независима. Значение НЕ пишется в cookie.
+    Возвращаем именно исходную строку, чтобы ссылки сохраняли удобный username.
     """
     if not config.ALLOW_DEV_LOGIN:
         return None
-    raw = request.query_params.get("as")
-    return int(raw) if raw and raw.isdigit() else None
+    raw = (request.query_params.get("user") or "").strip()
+    return raw if raw and _resolve_user_param(raw) else None
 
 
 def current_user(request: Request):
-    # Отладочный ?as= имеет приоритет над cookie и не трогает сессию.
-    as_uid = _dev_as(request)
-    if as_uid is not None:
-        return User.by_id(as_uid)
+    # Отладочный ?user= имеет приоритет над cookie и не трогает сессию.
+    if config.ALLOW_DEV_LOGIN:
+        user = _resolve_user_param(request.query_params.get("user"))
+        if user is not None:
+            return user
     uid = request.session.get("uid")
     return User.by_id(uid) if uid else None
 
 
-def _link_fn(as_uid):
-    """Вернуть функцию, дописывающую ?as=<id> к внутренним ссылкам/формам."""
+def _link_fn(user_param):
+    """Вернуть функцию, дописывающую ?user=<id|username> к внутренним ссылкам/формам."""
     def link(path: str) -> str:
-        if as_uid is None:
+        if not user_param:
             return path
         sep = "&" if "?" in path else "?"
-        return f"{path}{sep}as={as_uid}"
+        return f"{path}{sep}user={quote(str(user_param))}"
     return link
 
 
 def _ctx(request: Request, **extra):
-    """Контекст шаблона + прокидывание отладочного ?as= во все ссылки страницы."""
-    as_uid = _dev_as(request)
+    """Контекст шаблона + прокидывание отладочного ?user= во все ссылки страницы."""
+    user_param = _dev_user_param(request)
     return {
-        "as_uid": as_uid,
+        "dev_user": user_param,
         "allow_dev": config.ALLOW_DEV_LOGIN,
-        "link": _link_fn(as_uid),
+        "link": _link_fn(user_param),
         **extra,
     }
 
 
 def _redirect(request: Request, url: str, status_code: int = 303):
-    """RedirectResponse, сохраняющий отладочный ?as= (чтобы вкладка не «слетала»)."""
-    return RedirectResponse(url=_link_fn(_dev_as(request))(url), status_code=status_code)
+    """RedirectResponse, сохраняющий отладочный ?user= (чтобы вкладка не «слетала»)."""
+    return RedirectResponse(url=_link_fn(_dev_user_param(request))(url),
+                            status_code=status_code)
 
 
 _URL_RE = re.compile(r"(https?://[^\s]+)")
@@ -303,6 +317,7 @@ def user_row(user: User, game: Game) -> dict:
         "order": user.get_game_order() if user.is_player() else None,
         "kills": user.get_score() if user.is_player() else None,
         "nick": f"@{un}" if un else "—",
+        "username": un,
         "name": user.get_name(),
         "is_admin": user.is_admin(),
     }
@@ -515,6 +530,14 @@ def login(request: Request, token: str = ""):
             status_code=400,
         )
     request.session["uid"] = uid
+    # В dev-режиме закрепляем вход за КОНКРЕТНОЙ вкладкой через ?user=<username>,
+    # чтобы разные ссылки, открытые в разных вкладках одного браузера, не мешали
+    # друг другу (cookie одна на браузер). В проде (dev выключен) — обычная cookie.
+    if config.ALLOW_DEV_LOGIN:
+        u = User.by_id(uid)
+        ident = u.get_username() if u else None
+        return RedirectResponse(url=f"/app?user={quote(str(ident or uid))}",
+                                status_code=303)
     return RedirectResponse(url="/app", status_code=303)
 
 

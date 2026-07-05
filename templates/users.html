@@ -92,7 +92,7 @@
             <td class="num">{{ u.kills }}</td>
             <td class="nick">{{ u.nick }}</td>
             <td class="name"><a href="{{ link('/app/users/' ~ u.id) }}">{{ u.name }}</a></td>
-            {% if allow_dev %}<td class="nick"><a href="/app?as={{ u.id }}" target="_blank" rel="noopener" title="открыть в новой вкладке">открыть как ↗</a></td>{% endif %}
+            {% if allow_dev %}<td class="nick"><a href="/app?user={{ u.username or u.id }}" target="_blank" rel="noopener" title="открыть в новой вкладке">открыть как ↗</a></td>{% endif %}
           </tr>
         {% endfor %}
         </tbody>
@@ -114,7 +114,7 @@
             <td class="num">{{ u.id }}</td>
             <td class="nick">{{ u.nick }}</td>
             <td class="name"><a href="{{ link('/app/users/' ~ u.id) }}">{{ u.name }}</a></td>
-            {% if allow_dev %}<td class="nick"><a href="/app?as={{ u.id }}" target="_blank" rel="noopener" title="открыть в новой вкладке">открыть как ↗</a></td>{% endif %}
+            {% if allow_dev %}<td class="nick"><a href="/app?user={{ u.username or u.id }}" target="_blank" rel="noopener" title="открыть в новой вкладке">открыть как ↗</a></td>{% endif %}
           </tr>
         {% endfor %}
         </tbody>

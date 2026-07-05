@@ -34,6 +34,27 @@ class User:
         return cls(ident.get_user_id()) if ident else None
 
     @classmethod
+    def by_username(cls, username):
+        """Найти пользователя по username любого канала (или по platform_uid).
+
+        В эмуляции чата platform_uid = username, поэтому оба варианта совпадают.
+        Регистронезависимо, ведущий @ игнорируется.
+        """
+        if not username:
+            return None
+        u = str(username).strip().lstrip("@")
+        if not u:
+            return None
+        row = query_one(
+            "SELECT user_id FROM identity WHERE lower(username) = lower(?) "
+            "ORDER BY id LIMIT 1", (u,))
+        if not row:
+            row = query_one(
+                "SELECT user_id FROM identity WHERE lower(platform_uid) = lower(?) "
+                "ORDER BY id LIMIT 1", (u,))
+        return cls(row["user_id"]) if row else None
+
+    @classmethod
     def get_or_create_by_identity(cls, platform, platform_uid, username=None, name=None):
         """Найти пользователя по идентичности или создать новый профиль с ней."""
         ident = Identity.by_platform(platform, platform_uid)
