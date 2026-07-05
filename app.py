@@ -260,9 +260,9 @@ def capture_prompt(user: User):
     """
     if not (user.is_player() and user.is_alive() and user.is_being_caught()):
         return None
-    catcher = user.get_murderer()
-    who = escape(catcher.get_name()) if catcher else "Другой игрок"
-    message = (f"📸 <strong>{who}</strong> заявил(а), что поймал(а) вас!\n"
+    # ВАЖНО: имя «охотника» раскрывать нельзя — анонимность преследователя
+    # ключевая механика игры (как в боте: «Другой игрок сообщил…»).
+    message = ("📸 <strong>Другой игрок сообщил, что ему удалось вас поймать.</strong>\n"
                "Если это правда — подтвердите поимку. Если нет — отклоните.")
     return {
         "hint": "— вас поймали? —",
