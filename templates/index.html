@@ -329,8 +329,8 @@
   }
   .mini-body .btn.wide { flex: 1 1 100%; width: 100%; }
   /* окошко ввода сообщения — заметно шире и колонкой (побольше поле).
-     right:0 прижимает поповер к правому краю чипа, чтобы не вылезал за панель. */
-  .mini-body.msg { width: 360px; max-width: calc(100vw - 28px); left: auto; right: 0; }
+     позиционирование — как у остальных поповеров (от левого края чипа). */
+  .mini-body.msg { width: 360px; max-width: calc(100vw - 28px); }
   .mini-body.msg form { flex-direction: column; align-items: stretch; }
   .mini-body.msg textarea {
     width: 100%; font: inherit; font-size: 12.5px; padding: 7px 9px; resize: vertical;
