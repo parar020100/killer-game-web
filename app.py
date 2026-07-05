@@ -1020,7 +1020,8 @@ def _render_profile(request, user, values, errors, saved, answers):
         request, "profile.html",
         _ctx(request, values=values, errors=errors, saved=saved,
              extra_fields=fields, muted=muted,
-             is_admin=user.is_admin(), admin_log_on=_admin_log_enabled(user)),
+             is_admin=user.is_admin(), admin_log_on=_admin_log_enabled(user),
+             is_root=user.is_root()),
     )
 
 
@@ -1042,6 +1043,25 @@ async def profile_save(request: Request):
     form = await request.form()
     action = form.get("action", "save")
     is_player = user.is_player()
+
+    # «Выйти на всех устройствах» — отозвать постоянные ссылки входа и очистить
+    # текущую сессию. Новую ссылку можно получить в чате командой /start.
+    if action == "revoke_login":
+        user.revoke_login_links()
+        admin_log.log(f"🔐 {user.get_name()} отозвал(а) ссылки входа (выход на всех устройствах)")
+        request.session.clear()
+        return RedirectResponse(url="/", status_code=303)
+
+    # «Забыть меня» — самоудаление учётной записи (root удалить нельзя).
+    if action == "forget_me":
+        if user.is_root():
+            values = {"real_name": user.get_real_name() or ""}
+            return _render_profile(request, user, values, {},
+                                   "Учётную запись root удалить нельзя.",
+                                   get_extra_answers(user))
+        user.forget_self()
+        request.session.clear()
+        return RedirectResponse(url="/", status_code=303)
 
     # Переключатель уведомлений («Отключить бота» из меню игрока в боте).
     if action in ("mute", "unmute"):

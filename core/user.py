@@ -574,6 +574,34 @@ class User:
         self._finish_structural_change(was_alive)
         return f"Пользователь {name} удалён из системы."
 
+    # --- самообслуживание учётки («забыть меня») --------------------------
+
+    def revoke_login_links(self):
+        """Отозвать постоянные ссылки входа всех каналов («выйти на всех устройствах»).
+
+        Старые magic-ссылки перестают работать; новую можно получить в чате (/start).
+        """
+        from core import auth
+        for ident in self.identities():
+            auth.revoke_permanent_token(ident.id)
+
+    def forget_self(self) -> bool:
+        """Самоудаление учётной записи («забыть меня»). root удалить нельзя.
+
+        Каскадно удаляет идентичности и ссылки входа; игровые ссылки на этого
+        пользователя обнуляются. Возвращает False, если это root (удаление запрещено).
+        """
+        if self.is_root():
+            return False
+        name = self.get_name()
+        was_alive = self.is_alive()
+        self._log(f"🗑️ {name} удалил(а) свою учётную запись («забыть меня»)")
+        execute("UPDATE user SET target = NULL WHERE target = ?", (self.id,))
+        execute("UPDATE user SET killed_by = NULL WHERE killed_by = ?", (self.id,))
+        execute("DELETE FROM user WHERE id = ?", (self.id,))
+        self._finish_structural_change(was_alive)
+        return True
+
     # --- уведомления ------------------------------------------------------
 
     def notify(self, text: str):

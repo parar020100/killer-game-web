@@ -61,6 +61,9 @@
     border-radius: 10px; cursor: pointer; align-self: flex-start;
   }
   .btn.ghost { background: var(--btn-bg); border-color: var(--border); color: var(--text); font-weight: 600; }
+  .card.danger { border-color: rgba(214,69,80,.4); }
+  .btn.danger { background: rgba(214,69,80,.1); border-color: rgba(214,69,80,.4); color: var(--danger); }
+  code { background: var(--btn-bg); border: 1px solid var(--border); border-radius: 5px; padding: 0 5px; font-size: 12.5px; }
   .note {
     background: var(--ok-soft); border: 1px solid var(--ok-border); color: var(--ok);
     border-radius: 12px; padding: 10px 14px; font-size: 14px; font-weight: 550;
@@ -115,6 +118,26 @@
          обо всех значимых событиях игры (регистрации, поимки, действия других админов).</p>
       <p class="state">Сейчас: {{ '🔔 включены' if admin_log_on else '🔕 выключены' }}</p>
       <button type="submit" class="btn ghost">{{ '🔕 Выключить' if admin_log_on else '🔔 Включить' }}</button>
+    </form>
+    {% endif %}
+
+    <form class="card danger" method="post" action="{{ link('/app/profile') }}"
+          onsubmit="return confirm('Отозвать все ссылки входа? Текущий вход завершится, а старые ссылки перестанут работать. Новую можно получить в чате командой /start.')">
+      <input type="hidden" name="action" value="revoke_login">
+      <h2>🔐 Выйти на всех устройствах</h2>
+      <p class="hint">Отзывает ваши постоянные ссылки входа и завершает текущий сеанс.
+         Новую ссылку получите в чате командой <code>/start</code>.</p>
+      <button type="submit" class="btn ghost">🔐 Отозвать ссылки входа</button>
+    </form>
+
+    {% if not is_root %}
+    <form class="card danger" method="post" action="{{ link('/app/profile') }}"
+          onsubmit="return confirm('Удалить свою учётную запись? Это необратимо: профиль, участие в игре и ссылки входа будут стёрты.')">
+      <input type="hidden" name="action" value="forget_me">
+      <h2>🗑️ Забыть меня</h2>
+      <p class="hint">Полностью удаляет вашу учётную запись: профиль, участие в игре
+         и ссылки входа. Действие необратимо.</p>
+      <button type="submit" class="btn danger">🗑️ Удалить учётную запись</button>
     </form>
     {% endif %}
     </div>
