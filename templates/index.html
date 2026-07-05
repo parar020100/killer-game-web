@@ -205,10 +205,12 @@
 
   /* ── панель списка игроков: по умолчанию скрыта; видна при html.show-userlist.
      Скрыта → меню центрируется само (панели нет). Видна → уходит вправо. ── */
+  /* список виден только когда включён его переключатель И раскрыто меню админа
+     (скрытие меню админа прячет и список игроков — они логически связаны). */
   .userpanel { display: none; width: 100%; max-width: 460px; }
-  html.show-userlist .userpanel { display: block; }
+  html.show-userlist.show-adminmenu .userpanel { display: block; }
   @media (min-width: 980px) {
-    html.show-userlist .userpanel {
+    html.show-userlist.show-adminmenu .userpanel {
       flex: 1 1 0; min-width: 0; max-width: 640px;
       position: sticky; top: 18px; align-self: flex-start;
       /* список прокручивается в своём окне — меню слева остаётся на месте */

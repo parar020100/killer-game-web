@@ -162,15 +162,6 @@
       <button type="submit" class="btn ghost">{{ '➖ Не требовать фото' if photo_proof else '📸 Требовать фото' }}</button>
     </form>
 
-    <form class="card" method="post" action="{{ link('/app/settings') }}"
-          onsubmit="return confirm('Перезапустить приложение? На пару секунд сайт будет недоступен, данные игры сохранятся.')">
-      <input type="hidden" name="action" value="restart">
-      <h2>🔁 Перезапуск приложения</h2>
-      <p class="hint">Перезагружает сервер приложения (например, после обновления кода
-         или изменения настроек). Данные игры сохраняются, занимает пару секунд.</p>
-      <button type="submit" class="btn ghost">🔁 Перезапустить приложение</button>
-    </form>
-
     <form class="card" method="post" action="{{ link('/app/settings') }}" autocomplete="off"
           onsubmit="return confirm('Переключить активную игру (файл БД)? Приложение перезапустится, текущий вход может завершиться.')">
       <input type="hidden" name="action" value="active_db">
@@ -207,6 +198,15 @@
       </div>
       {% endfor %}
       <button type="submit" class="btn">💾 Сохранить вопросы</button>
+    </form>
+
+    <form class="card" method="post" action="{{ link('/app/settings') }}"
+          onsubmit="return confirm('Перезапустить приложение? На пару секунд сайт будет недоступен, данные игры сохранятся.')">
+      <input type="hidden" name="action" value="restart">
+      <h2>🔁 Перезапуск приложения</h2>
+      <p class="hint">Перезагружает сервер приложения (например, после обновления кода
+         или изменения настроек). Данные игры сохраняются, занимает пару секунд.</p>
+      <button type="submit" class="btn ghost">🔁 Перезапустить приложение</button>
     </form>
 
     <form class="card danger" method="post" action="{{ link('/app/settings') }}"
