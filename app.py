@@ -177,6 +177,8 @@ def player_view(user: User):
         # Игра идёт — показываем игровое состояние конкретного игрока.
         lines += _player_game_lines(user)
         buttons += _player_game_buttons(user)
+        if game.is_paused():
+            buttons.append(_btn("🏁 Итоги игры", href="/app/results", full=True))
 
     if has_rules():
         buttons.append(_btn("📜 Правила", href="/rules", full=True))
@@ -244,20 +246,28 @@ def admin_view(user: User):
     ])
 
     buttons = []
-    if game.is_started():
-        buttons.append(_btn("⏹️ Остановить игру", "stop_game", "danger"))
-    else:
+    if not game.is_started():
         buttons.append(_btn("▶️ Запустить игру", "start_game", "primary"))
+    else:
+        if game.is_paused():
+            buttons.append(_btn("▶️ Продолжить", "resume", "primary"))
+        else:
+            buttons.append(_btn("⏸️ Пауза", "pause"))
+        buttons.append(_btn("🏁 Завершить (итоги)", "end_game", "danger"))
     if game.is_registration_open():
         buttons.append(_btn("🚫 Закрыть регистрацию", "close_reg"))
     else:
         buttons.append(_btn("✅ Открыть регистрацию", "open_reg"))
 
+    if game.is_started():
+        buttons.append(_btn("📊 Промежуточные итоги", href="/app/results", full=True))
     buttons.append(_btn("👥 Список пользователей", href="/app/users", full=True))
     buttons.append(_btn("📢 Рассылка", href="/broadcast", full=True))
+    buttons.append(_btn("🔑 Пароль регистрации", href="/app/password", full=True))
     buttons.append(_btn("📋 Журнал (admin log)", href="/admin-log", full=True))
     if has_rules():
         buttons.append(_btn("📜 Правила", href="/rules", full=True))
+    buttons.append(_btn("♻️ Сбросить игру", "reset_game", "danger", full=True))
     buttons.append(_btn("🔄 Обновить", "noop", full=True))
     return message, buttons
 
@@ -328,6 +338,54 @@ def do_join(user: User):
     user.notify("✅ Вы зарегистрированы в игре «Папарацци».")
 
 
+_MEDALS = ["🥇", "🥈", "🥉"]
+
+
+def _results_rows(groups):
+    """Плоский список призёров из сгруппированного топа: [{medal,name,nick,score}]."""
+    rows = []
+    for i, grp in enumerate(groups[:3]):
+        for p in grp:
+            rows.append({"medal": _MEDALS[i], "name": p.get_name(),
+                         "nick": p.get_username(), "score": p.get_score()})
+    return rows
+
+
+def results_data():
+    game = Game()
+    winner = game.get_winner()
+    return {
+        "alive_count": game.count_alive(),
+        "total": game.count_players(),
+        "is_over": game.count_players() > 0 and game.count_alive() <= 1,
+        "winner_name": winner.get_name() if winner else None,
+        "top_alive": _results_rows(game.top_alive_grouped()),
+        "top_dead": _results_rows(game.top_dead_grouped()),
+    }
+
+
+def results_text() -> str:
+    """Простой текстовый вариант итогов для рассылки в чат."""
+    d = results_data()
+    lines = []
+    if d["winner_name"]:
+        lines.append(f"🏆 Победитель: {d['winner_name']}!")
+    else:
+        lines.append(f"В живых осталось {d['alive_count']} из {d['total']}.")
+    if d["top_alive"]:
+        lines.append("\nЛучшие игроки:")
+        for r in d["top_alive"]:
+            nick = f" (@{r['nick']})" if r["nick"] else ""
+            lines.append(f"{r['medal']} {r['name']}{nick} — поймал(а) {r['score']}")
+    if d["top_dead"]:
+        lines.append("\nЛучшие из выбывших:")
+        for r in d["top_dead"]:
+            nick = f" (@{r['nick']})" if r["nick"] else ""
+            lines.append(f"😵 {r['medal']} {r['name']}{nick} — поймал(а) {r['score']}")
+    lines.append("\nСпасибо за игру!")
+    return "\n".join(lines)
+
+
 def apply_action(action: str, user: User):
     game = Game()
     who = user.get_name()
@@ -352,6 +410,26 @@ def apply_action(action: str, user: User):
         game.stop()
         admin_log.log(f"🔴 {who} остановил(а) игру")
         _broadcast("🔴 Игра остановлена администратором.")
+    elif action == "pause":
+        if game.is_started() and not game.is_paused():
+            game.pause()
+            admin_log.log(f"⏸️ {who} поставил(а) игру на паузу")
+            _broadcast("⏸️ Игра поставлена на паузу администратором.")
+    elif action == "resume":
+        if game.is_started() and game.is_paused():
+            game.resume()
+            admin_log.log(f"▶️ {who} возобновил(а) игру")
+            _broadcast("▶️ Игра продолжается!")
+    elif action == "reset_game":
+        game.reset()
+        admin_log.log(f"♻️ {who} сбросил(а) игру")
+        _broadcast("♻️ Игра сброшена администратором. Спасибо за участие!",
+                   players_only=False)
+    elif action == "end_game":
+        game.pause()
+        admin_log.log(f"🏁 {who} завершил(а) игру, разосланы итоги")
+        _broadcast("🏁 Игра завершена! Итоги:\n\n" + results_text(),
+                   players_only=False)
     elif action == "leave":
         if user.is_player():
             user.leave()
@@ -487,6 +565,45 @@ def dashboard(request: Request, role: str = "player"):
             buttons=buttons,
             support_contact=SUPPORT_CONTACT,
         ),
+    )
+
+
+@app.get("/app/results", response_class=HTMLResponse)
+def results_page(request: Request):
+    user = current_user(request)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+    return templates.TemplateResponse(
+        request, "results.html", _ctx(request, is_admin=user.is_admin(), **results_data()),
+    )
+
+
+@app.get("/app/password", response_class=HTMLResponse)
+def password_form(request: Request):
+    user = current_user(request)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+    if not user.is_admin():
+        return _redirect(request, "/app")
+    return templates.TemplateResponse(
+        request, "password.html",
+        _ctx(request, current=Game().get_password(), saved=False),
+    )
+
+
+@app.post("/app/password", response_class=HTMLResponse)
+def password_save(request: Request, password: str = Form("")):
+    user = current_user(request)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+    if not user.is_admin():
+        return _redirect(request, "/app")
+    value = password.strip()
+    Game().set_password(value)
+    admin_log.log(f"🔑 {user.get_name()} "
+                  + ("задал(а) пароль регистрации" if value else "убрал(а) пароль регистрации"))
+    return templates.TemplateResponse(
+        request, "password.html", _ctx(request, current=value, saved=True),
     )
 
 

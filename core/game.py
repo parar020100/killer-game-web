@@ -79,6 +79,16 @@ class Game:
         if self.is_started():
             self.set_paused(False)
 
+    def reset(self):
+        """Полный сброс игры: снять всех игроков и обнулить игровые данные."""
+        self.set_started(False)
+        self.set_paused(False)
+        self.set_registration_open(False)
+        execute("DELETE FROM revive_queue")
+        execute("UPDATE user SET is_player = 0, is_alive = 0, kill_count = 0, "
+                "killed_by = NULL, game_order = NULL, target = NULL")
+        return True, "Игра сброшена."
+
     # --- счётчики ---------------------------------------------------------
 
     def count_users(self) -> int:
