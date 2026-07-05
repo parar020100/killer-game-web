@@ -58,13 +58,20 @@
   document.addEventListener('click', function (e) {
     var nav = e.target.closest('#usearch-next, #usearch-prev');
     if (nav) { e.preventDefault(); step(nav.id === 'usearch-next' ? 1 : -1); return; }
-    // клик по метке «кем пойман» — подставить имя в поиск и найти игрока
+    // клик по метке «кем пойман» — подставить имя в поиск, найти игрока в списке
+    // и раскрыть его карточку (замена перехода на отдельную страницу игрока)
     var jump = e.target.closest('[data-jump]');
     if (jump) {
       e.preventDefault();
       e.stopPropagation();
       var inp = input();
-      if (inp) { inp.value = jump.getAttribute('data-jump'); apply(true); inp.focus(); }
+      if (inp) {
+        inp.value = jump.getAttribute('data-jump');
+        apply(true);
+        var m = document.querySelector('.ucard.match');
+        if (m) m.open = true;   // раскрыть меню найденного игрока
+        inp.focus();
+      }
     }
   });
 })();

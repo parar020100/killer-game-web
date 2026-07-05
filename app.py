@@ -1365,43 +1365,9 @@ def _notify_retargets(before):
             notify_target(u)
 
 
-@app.get("/app/users/{uid}", response_class=HTMLResponse)
-def user_detail(request: Request, uid: int):
-    admin = current_user(request)
-    if admin is None:
-        return RedirectResponse(url="/", status_code=303)
-    if not admin.is_admin():
-        return _redirect(request, "/app")
-    target = User.by_id(uid)
-    if target is None:
-        return _redirect(request, "/app/users")
-
-    game = Game()
-    idents = [{"label": i.label(), "muted": i.is_muted(),
-               "log": i.is_admin_log_enabled()} for i in target.identities()]
-    info = {
-        "id": target.id,
-        "name": target.get_name(),
-        "username": target.get_username(),
-        "real_name": target.get_real_name(),
-        "extra_info": "; ".join(f"{l}: {a}" for l, a in extra_answer_pairs(target)),
-        "status": bot_status_emoji(target) + game_status_emoji(target, game),
-        "is_admin": target.is_admin(),
-        "is_default_admin": target.is_default_admin(),
-        "is_player": target.is_player(),
-        "is_alive": target.is_alive(),
-        "score": target.get_score(),
-        "order": target.get_game_order(),
-        "target": target.get_target(),
-        "killed_by": target.get_killed_by(),
-        "identities": idents,
-    }
-    return templates.TemplateResponse(
-        request, "user_detail.html",
-        _ctx(request, u=info, buttons=user_menu_buttons(target),
-             can_set_score=can_set_score(target, game),
-             can_set_order=can_set_order(target, game)),
-    )
+# Отдельные страницы «Пользователи» (/app/users) и «Профиль пользователя»
+# (/app/users/{uid}) убраны — они дублировали встроенный список на дашборде.
+# Остался только POST-обработчик действий над пользователем (формы карточек).
 
 
 @app.post("/app/users/{uid}/act")
@@ -1412,12 +1378,12 @@ def user_action(request: Request, uid: int, action: str = Form(...),
         return RedirectResponse(url="/", status_code=303)
     if not admin.is_admin():
         return _redirect(request, "/app")
-    # Куда вернуться после действия: туда, откуда пришли (дашборд/список), а не на
-    # отдельную страницу игрока. По умолчанию — на страницу пользователя.
-    dest = next_url if next_url.startswith("/app") else f"/app/users/{uid}"
+    # Куда вернуться после действия: туда, откуда пришли (дашборд). Отдельных
+    # страниц пользователя больше нет, поэтому по умолчанию — на дашборд.
+    dest = next_url if next_url.startswith("/app") else "/app"
     target = User.by_id(uid)
     if target is None:
-        return _redirect(request, "/app/users")
+        return _redirect(request, "/app")
 
     if action == "promote" and not target.is_admin():
         target.set_admin(True)
@@ -1461,9 +1427,7 @@ def user_action(request: Request, uid: int, action: str = Form(...),
             before = _snapshot_targets()
             target.delete_from_system(admin)
             _notify_retargets(before)
-            # удалённого игрока уже нет — возвращаемся к списку, не на его страницу
-            back = dest if dest != f"/app/users/{uid}" else "/app/users"
-            return _redirect(request, back)
+            return _redirect(request, "/app")
     elif action in _USER_ACTIONS:
         method, structural = _USER_ACTIONS[action]
         before = _snapshot_targets() if structural else None
@@ -1516,19 +1480,6 @@ def _user_list_data():
         "non_players": [row(u) for u in non_players],
         "pending": pending,
     }
-
-
-@app.get("/app/users", response_class=HTMLResponse)
-def users_list(request: Request):
-    user = current_user(request)
-    if user is None:
-        return RedirectResponse(url="/", status_code=303)
-    if not user.is_admin():
-        return _redirect(request, "/app")
-
-    return templates.TemplateResponse(
-        request, "users.html", _ctx(request, **_user_list_data()),
-    )
 
 
 def _render_register(request, user, game, values, errors, answers):

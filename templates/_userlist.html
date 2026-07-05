@@ -1,8 +1,8 @@
-{# Раскрывающаяся карточка пользователя с кнопками действий. Общий фрагмент для
-   отдельной страницы /app/users и встроенного списка на дашборде.
+{# Раскрывающаяся карточка пользователя с кнопками действий. Встроенный список на
+   дашборде админа (отдельных страниц пользователей больше нет).
    Импортировать: {% import "_userlist.html" as ul with context %}
-   `back` — путь, куда вернуться после действия (/app или /app/users).
-   Требует в контексте: allow_dev, link, extra_label. #}
+   `back` — путь, куда вернуться после действия (всегда /app).
+   Требует в контексте: allow_dev, link. #}
 
 {% macro card(u, back) -%}
   {# data-search — строка для живого поиска (номер, ник, имена) в нижнем регистре #}
@@ -25,7 +25,7 @@
       <div><dt>🆔 ID</dt><dd>{{ u.id }}</dd></div>
       {% if u.order is not none %}<div><dt>🔢 Позиция</dt><dd>{{ u.order }}</dd></div>{% endif %}
       {% if u.kills is not none %}<div><dt>🔪 Поймал целей</dt><dd>{{ u.kills }}</dd></div>{% endif %}
-      {% if u.killed_by %}<div><dt>{{ '⏳ Заявка о поимке' if u.kill_pending else '☠️ Кем пойман' }}</dt><dd>{% if u.killed_by_id %}<a class="kb-link" href="{{ link('/app/users/' ~ u.killed_by_id) }}">{{ u.killed_by }}</a>{% else %}{{ u.killed_by }}{% endif %}</dd></div>{% endif %}
+      {% if u.killed_by %}<div><dt>{{ '⏳ Заявка о поимке' if u.kill_pending else '☠️ Кем пойман' }}</dt><dd><a class="kb-link" data-jump="{{ u.killed_by }}" role="button" tabindex="0" title="найти этого игрока в списке">{{ u.killed_by }}</a></dd></div>{% endif %}
       {% if u.real_name %}<div><dt>🧑 Настоящее имя</dt><dd>{{ u.real_name }}</dd></div>{% endif %}
       {# привязанные профили разных типов: сначала Telegram, потом VK #}
       {% for a in u.accounts %}
@@ -142,6 +142,8 @@
     <button type="button" class="usearch-nav" id="usearch-next" title="Следующее совпадение" aria-label="Следующее совпадение">›</button>
   </div>
 
+  {# прокручивается только этот блок; поиск сверху и подсказка снизу — всегда видны #}
+  <div class="ulist-scroll">
   {% if pending %}
   <div class="pending">
     <h2>⏳ Неподтверждённые поимки ({{ pending | length }})</h2>
@@ -173,6 +175,7 @@
   {% if non_players %}
   <div class="cards">{% for u in non_players %}{{ card(u, back) }}{% endfor %}</div>
   {% else %}<div class="section empty">Все пользователи в игре.</div>{% endif %}
+  </div>{# /.ulist-scroll #}
 
   <p class="usearch-empty" hidden>Никто не найден.</p>
   <p class="legend">

@@ -213,11 +213,16 @@
     html.show-userlist.show-adminmenu .userpanel {
       flex: 1 1 0; min-width: 0; max-width: 640px;
       position: sticky; top: 18px; align-self: flex-start;
-      /* список прокручивается в своём окне — меню слева остаётся на месте */
-      max-height: calc(100dvh - 36px); overflow-y: auto;
+      /* список прокручивается в своём окне — меню слева остаётся на месте.
+         Панель — колонка: поиск сверху и подсказка снизу закреплены, скролл — в середине. */
+      max-height: calc(100dvh - 36px); display: flex; flex-direction: column;
     }
+    html.show-userlist.show-adminmenu .upanel-body { flex: 1 1 auto; min-height: 0; }
+    .upanel-body .ulist-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
   }
   .upanel-body { display: flex; flex-direction: column; gap: 8px; }
+  /* прокручиваемая середина списка (поиск и подсказка — вне неё) */
+  .ulist-scroll { display: flex; flex-direction: column; gap: 8px; }
 
   /* красный блок неподтверждённых поимок (заявки, ждущие ответа жертвы) */
   .pending {
@@ -255,7 +260,8 @@
   }
   .usearch-nav:hover { background: var(--btn-bg-hover); color: var(--text); }
   .usearch-empty { font-size: 13px; color: var(--text-dim); margin: 2px; text-align: center; }
-  .kb-link { color: var(--danger); text-decoration: none; }
+  .kb-link { color: var(--danger); text-decoration: none; cursor: pointer; }
+  .kb-link:hover { text-decoration: underline; }
   .ucard > summary .ubadge.kb[data-jump] { cursor: pointer; }
   /* Компактный список: один игрок — одна строка (без переносов), рассчитан на
      ~сотню игроков. Имя при нехватке места усекается многоточием. */
