@@ -521,6 +521,34 @@ class User:
             murderer.notify(f"🚫 Администратор отклонил вашу поимку {self.get_name()}.")
         return f"Поимка игрока {self.get_name()} отклонена."
 
+    def admin_reassign_kill(self, admin: "User", new_murderer: "User") -> str:
+        """Переназначить, кому засчитывается поимка выбывшего игрока (self).
+
+        Пример: цель поймал не тот, кому она была назначена. Списываем очко у
+        прежнего «охотника» (если был) и начисляем новому, обновляя killed_by.
+        """
+        if not self.is_player():
+            return "Пользователь не участвует в игре."
+        if self.is_alive():
+            return "Переназначить поимку можно только у выбывшего игрока."
+        if new_murderer is None or new_murderer.id == self.id:
+            return "Некорректный игрок для зачёта поимки."
+        old = self.get_murderer()
+        if old and old.id == new_murderer.id:
+            return "Поимка уже засчитана этому игроку."
+        if old:
+            old.decrement_score()
+            old.notify(f"➖ Администратор передал вашу поимку игрока "
+                       f"{self.get_name()} другому участнику.")
+        new_murderer.increment_score()
+        self.set_murderer(new_murderer)
+        self._log(f"🔁 {admin.get_name()} засчитал(а) поимку игрока "
+                  f"{self.get_name()} игроку {new_murderer.get_name()}")
+        new_murderer.notify(f"➕ Администратор засчитал вам поимку игрока "
+                            f"{self.get_name()}.")
+        return (f"Поимка игрока {self.get_name()} засчитана игроку "
+                f"{new_murderer.get_name()}.")
+
     def give_life(self, admin: "User") -> str:
         if self.is_alive():
             return "Игрок и так в игре."

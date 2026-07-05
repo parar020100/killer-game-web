@@ -32,27 +32,33 @@
     line-height: 1.5; min-height: 100dvh; display: flex; justify-content: center; align-items: flex-start;
     padding: 20px 14px calc(20px + env(safe-area-inset-bottom));
   }
-  .app { width: 100%; max-width: 460px; display: flex; flex-direction: column; gap: 14px; }
+  .app { width: 100%; max-width: 460px; display: flex; flex-direction: column; gap: 12px; }
+  /* на широком экране карточки профиля — в две колонки */
+  @media (min-width: 760px) { .app { max-width: 760px; } }
   .head { display: flex; align-items: center; gap: 10px; }
-  .head h1 { margin: 0; font-size: 18px; }
+  .head h1 { margin: 0; font-size: 17px; }
   .head .back { margin-left: auto; text-decoration: none; color: var(--accent); font-weight: 600; font-size: 13px; }
-  .card {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 18px;
-    box-shadow: var(--shadow); padding: 18px 18px; display: flex; flex-direction: column; gap: 12px;
+  .grid { display: flex; flex-direction: column; gap: 12px; }
+  @media (min-width: 760px) {
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
   }
-  .card h2 { margin: 0; font-size: 15px; display: flex; align-items: center; gap: 7px; }
-  .hint { margin: 0; font-size: 13.5px; color: var(--text-dim); }
-  label { display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 15px;
+    box-shadow: var(--shadow); padding: 13px 14px; display: flex; flex-direction: column; gap: 9px;
+  }
+  .card h2 { margin: 0; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+  .hint { margin: 0; font-size: 12.5px; color: var(--text-dim); }
+  label { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; font-weight: 600; }
   input {
-    font: inherit; font-size: 15px; font-weight: 400; padding: 11px 13px;
-    border: 1px solid var(--border); border-radius: 11px; background: var(--btn-bg); color: var(--text);
+    font: inherit; font-size: 13.5px; font-weight: 400; padding: 8px 10px;
+    border: 1px solid var(--border); border-radius: 9px; background: var(--btn-bg); color: var(--text);
   }
   input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .err { color: var(--danger); font-size: 13px; font-weight: 500; }
+  .err { color: var(--danger); font-size: 12.5px; font-weight: 500; }
   .btn {
     appearance: none; border: 1px solid var(--accent-border); background: var(--accent-soft);
-    color: var(--accent); font: inherit; font-weight: 650; font-size: 15px; padding: 12px;
-    border-radius: 12px; cursor: pointer; align-self: flex-start;
+    color: var(--accent); font: inherit; font-weight: 600; font-size: 13.5px; padding: 9px 14px;
+    border-radius: 10px; cursor: pointer; align-self: flex-start;
   }
   .btn.ghost { background: var(--btn-bg); border-color: var(--border); color: var(--text); font-weight: 600; }
   .note {
@@ -71,6 +77,7 @@
 
     {% if saved %}<div class="note">✅ {{ saved }}</div>{% endif %}
 
+    <div class="grid">
     <form class="card" method="post" action="{{ link('/app/profile') }}" autocomplete="off">
       <input type="hidden" name="action" value="save">
       <h2>✏️ Данные игрока</h2>
@@ -110,6 +117,7 @@
       <button type="submit" class="btn ghost">{{ '🔕 Выключить' if admin_log_on else '🔔 Включить' }}</button>
     </form>
     {% endif %}
+    </div>
   </main>
 </body>
 </html>

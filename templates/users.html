@@ -81,17 +81,41 @@
   .ucard > summary .chev { margin-left: auto; color: var(--text-dim); font-size: 14px; }
   .ucard[open] > summary { border-bottom: 1px solid var(--border); background: var(--btn-bg-hover); }
   .ucard[open] > summary .chev { color: var(--accent); }
-  /* совпадение с поиском — подсветка оранжевым */
+  /* совпадение с поиском — подсветка оранжевым; текущее (по Enter/‹›) — ярче */
   .ucard.match { border-color: #f0932b; box-shadow: 0 0 0 2px rgba(240,147,43,.35); }
   .ucard.match > summary { background: rgba(240,147,43,.14); }
-  /* поле живого поиска + полный набор полей в раскрытой карточке */
+  .ucard.match-current { border-color: #e67e22; box-shadow: 0 0 0 3px rgba(230,126,34,.55); }
+  /* поле живого поиска + кнопки перехода по совпадениям */
+  .usearch-row { display: flex; gap: 7px; align-items: stretch; }
   .usearch {
-    width: 100%; font: inherit; font-size: 14px; padding: 10px 13px;
+    flex: 1 1 auto; min-width: 0; font: inherit; font-size: 14px; padding: 10px 13px;
     border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
     color: var(--text); box-shadow: var(--shadow-sm);
   }
   .usearch:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .usearch-nav {
+    flex: 0 0 auto; width: 42px; font: inherit; font-size: 20px; line-height: 1;
+    border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+    color: var(--text-dim); cursor: pointer; box-shadow: var(--shadow-sm);
+  }
+  .usearch-nav:hover { background: var(--btn-bg-hover); color: var(--text); }
   .usearch-empty { font-size: 13px; color: var(--text-dim); margin: 2px; text-align: center; }
+  .kb-link { color: var(--danger); text-decoration: none; }
+  .ucard > summary .ubadge.kb[data-jump] { cursor: pointer; }
+  /* красный блок неподтверждённых поимок */
+  .pending {
+    background: var(--danger-soft); border: 1px solid var(--danger-border);
+    border-radius: 14px; padding: 11px 13px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .pending h2 { margin: 0; font-size: 14px; color: var(--danger); }
+  .prow { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; font-size: 13px; }
+  .prow .ptxt { flex: 1 1 160px; min-width: 0; word-break: break-word; }
+  .prow form { display: contents; margin: 0; }
+  .prow .btn.chip {
+    width: auto; min-height: 32px; padding: 6px 11px; font-size: 12.5px;
+    white-space: nowrap; border-radius: 10px;
+  }
+  .prow .unick { color: var(--text-dim); }
   .uinfo { margin: 0; padding: 10px 13px 3px; display: flex; flex-direction: column; gap: 3px;
            border-bottom: 1px solid var(--border); font-size: 13px; }
   .uinfo > div { display: flex; gap: 8px; align-items: baseline; }
@@ -159,7 +183,7 @@
     {% endif %}
 
     <div data-live="5000" style="display:contents">
-      {{ ul.userlist(players, non_players, '/app/users') }}
+      {{ ul.userlist(players, non_players, '/app/users', pending) }}
     </div>
   </main>
   {% include "_live.html" %}

@@ -14,8 +14,9 @@
       {% if u.nick and u.nick != '—' %}<span class="unick">{{ u.nick }}</span>{% endif %}
       {% if u.order is not none %}<span class="ubadge">#{{ u.order }}</span>{% endif %}
       {% if u.kills is not none %}<span class="ubadge">🔪 {{ u.kills }}</span>{% endif %}
-      {# «кем пойман» коротко: ☠️ подтверждено / ⏳ ждём подтверждения #}
-      {% if u.killed_by %}<span class="ubadge kb" title="Кем пойман: {{ u.killed_by }}{{ ' (ждёт подтверждения)' if u.kill_pending else '' }}">{{ '⏳' if u.kill_pending else '☠️' }} {{ u.killed_by }}</span>{% endif %}
+      {# «кем пойман» коротко: ☠️ подтверждено / ⏳ ждём подтверждения.
+         Клик по метке ищет этого игрока в списке (data-jump — см. _search.html). #}
+      {% if u.killed_by %}<span class="ubadge kb" data-jump="{{ u.killed_by }}" title="Кем пойман: {{ u.killed_by }}{{ ' (ждёт подтверждения)' if u.kill_pending else '' }} — нажмите, чтобы найти в списке">{{ '⏳' if u.kill_pending else '☠️' }} {{ u.killed_by }}</span>{% endif %}
       <span class="chev">⚙️<span class="cw"> управлять</span> ▾</span>
     </summary>
 
@@ -24,7 +25,7 @@
       <div><dt>🆔 ID</dt><dd>{{ u.id }}</dd></div>
       {% if u.order is not none %}<div><dt>🔢 Позиция</dt><dd>{{ u.order }}</dd></div>{% endif %}
       {% if u.kills is not none %}<div><dt>🔪 Поймал целей</dt><dd>{{ u.kills }}</dd></div>{% endif %}
-      {% if u.killed_by %}<div><dt>{{ '⏳ Заявка о поимке' if u.kill_pending else '☠️ Кем пойман' }}</dt><dd>{{ u.killed_by }}</dd></div>{% endif %}
+      {% if u.killed_by %}<div><dt>{{ '⏳ Заявка о поимке' if u.kill_pending else '☠️ Кем пойман' }}</dt><dd>{% if u.killed_by_id %}<a class="kb-link" href="{{ link('/app/users/' ~ u.killed_by_id) }}">{{ u.killed_by }}</a>{% else %}{{ u.killed_by }}{% endif %}</dd></div>{% endif %}
       <div><dt>🏷 Ник</dt><dd>{{ u.nick }}</dd></div>
       {% if u.tg_name %}<div><dt>✈️ Имя в канале</dt><dd>{{ u.tg_name }}</dd></div>{% endif %}
       {% if u.real_name %}<div><dt>🧑 Настоящее имя</dt><dd>{{ u.real_name }}</dd></div>{% endif %}
@@ -91,17 +92,60 @@
               title="во время паузы">💯 Редактировать счёт</button>
       {% endif %}
 
+      {# засчитать поимку выбывшего игрока другому «охотнику» (по его позиции #) #}
+      {% if u.can_reassign_kill %}
+      <details class="mini" data-keep="rsk{{ u.id }}">
+        <summary class="btn chip">🔁 Засчитать другому</summary>
+        <div class="mini-body">
+          <form method="post" action="{{ link('/app/users/' ~ u.id ~ '/act') }}">
+            <input type="hidden" name="action" value="reassign_kill">
+            <input type="hidden" name="next" value="{{ back }}">
+            <input type="number" name="value" min="1" placeholder="позиция (#) охотника"
+                   aria-label="Позиция в круге игрока, которому засчитать поимку">
+            <button type="submit" class="btn primary">Засчитать</button>
+          </form>
+        </div>
+      </details>
+      {% endif %}
+
       {# TODO: страница переписки админ↔игрок ещё не реализована — пока заглушка #}
       <button type="button" class="btn chip todo" data-note="Личные сообщения с игроком ещё не реализованы." title="ещё не реализовано"><s>💬 Сообщения</s></button>
-      {% if allow_dev %}<a class="btn chip" href="/app?user={{ u.username or u.id }}" target="_blank" rel="noopener">🕶 Открыть меню от имени игрока</a>{% endif %}
+      {% if allow_dev %}<a class="btn chip" href="/app?user={{ u.username or u.id }}" target="_blank" rel="noopener">🕶 Меню от имени игрока</a>{% endif %}
     </div>
   </details>
 {%- endmacro %}
 
-{% macro userlist(players, non_players, back) -%}
-  {# живой поиск: без кнопок, применяется по мере ввода (см. _search.html) #}
-  <input type="search" class="usearch" id="usearch" autocomplete="off"
-         placeholder="🔍 Поиск по номеру, нику, имени…" aria-label="Поиск игрока">
+{% macro userlist(players, non_players, back, pending=None) -%}
+  {# живой поиск: применяется по мере ввода; Enter и стрелки ‹/› листают совпадения
+     (см. _search.html) #}
+  <div class="usearch-row">
+    <input type="search" class="usearch" id="usearch" autocomplete="off"
+           placeholder="🔍 Поиск по номеру, нику, имени…" aria-label="Поиск игрока">
+    <button type="button" class="usearch-nav" id="usearch-prev" title="Предыдущее совпадение" aria-label="Предыдущее совпадение">‹</button>
+    <button type="button" class="usearch-nav" id="usearch-next" title="Следующее совпадение" aria-label="Следующее совпадение">›</button>
+  </div>
+
+  {% if pending %}
+  <div class="pending">
+    <h2>⏳ Неподтверждённые поимки ({{ pending | length }})</h2>
+    {% for p in pending %}
+    <div class="prow">
+      <span class="ptxt">📸 <strong>{{ p.hunter_name }}</strong> → {{ p.victim_name }}{% if p.victim_order is not none %} <span class="unick">#{{ p.victim_order }}</span>{% endif %}</span>
+      <form method="post" action="{{ link('/app/users/' ~ p.victim_id ~ '/act') }}">
+        <input type="hidden" name="action" value="force_accept">
+        <input type="hidden" name="next" value="{{ back }}">
+        <button type="submit" class="btn chip primary">✅ Засчитать</button>
+      </form>
+      <form method="post" action="{{ link('/app/users/' ~ p.victim_id ~ '/act') }}"
+            onsubmit="return confirm('Отклонить заявку о поимке {{ p.victim_name }}?')">
+        <input type="hidden" name="action" value="force_deny">
+        <input type="hidden" name="next" value="{{ back }}">
+        <button type="submit" class="btn chip danger">❌ Отклонить</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
 
   <h2>🎯 Активные игроки ({{ players | length }})</h2>
   {% if players %}

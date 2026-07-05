@@ -30,22 +30,28 @@
     line-height: 1.5; min-height: 100dvh; display: flex; justify-content: center; align-items: flex-start;
     padding: 20px 14px calc(20px + env(safe-area-inset-bottom));
   }
-  .app { width: 100%; max-width: 460px; display: flex; flex-direction: column; gap: 14px; }
+  .app { width: 100%; max-width: 460px; display: flex; flex-direction: column; gap: 12px; }
+  /* на широком экране карточки настроек — в две колонки */
+  @media (min-width: 760px) { .app { max-width: 760px; } }
   .head { display: flex; align-items: center; gap: 10px; }
-  .head h1 { margin: 0; font-size: 18px; }
+  .head h1 { margin: 0; font-size: 17px; }
   .head .back { margin-left: auto; text-decoration: none; color: var(--accent); font-weight: 600; font-size: 13px; }
-  .card {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
-    box-shadow: var(--shadow); padding: 14px 15px; display: flex; flex-direction: column; gap: 9px;
+  .grid { display: flex; flex-direction: column; gap: 12px; }
+  @media (min-width: 760px) {
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
   }
-  .card h2 { margin: 0; font-size: 14px; display: flex; align-items: center; gap: 7px; }
-  .hint { margin: 0; font-size: 12.5px; color: var(--text-dim); }
-  label { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; font-weight: 600; }
-  input {
-    font: inherit; font-size: 13.5px; font-weight: 400; padding: 8px 10px;
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 15px;
+    box-shadow: var(--shadow); padding: 12px 13px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .card h2 { margin: 0; font-size: 13.5px; display: flex; align-items: center; gap: 6px; }
+  .hint { margin: 0; font-size: 12px; color: var(--text-dim); }
+  label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; }
+  input, select {
+    font: inherit; font-size: 13px; font-weight: 400; padding: 7px 9px;
     border: 1px solid var(--border); border-radius: 9px; background: var(--btn-bg); color: var(--text);
   }
-  input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
   .btn {
     appearance: none; border: 1px solid var(--accent-border); background: var(--accent-soft);
     color: var(--accent); font: inherit; font-weight: 600; font-size: 13px; padding: 8px 14px;
@@ -78,6 +84,7 @@
 
     {% if saved %}<div class="note">✅ {{ saved }}</div>{% endif %}
 
+    <div class="grid">
     <form class="card" method="post" action="{{ link('/app/settings') }}" autocomplete="off">
       <input type="hidden" name="action" value="password">
       <h2>🔑 Пароль регистрации</h2>
@@ -105,11 +112,19 @@
     <form class="card" method="post" action="{{ link('/app/settings') }}" autocomplete="off">
       <input type="hidden" name="action" value="rules">
       <h2>📜 Файл правил</h2>
-      <p class="hint">Путь к HTML-файлу с правилами (относительно папки проекта).
-         Пусто = кнопка «Правила» скрыта. Готовые наборы лежат в папке <code>rules/</code>.</p>
+      <p class="hint">HTML-файл с правилами из папки <code>rules/</code>.
+         «— без правил —» скрывает кнопку «Правила».</p>
       <label>
-        Путь к файлу
-        <input type="text" name="rules_filename" value="{{ rules_filename }}" placeholder="rules/пример.html" maxlength="200">
+        Файл правил
+        <select name="rules_filename">
+          <option value="" {{ 'selected' if not rules_filename else '' }}>— без правил —</option>
+          {% for f in rules_files %}
+          <option value="{{ f }}" {{ 'selected' if f == rules_filename else '' }}>{{ f }}</option>
+          {% endfor %}
+          {% if rules_filename and rules_filename not in rules_files %}
+          <option value="{{ rules_filename }}" selected>{{ rules_filename }} (нет файла)</option>
+          {% endif %}
+        </select>
       </label>
       <button type="submit" class="btn">💾 Сохранить</button>
     </form>
@@ -156,6 +171,7 @@
          пересоздавая пустую базу. Используйте только между разными мероприятиями.</p>
       <button type="submit" class="btn danger">💣 Стереть всё и начать заново</button>
     </form>
+    </div>
   </main>
 </body>
 </html>

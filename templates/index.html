@@ -1,6 +1,6 @@
 {% import "_userlist.html" as ul with context %}
 <!DOCTYPE html>
-<html lang="ru"{% if show_userlist %} class="show-userlist"{% endif %}>
+<html lang="ru" class="{% if show_userlist %}show-userlist {% endif %}{% if show_adminmenu %}show-adminmenu{% endif %}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -195,6 +195,14 @@
     font-weight: 650; box-shadow: inset 0 1px 3px rgba(0,0,0,.12);
   }
 
+  /* переключатель «меню админа»: сворачивает раздел управления игрой (кнопки),
+     сам всегда виден. Состояние — в классе html.show-adminmenu (+ кука). */
+  .admintoggle {
+    background: var(--btn-bg-hover); border-color: var(--text-dim); color: var(--text);
+    font-weight: 600; min-height: 40px; font-size: 13px;
+  }
+  html:not(.show-adminmenu) .adminmenu-wrap { display: none; }
+
   /* ── панель списка игроков: по умолчанию скрыта; видна при html.show-userlist.
      Скрыта → меню центрируется само (панели нет). Видна → уходит вправо. ── */
   .userpanel { display: none; width: 100%; max-width: 460px; }
@@ -203,9 +211,25 @@
     html.show-userlist .userpanel {
       flex: 1 1 0; min-width: 0; max-width: 640px;
       position: sticky; top: 18px; align-self: flex-start;
+      /* список прокручивается в своём окне — меню слева остаётся на месте */
+      max-height: calc(100dvh - 36px); overflow-y: auto;
     }
   }
   .upanel-body { display: flex; flex-direction: column; gap: 8px; }
+
+  /* красный блок неподтверждённых поимок (заявки, ждущие ответа жертвы) */
+  .pending {
+    background: var(--danger-soft); border: 1px solid var(--danger-border);
+    border-radius: 13px; padding: 9px 11px; display: flex; flex-direction: column; gap: 7px;
+  }
+  .pending h2 { margin: 0; font-size: 13px; color: var(--danger); }
+  .prow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12.5px; }
+  .prow .ptxt { flex: 1 1 140px; min-width: 0; word-break: break-word; }
+  .prow form { display: contents; margin: 0; }
+  .prow .btn.chip {
+    width: auto; min-height: 30px; padding: 5px 10px; font-size: 12px; font-weight: 550;
+    white-space: nowrap; box-shadow: none; border-radius: 9px;
+  }
 
   /* карточки внутри встроенного списка (те же классы, что на /app/users) */
   .upanel-body h2 { margin: 4px 2px 0; font-size: 14px; }
@@ -214,14 +238,23 @@
     background: var(--btn-bg); border-radius: 12px;
   }
   .upanel-body .legend { font-size: 11.5px; color: var(--text-dim); margin: 2px; line-height: 1.7; }
-  /* поле живого поиска над списком */
+  /* поле живого поиска над списком + кнопки перехода по совпадениям */
+  .usearch-row { display: flex; gap: 6px; align-items: stretch; }
   .usearch {
-    width: 100%; font: inherit; font-size: 13.5px; padding: 9px 12px;
+    flex: 1 1 auto; min-width: 0; font: inherit; font-size: 13.5px; padding: 9px 12px;
     border: 1px solid var(--border); border-radius: 11px; background: var(--surface);
     color: var(--text); box-shadow: var(--shadow-sm);
   }
   .usearch:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .usearch-nav {
+    flex: 0 0 auto; width: 36px; font: inherit; font-size: 18px; line-height: 1;
+    border: 1px solid var(--border); border-radius: 11px; background: var(--surface);
+    color: var(--text-dim); cursor: pointer; box-shadow: var(--shadow-sm);
+  }
+  .usearch-nav:hover { background: var(--btn-bg-hover); color: var(--text); }
   .usearch-empty { font-size: 13px; color: var(--text-dim); margin: 2px; text-align: center; }
+  .kb-link { color: var(--danger); text-decoration: none; }
+  .ucard > summary .ubadge.kb[data-jump] { cursor: pointer; }
   /* Компактный список: один игрок — одна строка (без переносов), рассчитан на
      ~сотню игроков. Имя при нехватке места усекается многоточием. */
   .cards { display: flex; flex-direction: column; gap: 5px; }
@@ -250,9 +283,10 @@
   .upanel-body .cw { display: none; }  /* компактно: без слова «управлять» */
   .ucard[open] > summary { border-bottom: 1px solid var(--border); background: var(--btn-bg-hover); }
   .ucard[open] > summary .chev { color: var(--accent); }
-  /* совпадение с поиском — подсветка оранжевым */
+  /* совпадение с поиском — подсветка оранжевым; текущее (по Enter/‹›) — ярче */
   .ucard.match { border-color: #f0932b; box-shadow: 0 0 0 2px rgba(240,147,43,.35); }
   .ucard.match > summary { background: rgba(240,147,43,.14); }
+  .ucard.match-current { border-color: #e67e22; box-shadow: 0 0 0 3px rgba(230,126,34,.55); }
   /* полный набор полей в раскрытой карточке (как в .txt-списке бота) */
   .uinfo { margin: 0; padding: 9px 12px 2px; display: flex; flex-direction: column; gap: 3px;
            border-bottom: 1px solid var(--border); font-size: 12.5px; }
@@ -337,7 +371,11 @@
       {% if s.message or s.buttons %}
       <p class="section-hint">{{ s.hint }}</p>
       {% if s.message %}<div class="bubble{% if s.kind %} {{ s.kind }}{% endif %}">{{ s.message | safe }}</div>{% endif %}
-      <div class="keyboard">
+      {% if s.toggle_id %}
+      <button type="button" class="btn full admintoggle" data-toggle="{{ s.toggle_id }}"
+              data-on="🛠 Скрыть меню админа" data-off="🛠 Показать меню админа">{{ '🛠 Скрыть меню админа' if show_adminmenu else '🛠 Показать меню админа' }}</button>
+      {% endif %}
+      <div class="keyboard{% if s.toggle_id %} adminmenu-wrap{% endif %}">
         {% for b in s.buttons %}
           {% if b.toggle == 'userlist' %}
           <button type="button" class="btn ul-toggle{% if b.full %} full{% endif %}" data-toggle="userlist"
@@ -363,29 +401,32 @@
     </div>
   </main>
 
-  {% if is_admin and user_list %}
+  {# Панель списка всегда в DOM (пусть даже пустая) — иначе при снятии админки
+     она осталась бы вне области живого обновления и «зависла» на экране. #}
   <aside class="userpanel">
     <div data-live="5000" style="display:contents">
     <div class="upanel-body">
-      {{ ul.userlist(user_list.players, user_list.non_players, '/app') }}
+      {% if is_admin and user_list %}{{ ul.userlist(user_list.players, user_list.non_players, '/app', user_list.pending) }}{% endif %}
     </div>
     </div>
   </aside>
-  {% endif %}
   </div>
   {% include "_live.html" %}
   {% include "_cards.html" %}
   {% include "_search.html" %}
   <script>
-  // Один переключатель «Показать/Скрыть игроков»: меняет класс на <html>,
-  // текст самой кнопки и запоминает выбор в куке (переживает перезагрузку и
-  // живое обновление меню — сервер отдаёт правильную подпись по куке).
+  // Универсальные переключатели (список игроков, меню админа): меняют класс
+  // show-<name> на <html>, текст самой кнопки и запоминают выбор в куке
+  // (переживает перезагрузку и живое обновление меню — сервер отдаёт правильную
+  // подпись по куке). Меню админа по умолчанию раскрыто, поэтому кука хранит '0'
+  // именно для свёрнутого состояния.
   document.addEventListener('click', function (e) {
-    var b = e.target.closest('[data-toggle="userlist"]');
+    var b = e.target.closest('[data-toggle]');
     if (!b) return;
-    var open = document.documentElement.classList.toggle('show-userlist');
-    b.textContent = open ? b.dataset.on : b.dataset.off;
-    document.cookie = 'userlist=' + (open ? '1' : '0') + ';path=/;max-age=31536000;samesite=lax';
+    var name = b.dataset.toggle;                 // 'userlist' | 'adminmenu'
+    var open = document.documentElement.classList.toggle('show-' + name);
+    if (b.dataset.on) b.textContent = open ? b.dataset.on : b.dataset.off;
+    document.cookie = name + '=' + (open ? '1' : '0') + ';path=/;max-age=31536000;samesite=lax';
   });
   </script>
 </body>

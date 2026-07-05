@@ -253,6 +253,14 @@ def _rules_path():
     return (BASE_DIR / fn) if fn else None
 
 
+def _rules_choices():
+    """Список HTML-файлов в папке rules/ (пути от корня проекта) для выпадающего списка."""
+    d = BASE_DIR / "rules"
+    if not d.is_dir():
+        return []
+    return sorted(p.relative_to(BASE_DIR).as_posix() for p in d.glob("*.html"))
+
+
 def has_rules() -> bool:
     p = _rules_path()
     return bool(p and p.exists())
@@ -289,14 +297,10 @@ def player_section(user: User):
     # Левая колонка — статус игры; правая — «Ваша цель» (см. index.html).
     status = ['<span class="divider">══ 📋 Статус игры ══</span>', game.status_html()]
     target_html = ""
-    buttons = []
 
     if not user.is_player():
         status.append("❌ <em>Вы пока не участвуете в игре</em>")
         status.append(f"👥 Игроков: <strong>{game.count_players()}</strong>")
-        if game.is_registration_open():
-            buttons.append(_btn("🟢 Зарегистрироваться", href="/app/join",
-                                kind="primary", full=True))
     elif not game.is_started():
         status.append("✅ <em>Вы зарегистрированы, ждём старта игры</em>")
         status.append(f"👥 Игроков: <strong>{game.count_players()}</strong>")
@@ -306,17 +310,55 @@ def player_section(user: User):
         # (их рассылает админ при завершении). Промежуточные итоги — только у админа.
         status_extra, target_html = _player_game_split(user)
         status += status_extra
-        buttons += _player_game_buttons(user)
 
-    # «Выйти из игры» доступна игроку в любой момент (как в боте: b_leave показан
-    # и до старта, и во время игры). Это не «критическое» действие админа, поэтому
-    # без красного цвета, но с подтверждением.
-    if user.is_player():
-        buttons.append(_btn("🚪 Выйти из игры", "leave",
-                            confirm="Точно выйти из игры? Вернуться можно будет "
-                                    "только через новую регистрацию."))
+    # Единый постоянный набор игровых кнопок (недоступные — серые, с подсказкой),
+    # одинаковый для игрока и не-игрока.
+    return top, "\n".join(status), target_html, _player_action_buttons(user, game)
 
-    return top, "\n".join(status), target_html, buttons
+
+def _player_action_buttons(user: User, game: Game):
+    """Единый постоянный набор игровых кнопок игрока/не-игрока.
+
+    Всегда одни и те же слоты; недоступные по состоянию — бледно-серые с подсказкой.
+    Различается только смысл главного слота: не в игре — «Зарегистрироваться»,
+    в игре — «Сообщить о поимке цели» (как в боте b_join / b_gotcha).
+    """
+    is_player = user.is_player()
+    started = game.is_started()
+    b = []
+
+    # Главный слот — на всю ширину.
+    if not is_player:
+        if game.is_registration_open():
+            b.append(_btn("🟢 Зарегистрироваться", href="/app/join",
+                          kind="primary", full=True))
+        else:
+            b.append(_btn("🟢 Зарегистрироваться", disabled=True, full=True,
+                          note="Регистрация сейчас закрыта — дождитесь, когда "
+                               "организаторы её откроют."))
+    elif not started:
+        b.append(_btn("📸 Сообщить о поимке цели", disabled=True, full=True,
+                      note="Сообщить о поимке можно будет после старта игры."))
+    elif not user.is_alive():
+        b.append(_btn("📸 Сообщить о поимке цели", disabled=True, full=True,
+                      note="Вы выбыли из игры — ловить цель больше нельзя."))
+    elif user.is_awaiting_confirmation():
+        b.append(_btn("✖️ Отменить заявку о поимке", "cancel_capture", full=True))
+    elif user.get_target_user():
+        b.append(_btn("📸 Сообщить о поимке цели", "report_capture", "ok", full=True))
+    else:
+        b.append(_btn("📸 Сообщить о поимке цели", disabled=True, full=True,
+                      note="Сейчас у вас нет активной цели."))
+
+    # «Выйти из игры» — всегда на месте (как в боте b_leave); для не-игроков серая.
+    if is_player:
+        b.append(_btn("🚪 Выйти из игры", "leave",
+                      confirm="Точно выйти из игры? Вернуться можно будет "
+                              "только через новую регистрацию."))
+    else:
+        b.append(_btn("🚪 Выйти из игры", disabled=True,
+                      note="Вы не участвуете в игре — выходить не из чего."))
+    return b
 
 
 def _player_game_split(user: User):
@@ -354,22 +396,6 @@ def _awaiting_confirmation(user: User) -> bool:
     target = user.get_target_user()
     return bool(target and target.is_being_caught()
                 and target.get_murderer() and target.get_murderer().id == user.id)
-
-
-def _player_game_buttons(user: User):
-    """Кнопки игрока по его СОБСТВЕННОЙ цели (независимо от того, ловят ли его).
-
-    Событие «вас поймали» вынесено в отдельную секцию (capture_prompt), поэтому
-    кнопка «сообщить о поимке цели» здесь не исчезает, даже если игрока в этот
-    момент кто-то пытается поймать.
-    """
-    if not user.is_alive():
-        return []
-    if user.is_awaiting_confirmation():
-        return [_btn("✖️ Отменить заявку о поимке", "cancel_capture", full=True)]
-    if user.get_target_user():
-        return [_btn("📸 Сообщить о поимке цели", "report_capture", "ok", full=True)]
-    return []
 
 
 def recent_notifications(user: User, limit: int = 8):
@@ -511,6 +537,7 @@ def user_row(user: User, game: Game) -> dict:
         "is_admin": user.is_admin(),
         # «кем пойман» (killed_by): имя + подтверждена ли поимка (жив = ждём).
         "killed_by": murderer.get_name() if murderer else None,
+        "killed_by_id": murderer.id if murderer else None,
         "kill_pending": bool(murderer) and user.is_alive(),
         # полный набор полей для раскрытой карточки (как в .txt-списке бота)
         "real_name": user.get_real_name(),
@@ -793,10 +820,11 @@ def dashboard(request: Request):
     player_buttons.append(_btn("✍️ Написать организаторам", todo=True))
     sections.append({"hint": "— доступные действия —", "buttons": player_buttons})
 
-    # Админу — второй раздел с управлением игрой.
+    # Админу — второй раздел с управлением игрой (сворачиваемый переключателем).
     user_list = None
-    if user.is_admin():
-        sections.append({"hint": "— управление игрой —",
+    is_admin = user.is_admin()
+    if is_admin:
+        sections.append({"hint": "— управление игрой —", "toggle_id": "adminmenu",
                          "buttons": admin_management_buttons(user)})
         user_list = _user_list_data()
 
@@ -804,7 +832,7 @@ def dashboard(request: Request):
         request, "index.html",
         _ctx(
             request,
-            is_admin=user.is_admin(),
+            is_admin=is_admin,
             user_name=user.get_name(),
             message_html=message,
             status_col=status_col,
@@ -812,9 +840,11 @@ def dashboard(request: Request):
             notifications=recent_notifications(user),
             sections=sections,
             user_list=user_list,
-            # состояние переключателя списка игроков (кука → корректная подпись
-            # кнопки даже при живом обновлении, когда меню перерисовывается)
-            show_userlist=request.cookies.get("userlist") == "1",
+            # состояние переключателей (кука → корректная подпись кнопки даже при
+            # живом обновлении, когда меню перерисовывается)
+            show_userlist=is_admin and request.cookies.get("userlist") == "1",
+            # меню админа по умолчанию раскрыто; свёрнуто только если явно выбрано
+            show_adminmenu=request.cookies.get("adminmenu") != "0",
             support_contact=app_settings.support_contact(),
         ),
     )
@@ -880,6 +910,7 @@ def _settings_ctx(request, user, saved="", **extra):
         current=Game().get_password(),
         support_contact=app_settings.support_contact(),
         rules_filename=app_settings.rules_filename(),
+        rules_files=_rules_choices(),
         extra_questions=app_settings.extra_questions(),
         confirm_kills=app_settings.confirm_kills(),
         saved=saved,
@@ -935,6 +966,7 @@ async def settings_save(request: Request):
                  else "Теперь поимка засчитывается сразу, без подтверждения.")
     elif action == "extra_questions":
         # Собираем пары label_i / q_i (пустые строки = удалённые вопросы).
+        old_labels = {p[0] for p in app_settings.extra_questions()}
         pairs, i = [], 0
         while (f"label_{i}" in form) or (f"q_{i}" in form):
             label = (form.get(f"label_{i}") or "").strip()
@@ -946,6 +978,20 @@ async def settings_save(request: Request):
         admin_log.log(f"❓ {user.get_name()} обновил(а) доп. вопросы регистрации "
                       f"({len(pairs)} шт.)")
         saved = "Доп. вопросы сохранены."
+        # Если добавились новые вопросы — попросить уже зарегистрированных игроков,
+        # у кого на них нет ответа, зайти в «Настройки профиля» и заполнить.
+        added = {p[0] for p in pairs} - old_labels
+        if added:
+            notified = 0
+            for ply in User.all_players():
+                ans = get_extra_answers(ply)
+                if any(lbl not in ans for lbl in added):
+                    ply.notify("❓ Организаторы добавили новые вопросы для участников. "
+                               "Пожалуйста, зайдите в «Настройки профиля» на сайте и "
+                               "ответьте на них.")
+                    notified += 1
+            if notified:
+                saved += f" Игроков без ответов уведомлено: {notified}."
     elif action == "restart":
         # Перезапуск приложения: под uvicorn --reload достаточно «тронуть» файл
         # исходника — наблюдатель перезагрузит воркер. Делаем с задержкой, чтобы
@@ -1215,6 +1261,15 @@ def user_action(request: Request, uid: int, action: str = Form(...),
             _notify_retargets(before)
         except (ValueError, TypeError):
             pass
+    elif action == "reassign_kill" and target.is_player():
+        # value — позиция в круге (#) нового «охотника», которому засчитать поимку.
+        new_m = None
+        try:
+            new_m = User.by_game_order(int(value))
+        except (ValueError, TypeError):
+            pass
+        if new_m is not None:
+            target.admin_reassign_kill(admin, new_m)
     elif action == "delete":
         # нельзя удалить себя или дефолт-админа
         if target.id != admin.id and not target.is_default_admin():
@@ -1250,8 +1305,22 @@ def _user_list_data():
         r["buttons"] = user_menu_buttons(u)
         r["can_set_score"] = can_set_score(u, game)
         r["can_set_order"] = can_set_order(u, game)
+        r["can_reassign_kill"] = u.is_player() and not u.is_alive() and bool(u.get_murderer())
         r["score"] = u.get_score()
         return r
+
+    # Неподтверждённые поимки (заявки, ждущие ответа жертвы) — отдельным красным
+    # блоком над списком, сразу с кнопками «Засчитать» / «Отклонить».
+    pending = []
+    for u in players:
+        if u.is_being_caught():
+            murderer = u.get_murderer()
+            pending.append({
+                "victim_id": u.id,
+                "victim_name": u.get_name(),
+                "victim_order": u.get_game_order(),
+                "hunter_name": murderer.get_name() if murderer else "?",
+            })
 
     return {
         "total_users": len(all_users),
@@ -1260,6 +1329,7 @@ def _user_list_data():
         "game_paused": game.is_paused(),
         "players": [row(u) for u in players],
         "non_players": [row(u) for u in non_players],
+        "pending": pending,
     }
 
 
