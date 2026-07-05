@@ -75,7 +75,7 @@
       </div>
     </div>
 
-    <a class="backlink" href="/app?role=admin">← в меню админа</a>
+    <a class="backlink" href="{{ link('/app?role=admin') }}">← в меню админа</a>
 
     {% if messages %}
       {% for m in messages %}
@@ -83,7 +83,7 @@
       {% endfor %}
       <div class="actions">
         <span class="foot">Всего записей: {{ messages | length }}</span>
-        <form method="post" action="/admin-log/clear">
+        <form method="post" action="{{ link('/admin-log/clear') }}">
           <button type="submit" class="btn">🗑️ Очистить</button>
         </form>
       </div>

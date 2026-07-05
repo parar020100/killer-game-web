@@ -142,14 +142,14 @@
 
     {% if is_admin %}
     <nav class="switch" aria-label="Роль">
-      <a href="/app?role=player" class="{{ 'active' if role == 'player' else '' }}">👤 Игрок</a>
-      <a href="/app?role=admin"  class="{{ 'active' if role == 'admin'  else '' }}">👑 Админ</a>
+      <a href="{{ link('/app?role=player') }}" class="{{ 'active' if role == 'player' else '' }}">👤 Игрок</a>
+      <a href="{{ link('/app?role=admin') }}"  class="{{ 'active' if role == 'admin'  else '' }}">👑 Админ</a>
     </nav>
     {% endif %}
 
     <div class="devbar">
-      <span>Вы вошли как <b>{{ user_name }}</b></span>
-      <span class="as-links"><a href="/logout">выйти</a></span>
+      <span>Вы вошли как <b>{{ user_name }}</b>{% if as_uid %} <span title="Вкладка привязана к id {{ as_uid }} через ?as= — своя на каждую вкладку, независимо от cookie">🕶 #{{ as_uid }}</span>{% endif %}</span>
+      <span class="as-links">{% if as_uid %}<span title="Вкладка в отладочном входе ?as=; чтобы «выйти», просто закройте её">отладочная вкладка</span>{% else %}<a href="/logout">выйти</a>{% endif %}</span>
     </div>
 
     <div class="bubble">{{ message_html | safe }}<span class="support">ℹ️ В случае ошибок, вопросов или разногласий, напишите сообщение этому боту (желательно) или <a href="#">{{ support_contact }}</a>.</span></div>
@@ -159,9 +159,9 @@
     <div class="keyboard">
       {% for b in buttons %}
         {% if b.href %}
-        <a class="btn{% if b.kind %} {{ b.kind }}{% endif %}{% if b.full %} full{% endif %}" href="{{ b.href }}">{{ b.label }}</a>
+        <a class="btn{% if b.kind %} {{ b.kind }}{% endif %}{% if b.full %} full{% endif %}" href="{{ link(b.href) }}">{{ b.label }}</a>
         {% elif b.action %}
-        <form method="post" action="/act">
+        <form method="post" action="{{ link('/act') }}">
           <input type="hidden" name="action" value="{{ b.action }}">
           <input type="hidden" name="role" value="{{ role }}">
           <button type="submit" class="btn{% if b.kind %} {{ b.kind }}{% endif %}{% if b.full %} full{% endif %}">{{ b.label }}</button>
@@ -172,7 +172,7 @@
       {% endfor %}
     </div>
 
-    <p class="foot">Серверный рендер на FastAPI · вход по одноразовой ссылке из чата бота.</p>
+    <p class="foot">Серверный рендер на FastAPI · вход по постоянной ссылке из чата бота.</p>
   </main>
 </body>
 </html>

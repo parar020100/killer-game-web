@@ -53,12 +53,54 @@ def validate_real_name(raw: str):
 
 
 # ---------------------------------------------------------------------------
-# Текущий пользователь (по сессии)
+# Текущий пользователь (по сессии или отладочному ?as=<id>)
 # ---------------------------------------------------------------------------
 
+def _dev_as(request: Request):
+    """id пользователя из ?as= (только если включён ALLOW_DEV_LOGIN), иначе None.
+
+    Это ключ к «разным вкладкам»: identity живёт в URL, а не в общей на браузер
+    cookie, поэтому каждая вкладка независима. Значение НЕ пишется в cookie.
+    """
+    if not config.ALLOW_DEV_LOGIN:
+        return None
+    raw = request.query_params.get("as")
+    return int(raw) if raw and raw.isdigit() else None
+
+
 def current_user(request: Request):
+    # Отладочный ?as= имеет приоритет над cookie и не трогает сессию.
+    as_uid = _dev_as(request)
+    if as_uid is not None:
+        return User.by_id(as_uid)
     uid = request.session.get("uid")
     return User.by_id(uid) if uid else None
+
+
+def _link_fn(as_uid):
+    """Вернуть функцию, дописывающую ?as=<id> к внутренним ссылкам/формам."""
+    def link(path: str) -> str:
+        if as_uid is None:
+            return path
+        sep = "&" if "?" in path else "?"
+        return f"{path}{sep}as={as_uid}"
+    return link
+
+
+def _ctx(request: Request, **extra):
+    """Контекст шаблона + прокидывание отладочного ?as= во все ссылки страницы."""
+    as_uid = _dev_as(request)
+    return {
+        "as_uid": as_uid,
+        "allow_dev": config.ALLOW_DEV_LOGIN,
+        "link": _link_fn(as_uid),
+        **extra,
+    }
+
+
+def _redirect(request: Request, url: str, status_code: int = 303):
+    """RedirectResponse, сохраняющий отладочный ?as= (чтобы вкладка не «слетала»)."""
+    return RedirectResponse(url=_link_fn(_dev_as(request))(url), status_code=status_code)
 
 
 _URL_RE = re.compile(r"(https?://[^\s]+)")
@@ -311,14 +353,15 @@ def dashboard(request: Request, role: str = "player"):
 
     return templates.TemplateResponse(
         request, "index.html",
-        {
-            "role": role,
-            "is_admin": user.is_admin(),
-            "user_name": user.get_name(),
-            "message_html": message,
-            "buttons": buttons,
-            "support_contact": SUPPORT_CONTACT,
-        },
+        _ctx(
+            request,
+            role=role,
+            is_admin=user.is_admin(),
+            user_name=user.get_name(),
+            message_html=message,
+            buttons=buttons,
+            support_contact=SUPPORT_CONTACT,
+        ),
     )
 
 
@@ -347,10 +390,10 @@ def user_detail(request: Request, uid: int):
     if admin is None:
         return RedirectResponse(url="/", status_code=303)
     if not admin.is_admin():
-        return RedirectResponse(url="/app", status_code=303)
+        return _redirect(request, "/app")
     target = User.by_id(uid)
     if target is None:
-        return RedirectResponse(url="/app/users", status_code=303)
+        return _redirect(request, "/app/users")
 
     game = Game()
     idents = [{"label": i.label(), "muted": i.is_muted(),
@@ -374,7 +417,7 @@ def user_detail(request: Request, uid: int):
     }
     return templates.TemplateResponse(
         request, "user_detail.html",
-        {"u": info, "buttons": user_menu_buttons(target)},
+        _ctx(request, u=info, buttons=user_menu_buttons(target)),
     )
 
 
@@ -384,10 +427,10 @@ def user_action(request: Request, uid: int, action: str = Form(...)):
     if admin is None:
         return RedirectResponse(url="/", status_code=303)
     if not admin.is_admin():
-        return RedirectResponse(url="/app", status_code=303)
+        return _redirect(request, "/app")
     target = User.by_id(uid)
     if target is None:
-        return RedirectResponse(url="/app/users", status_code=303)
+        return _redirect(request, "/app/users")
 
     if action == "promote" and not target.is_admin():
         target.set_admin(True)
@@ -397,7 +440,7 @@ def user_action(request: Request, uid: int, action: str = Form(...)):
         target.set_admin(False)
         admin_log.log(f"🧹 {admin.get_name()} снял(а) права админа: {target.get_name()}")
         target.notify("Права администратора сняты.")
-    return RedirectResponse(url=f"/app/users/{uid}", status_code=303)
+    return _redirect(request, f"/app/users/{uid}")
 
 
 @app.get("/app/users", response_class=HTMLResponse)
@@ -406,7 +449,7 @@ def users_list(request: Request):
     if user is None:
         return RedirectResponse(url="/", status_code=303)
     if not user.is_admin():
-        return RedirectResponse(url="/app", status_code=303)
+        return _redirect(request, "/app")
 
     game = Game()
     all_users = User.all()
@@ -416,25 +459,27 @@ def users_list(request: Request):
 
     return templates.TemplateResponse(
         request, "users.html",
-        {
-            "total_users": len(all_users),
-            "total_players": len(players),
-            "game_started": game.is_started(),
-            "players": [user_row(u, game) for u in players],
-            "non_players": [user_row(u, game) for u in non_players],
-        },
+        _ctx(
+            request,
+            total_users=len(all_users),
+            total_players=len(players),
+            game_started=game.is_started(),
+            players=[user_row(u, game) for u in players],
+            non_players=[user_row(u, game) for u in non_players],
+        ),
     )
 
 
 def _render_register(request, user, game, values, errors):
     return templates.TemplateResponse(
         request, "register.html",
-        {
-            "needs_password": bool(game.get_password()),
-            "extra_question": EXTRA_QUESTION,
-            "values": values,
-            "errors": errors,
-        },
+        _ctx(
+            request,
+            needs_password=bool(game.get_password()),
+            extra_question=EXTRA_QUESTION,
+            values=values,
+            errors=errors,
+        ),
     )
 
 
@@ -445,7 +490,7 @@ def join_form(request: Request):
         return RedirectResponse(url="/", status_code=303)
     game = Game()
     if user.is_player() or not game.is_registration_open():
-        return RedirectResponse(url="/app", status_code=303)
+        return _redirect(request, "/app")
     values = {"real_name": user.get_real_name(), "extra": user.get_extra_info()}
     return _render_register(request, user, game, values, {})
 
@@ -458,7 +503,7 @@ def join_submit(request: Request, real_name: str = Form(""),
         return RedirectResponse(url="/", status_code=303)
     game = Game()
     if user.is_player() or not game.is_registration_open():
-        return RedirectResponse(url="/app", status_code=303)
+        return _redirect(request, "/app")
 
     errors = {}
     name, err = validate_real_name(real_name)
@@ -477,7 +522,7 @@ def join_submit(request: Request, real_name: str = Form(""),
     if EXTRA_QUESTION:
         user.set_extra_info(extra.strip())
     do_join(user)
-    return RedirectResponse(url="/app", status_code=303)
+    return _redirect(request, "/app")
 
 
 @app.post("/act")
@@ -488,7 +533,7 @@ def act(request: Request, action: str = Form(...), role: str = Form("player")):
         return RedirectResponse(url="/", status_code=303)
     apply_action(action, user)
     role = "admin" if role == "admin" and user.is_admin() else "player"
-    return RedirectResponse(url=f"/app?role={role}", status_code=303)
+    return _redirect(request, f"/app?role={role}")
 
 
 # ---------------------------------------------------------------------------
@@ -499,9 +544,9 @@ def act(request: Request, action: str = Form(...), role: str = Form("player")):
 def admin_log_view(request: Request):
     user = current_user(request)
     if user is None or not user.is_admin():
-        return RedirectResponse(url="/app", status_code=303)
+        return _redirect(request, "/app")
     return templates.TemplateResponse(
-        request, "admin_log.html", {"messages": admin_log.read_messages()},
+        request, "admin_log.html", _ctx(request, messages=admin_log.read_messages()),
     )
 
 
@@ -510,4 +555,4 @@ def admin_log_clear(request: Request):
     user = current_user(request)
     if user and user.is_admin():
         admin_log.clear()
-    return RedirectResponse(url="/admin-log", status_code=303)
+    return _redirect(request, "/admin-log")

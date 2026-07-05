@@ -59,7 +59,7 @@
     <h1>📷 Регистрация в игре</h1>
     <p class="hint">Заполните данные, чтобы участвовать. Имя увидят другие игроки и админ.</p>
 
-    <form method="post" action="/app/join" autocomplete="off" style="display:flex;flex-direction:column;gap:16px;">
+    <form method="post" action="{{ link('/app/join') }}" autocomplete="off" style="display:flex;flex-direction:column;gap:16px;">
       <label class="{{ 'bad' if errors.real_name else '' }}">
         Имя в игре
         <input type="text" name="real_name" value="{{ values.real_name or '' }}"
@@ -84,7 +84,7 @@
       {% endif %}
 
       <div class="row">
-        <a class="btn" href="/app">Отмена</a>
+        <a class="btn" href="{{ link('/app') }}">Отмена</a>
         <button type="submit" class="btn primary">Зарегистрироваться</button>
       </div>
     </form>

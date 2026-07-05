@@ -70,14 +70,19 @@
         <span class="name">Пользователи</span>
         <span class="sub">игроков: {{ total_players }} из {{ total_users }}</span>
       </div>
-      <a class="back" href="/app?role=admin">← в меню админа</a>
+      <a class="back" href="{{ link('/app?role=admin') }}">← в меню админа</a>
     </div>
+
+    {% if allow_dev %}
+    <p class="legend" style="margin:-4px 2px 2px">🕶 <b>Отладка:</b> «открыть как» открывает игрока в <b>новой вкладке</b> —
+      так можно держать несколько пользователей одновременно в одном браузере.</p>
+    {% endif %}
 
     <h2>🎯 Активные игроки ({{ players | length }})</h2>
     <div class="section scroll">
       {% if players %}
       <table>
-        <thead><tr><th>ℹ️</th><th>#</th><th>Order</th><th>🔪</th><th>Ник</th><th>Имя</th></tr></thead>
+        <thead><tr><th>ℹ️</th><th>#</th><th>Order</th><th>🔪</th><th>Ник</th><th>Имя</th>{% if allow_dev %}<th>🕶</th>{% endif %}</tr></thead>
         <tbody>
         {% for u in players %}
           <tr>
@@ -86,7 +91,8 @@
             <td class="num">{{ u.order if u.order is not none else '—' }}</td>
             <td class="num">{{ u.kills }}</td>
             <td class="nick">{{ u.nick }}</td>
-            <td class="name"><a href="/app/users/{{ u.id }}">{{ u.name }}</a></td>
+            <td class="name"><a href="{{ link('/app/users/' ~ u.id) }}">{{ u.name }}</a></td>
+            {% if allow_dev %}<td class="nick"><a href="/app?as={{ u.id }}" target="_blank" rel="noopener" title="открыть в новой вкладке">открыть как ↗</a></td>{% endif %}
           </tr>
         {% endfor %}
         </tbody>
@@ -100,14 +106,15 @@
     <div class="section scroll">
       {% if non_players %}
       <table>
-        <thead><tr><th>ℹ️</th><th>#</th><th>Ник</th><th>Имя</th></tr></thead>
+        <thead><tr><th>ℹ️</th><th>#</th><th>Ник</th><th>Имя</th>{% if allow_dev %}<th>🕶</th>{% endif %}</tr></thead>
         <tbody>
         {% for u in non_players %}
           <tr>
             <td class="st">{{ u.status }}</td>
             <td class="num">{{ u.id }}</td>
             <td class="nick">{{ u.nick }}</td>
-            <td class="name"><a href="/app/users/{{ u.id }}">{{ u.name }}</a></td>
+            <td class="name"><a href="{{ link('/app/users/' ~ u.id) }}">{{ u.name }}</a></td>
+            {% if allow_dev %}<td class="nick"><a href="/app?as={{ u.id }}" target="_blank" rel="noopener" title="открыть в новой вкладке">открыть как ↗</a></td>{% endif %}
           </tr>
         {% endfor %}
         </tbody>

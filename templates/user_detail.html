@@ -79,7 +79,7 @@
         <span class="name">{{ u.name }}</span>
         <span class="sub">{% if u.username %}@{{ u.username }} · {% endif %}внутренний id {{ u.id }}</span>
       </div>
-      <a class="back" href="/app/users">← к списку</a>
+      <a class="back" href="{{ link('/app/users') }}">← к списку</a>
     </div>
 
     <div class="card">
@@ -107,13 +107,18 @@
       </div>
     </div>
 
+    {% if allow_dev %}
+    <a class="btn full" href="/app?as={{ u.id }}" target="_blank" rel="noopener"
+       title="откроется в новой вкладке, независимо от вашей cookie-сессии">🕶 Открыть как этот пользователь (новая вкладка)</a>
+    {% endif %}
+
     <p class="section-hint">— действия над пользователем —</p>
     <div class="keyboard">
       {% for b in buttons %}
         {% if b.todo %}
         <button class="btn todo" disabled title="ещё не реализовано"><s>{{ b.label }}</s></button>
         {% else %}
-        <form method="post" action="/app/users/{{ u.id }}/act">
+        <form method="post" action="{{ link('/app/users/' ~ u.id ~ '/act') }}">
           <input type="hidden" name="action" value="{{ b.action }}">
           <button type="submit" class="btn primary full">{{ b.label }}</button>
         </form>
