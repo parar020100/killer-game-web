@@ -86,6 +86,7 @@
       <a class="back" href="/">← сменить id</a>
     </div>
 
+    <div data-live="3000" data-live-bottom style="display:contents">
     {% if messages %}
     <div class="thread">
       {% for m in messages %}
@@ -97,6 +98,7 @@
     {% else %}
     <div class="empty">Сообщений пока нет.<br>Нажмите <b>/start</b>, чтобы бот прислал ссылку для входа.</div>
     {% endif %}
+    </div>
 
     <div class="composer">
       <form method="post" action="/chat/{{ username }}/start">
@@ -104,5 +106,6 @@
       </form>
     </div>
   </main>
+  {% include "_live.html" %}
 </body>
 </html>

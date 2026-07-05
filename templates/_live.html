@@ -1,0 +1,50 @@
+<script>
+/* Живое обновление без библиотек и без отдельных маршрутов.
+   Любой элемент с атрибутом data-live периодически синхронизируется:
+   страница перезапрашивается целиком (GET, та же ссылка — cookie/?user=/?role
+   сохраняются), из ответа берётся соответствующий по порядку блок [data-live]
+   и его innerHTML подменяется — но только если он реально изменился, поэтому
+   мигания нет. data-live="3000" на первом блоке задаёт период опроса (мс).
+   data-live-bottom — держать страницу прокрученной вниз (для чата). */
+(function () {
+  var regions = Array.prototype.slice.call(document.querySelectorAll('[data-live]'));
+  if (!regions.length) return;
+  var interval = parseInt(regions[0].getAttribute('data-live'), 10) || 4000;
+  var busy = false;
+
+  function atBottom() {
+    return window.innerHeight + window.scrollY >=
+           document.documentElement.scrollHeight - 60;
+  }
+
+  function tick() {
+    if (busy || document.hidden) return;
+    // не затираем блок, пока пользователь печатает/выбирает внутри него
+    var ae = document.activeElement;
+    if (ae && ['INPUT', 'TEXTAREA', 'SELECT'].indexOf(ae.tagName) !== -1 &&
+        regions.some(function (r) { return r.contains(ae); })) return;
+    busy = true;
+    fetch(location.href, { cache: 'no-store', credentials: 'same-origin' })
+      .then(function (res) { return res.ok ? res.text() : Promise.reject(); })
+      .then(function (text) {
+        var doc = new DOMParser().parseFromString(text, 'text/html');
+        var fresh = doc.querySelectorAll('[data-live]');
+        var stick = regions.some(function (r) {
+          return r.hasAttribute('data-live-bottom');
+        }) && atBottom();
+        regions.forEach(function (r, i) {
+          var f = fresh[i];
+          if (f && f.innerHTML !== r.innerHTML) r.innerHTML = f.innerHTML;
+        });
+        if (stick) window.scrollTo(0, document.documentElement.scrollHeight);
+      })
+      .catch(function () { /* сеть моргнула — попробуем в следующий раз */ })
+      .then(function () { busy = false; });
+  }
+
+  setInterval(tick, interval);
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) tick();
+  });
+})();
+</script>

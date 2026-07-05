@@ -93,6 +93,7 @@
       <a class="back" href="{{ link('/app/users') }}">← к списку</a>
     </div>
 
+    <div data-live="5000" style="display:contents">
     <div class="card">
       <dl>
         <dt>Роль</dt><dd>
@@ -144,6 +145,8 @@
       </form>
       {% endif %}
     </div>
+    </div>
   </main>
+  {% include "_live.html" %}
 </body>
 </html>
