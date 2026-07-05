@@ -123,6 +123,27 @@ def _btn(label, action=None, kind="", full=False, href=None):
     return {"label": label, "action": action, "kind": kind, "full": full, "href": href}
 
 
+# --- правила игры (HTML-файл из config.RULES_FILENAME) ----------------------
+
+def _rules_path():
+    return (BASE_DIR / config.RULES_FILENAME) if config.RULES_FILENAME else None
+
+
+def has_rules() -> bool:
+    p = _rules_path()
+    return bool(p and p.exists())
+
+
+def read_rules_html():
+    p = _rules_path()
+    if not p:
+        return None
+    try:
+        return p.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+
 def player_view(user: User):
     game = Game()
     lines = [
@@ -144,6 +165,8 @@ def player_view(user: User):
     elif game.is_registration_open():
         buttons.append(_btn("🟢 Зарегистрироваться", href="/app/join", kind="primary", full=True))
 
+    if has_rules():
+        buttons.append(_btn("📜 Правила", href="/rules", full=True))
     buttons.append(_btn("🔄 Обновить", "noop", full=True))
     return "\n".join(lines), buttons
 
@@ -172,6 +195,8 @@ def admin_view(user: User):
 
     buttons.append(_btn("👥 Список пользователей", href="/app/users", full=True))
     buttons.append(_btn("📋 Журнал (admin log)", href="/admin-log", full=True))
+    if has_rules():
+        buttons.append(_btn("📜 Правила", href="/rules", full=True))
     buttons.append(_btn("🔄 Обновить", "noop", full=True))
     return message, buttons
 
@@ -333,6 +358,20 @@ def login(request: Request, token: str = ""):
 def logout(request: Request):
     request.session.clear()
     return RedirectResponse(url="/", status_code=303)
+
+
+@app.get("/rules", response_class=HTMLResponse)
+def rules_page(request: Request):
+    html_text = read_rules_html()
+    if html_text is None:
+        return HTMLResponse(
+            "<h3>Для этой игры правила пока не заданы.</h3>"
+            "<p>Свяжитесь с администратором.</p>",
+            status_code=404,
+        )
+    return templates.TemplateResponse(
+        request, "rules.html", _ctx(request, rules_html=Markup(html_text)),
+    )
 
 
 # ---------------------------------------------------------------------------

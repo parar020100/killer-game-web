@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Правила · Киллер / Папарацци</title>
+<style>
+  :root {
+    --bg: #eaeef4; --surface: #ffffff; --btn-bg: #f4f6fa; --btn-bg-hover: #eaeef4;
+    --text: #171a21; --text-dim: #6a7280; --border: #e2e7ef;
+    --accent: #e23b4e; --accent-soft: rgba(226,59,78,.10); --accent-border: rgba(226,59,78,.28);
+    --shadow: 0 6px 24px rgba(23,26,40,.10); --shadow-sm: 0 2px 6px rgba(23,26,40,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1116; --surface: #191d24; --btn-bg: #222831; --btn-bg-hover: #2a313b;
+      --text: #e9ecf1; --text-dim: #9aa4b2; --border: #2a313b;
+      --accent: #ff5069; --accent-soft: rgba(255,80,105,.14); --accent-border: rgba(255,80,105,.35);
+      --shadow: 0 8px 30px rgba(0,0,0,.45); --shadow-sm: 0 2px 8px rgba(0,0,0,.35);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+                 "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+    line-height: 1.55; min-height: 100dvh; display: flex; justify-content: center;
+    padding: 18px 12px calc(18px + env(safe-area-inset-bottom));
+  }
+  .app { width: 100%; max-width: 560px; display: flex; flex-direction: column; gap: 14px; }
+  .topbar { display: flex; align-items: center; gap: 12px; }
+  .logo {
+    width: 44px; height: 44px; flex: 0 0 44px; border-radius: 14px;
+    display: grid; place-items: center; font-size: 22px;
+    background: linear-gradient(135deg, var(--accent), #8a1f2b); box-shadow: var(--shadow-sm);
+  }
+  .titles { display: flex; flex-direction: column; }
+  .titles .name { font-weight: 700; font-size: 16px; }
+  .titles .sub { font-size: 13px; color: var(--text-dim); }
+  .back { margin-left: auto; text-decoration: none; color: var(--accent); font-weight: 600; font-size: 13px; }
+
+  .doc {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 18px;
+    box-shadow: var(--shadow); padding: 20px 20px 22px; font-size: 15px;
+  }
+  .doc p { margin: 0 0 12px; word-break: break-word; }
+  .doc ul { margin: 0 0 12px; padding-left: 22px; }
+  .doc li { margin: 2px 0; }
+  .doc strong { font-weight: 700; }
+  .doc em { font-style: italic; }
+  .doc u { text-decoration: underline; }
+  .doc hr { border: none; border-top: 1px dashed var(--border); margin: 16px 0; }
+  .doc blockquote {
+    margin: 0 0 12px; padding: 8px 14px; color: var(--text-dim);
+    border-left: 3px solid var(--accent-border); background: var(--accent-soft);
+    border-radius: 0 10px 10px 0; font-size: 14px;
+  }
+  .doc a { color: var(--accent); text-decoration: none; }
+</style>
+</head>
+<body>
+  <main class="app">
+    <div class="topbar">
+      <div class="logo">📜</div>
+      <div class="titles">
+        <span class="name">Правила игры</span>
+        <span class="sub">Киллер / Папарацци</span>
+      </div>
+      <a class="back" href="{{ link('/app') }}">← назад</a>
+    </div>
+    <article class="doc">{{ rules_html | safe }}</article>
+  </main>
+</body>
+</html>
