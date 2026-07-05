@@ -874,6 +874,8 @@ def dashboard(request: Request):
             game_name=mode.term("name"),
             game_tagline=mode.term("tagline"),
             game_icon=mode.term("icon"),
+            # одноразовое уведомление о результате действия (напр. переназначение поимки)
+            flash=request.session.pop("flash", ""),
         ),
     )
 
@@ -1410,13 +1412,17 @@ def user_action(request: Request, uid: int, action: str = Form(...),
                           f"{target.get_name()}: {text}")
     elif action == "reassign_kill" and target.is_player():
         # value — позиция в круге (#) нового «охотника», которому засчитать поимку.
-        new_m = None
+        pos = None
         try:
-            new_m = User.by_game_order(int(value))
+            pos = int(value)
         except (ValueError, TypeError):
             pass
-        if new_m is not None:
-            target.admin_reassign_kill(admin, new_m)
+        new_m = User.by_game_order(pos) if pos else None
+        if new_m is None:
+            request.session["flash"] = (
+                f"⚠️ Игрок с позицией №{value} не найден — поимка не переназначена.")
+        else:
+            request.session["flash"] = target.admin_reassign_kill(admin, new_m)
     elif action == "delete":
         # нельзя удалить себя или дефолт-админа
         if target.id != admin.id and not target.is_default_admin():
