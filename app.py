@@ -144,6 +144,14 @@ def read_rules_html():
         return None
 
 
+def notify_target(user: User):
+    """Сообщить игроку его текущую цель (в эмулированный чат)."""
+    target = user.get_target_user()
+    if target:
+        user.notify(f"🎯 Твоя цель: {target.get_name()}\n"
+                    "Поймай её (сделай селфи) раньше, чем поймают тебя!")
+
+
 def player_view(user: User):
     game = Game()
     lines = [
@@ -153,22 +161,65 @@ def player_view(user: User):
         '<span class="divider">══ 📋 Статус игры ══</span>',
         game.status_html(),
     ]
-    if user.is_player():
-        lines.append("✅ <em>Вы зарегистрированы в игре</em>")
-    else:
-        lines.append("❌ <em>Вы пока не участвуете в игре</em>")
-    lines.append(f"👥 Игроков: <strong>{game.count_players()}</strong>")
-
     buttons = []
-    if user.is_player():
+
+    if not user.is_player():
+        lines.append("❌ <em>Вы пока не участвуете в игре</em>")
+        lines.append(f"👥 Игроков: <strong>{game.count_players()}</strong>")
+        if game.is_registration_open():
+            buttons.append(_btn("🟢 Зарегистрироваться", href="/app/join",
+                                kind="primary", full=True))
+    elif not game.is_started():
+        lines.append("✅ <em>Вы зарегистрированы, ждём старта игры</em>")
+        lines.append(f"👥 Игроков: <strong>{game.count_players()}</strong>")
         buttons.append(_btn("🔴 Выйти из игры", "leave", "danger", full=True))
-    elif game.is_registration_open():
-        buttons.append(_btn("🟢 Зарегистрироваться", href="/app/join", kind="primary", full=True))
+    else:
+        # Игра идёт — показываем игровое состояние конкретного игрока.
+        lines += _player_game_lines(user)
+        buttons += _player_game_buttons(user)
 
     if has_rules():
         buttons.append(_btn("📜 Правила", href="/rules", full=True))
     buttons.append(_btn("🔄 Обновить", "noop", full=True))
     return "\n".join(lines), buttons
+
+
+def _player_game_lines(user: User):
+    """Строки статуса для игрока в идущей игре."""
+    game = Game()
+    lines = [f"🔪 Ваш счёт поимок: <strong>{user.get_score()}</strong>",
+             f"💚 Живых игроков: <strong>{game.count_alive()}</strong>"]
+    if not user.is_alive():
+        lines.append("")
+        lines.append("☠️ <em>Вы выбыли из игры.</em> Спасибо за участие!")
+        return lines
+    if user.is_being_caught():
+        catcher = user.get_murderer()
+        who = escape(catcher.get_name()) if catcher else "другой игрок"
+        lines.append("")
+        lines.append(f"📸 <strong>{who}</strong> заявил(а), что поймал(а) вас!")
+        lines.append("Подтвердите или отклоните это ниже.")
+        return lines
+    target = user.get_target_user()
+    tname = escape(target.get_name()) if target else "—"
+    lines.append("")
+    lines.append(f'<span class="divider">══ 🎯 Ваша цель ══</span>')
+    lines.append(f"🎯 <strong>{tname}</strong>")
+    if _awaiting_confirmation(user):
+        lines.append("⏳ <em>Вы заявили о поимке — ждём подтверждения цели.</em>")
+    return lines
+
+
+def _awaiting_confirmation(user: User) -> bool:
+    """Игрок сообщил о поимке своей цели и ждёт её подтверждения."""
+    target = user.get_target_user()
+    return bool(target and target.is_being_caught()
+                and target.get_murderer() and target.get_murderer().id == user.id)
+
+
+def _player_game_buttons(user: User):
+    """Кнопки для игрока в идущей игре (интерактив включается в цикле поимок)."""
+    return []
 
 
 def admin_view(user: User):
@@ -280,9 +331,14 @@ def apply_action(action: str, user: User):
         game.close_registration()
         admin_log.log(f"🚫 {who} закрыл(а) регистрацию")
     elif action == "start_game":
-        game.start()
-        admin_log.log(f"🟢 {who} запустил(а) игру ({game.count_players()} игроков)")
-        _broadcast("🟢 Игра началась! Проверьте свою цель на сайте.")
+        ok, msg = game.start()
+        if ok:
+            admin_log.log(f"🟢 {who} запустил(а) игру ({game.count_players()} игроков)")
+            _broadcast("🟢 Игра «Папарацци» началась! Узнайте свою цель на сайте.")
+            for ply in User.alive_players():
+                notify_target(ply)
+        else:
+            admin_log.log(f"⚠️ {who} не смог(ла) запустить игру: {msg}")
     elif action == "stop_game":
         game.stop()
         admin_log.log(f"🔴 {who} остановил(а) игру")

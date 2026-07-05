@@ -4,6 +4,8 @@
 живёт в таблице `identity` и модели Identity. У одного пользователя может быть
 несколько идентичностей; уведомления доставляются в каждую неприглушённую.
 """
+import random
+
 from db import query_one, query_all, execute
 from core.identity import Identity
 from config import DEFAULT_ADMINS
@@ -166,6 +168,129 @@ class User:
     def set_player(self, value: bool): self._set("is_player", int(value))
     def set_alive(self, value: bool):  self._set("is_alive", int(value))
 
+    # --- счёт поимок ------------------------------------------------------
+
+    def set_score(self, value: int):   self._set("kill_count", value)
+    def increment_score(self):
+        execute("UPDATE user SET kill_count = kill_count + 1 WHERE id = ?", (self.id,))
+    def decrement_score(self):
+        execute("UPDATE user SET kill_count = kill_count - 1 WHERE id = ?", (self.id,))
+
+    # --- круг целей: порядок в круге --------------------------------------
+    # Круг задаётся возрастанием game_order (с заворотом). Цель игрока — следующий
+    # живой по кругу, охотник — предыдущий живой. Как в боте (user.py).
+
+    def get_game_order_raw(self):
+        return self._get("game_order")
+
+    def set_raw_game_order(self, value):
+        self._set("game_order", int(value) if value is not None else None)
+
+    @classmethod
+    def by_game_order(cls, value):
+        row = query_one("SELECT id FROM user WHERE game_order = ?", (value,))
+        return cls(row["id"]) if row else None
+
+    @classmethod
+    def _next_order_no_loop(cls, current):
+        row = query_one(
+            "SELECT game_order FROM user WHERE is_player = 1 AND game_order > ? "
+            "ORDER BY game_order ASC LIMIT 1", (current,))
+        return row["game_order"] if row else None
+
+    def set_game_order(self, value, increase=True):
+        """Задать позицию; при конфликте (уже занята) сдвинуть в свободную щель."""
+        if value is not None:
+            existing = User.by_game_order(value)
+            if existing is not None and existing.id != self.id:
+                if not increase:
+                    return None
+                nxt = User._next_order_no_loop(value) or (value + 100000)
+                value = (value + nxt) // 2
+                existing = User.by_game_order(value)
+                while existing is not None and existing.id != self.id:
+                    value += 1
+                    existing = User.by_game_order(value)
+        self.set_raw_game_order(value)
+        return value
+
+    def randomize_game_order(self):
+        value = None
+        while not value:
+            value = self.set_game_order(random.randint(1, 1_000_000), increase=False)
+        return value
+
+    @classmethod
+    def find_next_alive_order(cls, current):
+        row = query_one(
+            "SELECT game_order, id FROM user WHERE is_player = 1 AND is_alive = 1 "
+            "AND game_order > ? ORDER BY game_order ASC LIMIT 1", (current,))
+        if not row:
+            row = query_one(
+                "SELECT game_order, id FROM user WHERE is_player = 1 AND is_alive = 1 "
+                "ORDER BY game_order ASC LIMIT 1")
+        return (row["game_order"], cls(row["id"])) if row else (None, None)
+
+    @classmethod
+    def find_prev_alive_order(cls, current):
+        row = query_one(
+            "SELECT game_order, id FROM user WHERE is_player = 1 AND is_alive = 1 "
+            "AND game_order < ? ORDER BY game_order DESC LIMIT 1", (current,))
+        if not row:
+            row = query_one(
+                "SELECT game_order, id FROM user WHERE is_player = 1 AND is_alive = 1 "
+                "ORDER BY game_order DESC LIMIT 1")
+        return (row["game_order"], cls(row["id"])) if row else (None, None)
+
+    def find_victim(self):
+        order = self.get_game_order_raw()
+        if order is None:
+            return None
+        _, user = User.find_next_alive_order(order)
+        return user
+
+    def find_killer(self):
+        order = self.get_game_order_raw()
+        if order is None:
+            return None
+        _, user = User.find_prev_alive_order(order)
+        return user
+
+    # --- цель -------------------------------------------------------------
+
+    def get_target_id(self):
+        return self._get("target")
+
+    def set_target_id(self, value):
+        self._set("target", value)
+
+    def get_target_user(self):
+        tid = self._get("target")
+        return User.by_id(tid) if tid else None
+
+    def set_target_user(self, user):
+        self._set("target", user.id if user else None)
+
+    def update_target_quiet(self):
+        """Назначить целью следующего живого по кругу (без уведомлений)."""
+        self.set_target_user(self.find_victim())
+
+    # --- «убийца»/поимка --------------------------------------------------
+
+    def set_killed_by(self, value):
+        self._set("killed_by", value)
+
+    def get_murderer(self):
+        k = self._get("killed_by")
+        return User.by_id(k) if k else None
+
+    def set_murderer(self, user):
+        self._set("killed_by", user.id if user else None)
+
+    def is_being_caught(self) -> bool:
+        """Жив, но кто-то уже заявил о его поимке (ждёт подтверждения)."""
+        return self.is_alive() and self._get("killed_by") is not None
+
     # --- уведомления ------------------------------------------------------
 
     def notify(self, text: str):
@@ -180,6 +305,10 @@ class User:
         self.set_player(True)
         self.set_alive(alive)
         self._set("kill_count", 0)
+        self._set("killed_by", None)
+        self._set("target", None)
+        # Позицию в круге назначаем сразу (цель раздаётся при старте игры).
+        self.randomize_game_order()
 
     def leave(self):
         self.set_player(False)
