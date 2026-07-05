@@ -25,7 +25,60 @@ from pathlib import Path
 import config
 
 BASE_DIR = Path(__file__).parent
-DB_PATH = BASE_DIR / config.DB_NAME
+
+# Активная «игра» = отдельный файл БД. По умолчанию — config.DB_NAME, но админ может
+# выбрать другой файл в «⚙️ Настройки игры» (требует перезапуска). Выбор хранится в
+# указателе active_db.txt рядом с БД — вне самой базы, чтобы можно было переключаться
+# между играми. Указатель ищется в папке БД по умолчанию; в тестах config.DB_NAME
+# переопределяют на абсолютный путь, поэтому указатель из рабочей папки их не задевает.
+_DEFAULT_DB = BASE_DIR / config.DB_NAME
+_POINTER = _DEFAULT_DB.parent / "active_db.txt"
+
+
+def _safe_db_name(name: str) -> str:
+    """Безопасное имя файла БД (только basename, расширение .db)."""
+    n = Path((name or "").strip()).name
+    if not n:
+        return ""
+    if not n.endswith(".db"):
+        n += ".db"
+    return n
+
+
+def _resolve_db_path() -> Path:
+    try:
+        if _POINTER.exists():
+            name = _safe_db_name(_POINTER.read_text(encoding="utf-8"))
+            if name:
+                return _DEFAULT_DB.parent / name
+    except OSError:
+        pass
+    return _DEFAULT_DB
+
+
+def list_db_files():
+    """Имена файлов БД (*.db) в папке данных — список доступных «игр»."""
+    d = _DEFAULT_DB.parent
+    if not d.is_dir():
+        return []
+    return sorted(p.name for p in d.glob("*.db"))
+
+
+def active_db_name() -> str:
+    return DB_PATH.name
+
+
+def set_active_db(name: str) -> str:
+    """Записать указатель активной БД (применяется после перезапуска). Вернуть имя."""
+    n = _safe_db_name(name)
+    if not n:
+        return active_db_name()
+    _DEFAULT_DB.parent.mkdir(exist_ok=True)
+    _POINTER.write_text(n, encoding="utf-8")
+    return n
+
+
+DB_PATH = _resolve_db_path()
 DATA_DIR = DB_PATH.parent
 
 

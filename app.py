@@ -915,6 +915,8 @@ def _settings_ctx(request, user, saved="", **extra):
         extra_questions=app_settings.extra_questions(),
         confirm_kills=app_settings.confirm_kills(),
         game_mode=mode.current(),
+        db_files=db.list_db_files(),
+        active_db=db.active_db_name(),
         saved=saved,
         **extra,
     )
@@ -1000,6 +1002,18 @@ async def settings_save(request: Request):
                     notified += 1
             if notified:
                 saved += f" Игроков без ответов уведомлено: {notified}."
+    elif action == "active_db":
+        # Выбор активной «игры» = файл БД. Имя нового файла (если задано) имеет
+        # приоритет над выбором из списка. Применяется после перезапуска.
+        name = (form.get("new_db") or form.get("db_select") or "").strip()
+        if name:
+            applied = db.set_active_db(name)
+            admin_log.log(f"🗄️ {user.get_name()} выбрал(а) активную игру (БД): {applied}")
+            # перезапуск, чтобы приложение переоткрыло выбранный файл БД
+            import threading
+            threading.Timer(0.6, lambda: Path(__file__).touch()).start()
+            return _redirect(request, "/app")
+        saved = "Имя файла БД не задано."
     elif action == "restart":
         # Перезапуск приложения: под uvicorn --reload достаточно «тронуть» файл
         # исходника — наблюдатель перезагрузит воркер. Делаем с задержкой, чтобы

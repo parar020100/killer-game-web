@@ -162,6 +162,28 @@
       <button type="submit" class="btn ghost">🔁 Перезапустить приложение</button>
     </form>
 
+    <form class="card" method="post" action="{{ link('/app/settings') }}" autocomplete="off"
+          onsubmit="return confirm('Переключить активную игру (файл БД)? Приложение перезапустится, текущий вход может завершиться.')">
+      <input type="hidden" name="action" value="active_db">
+      <h2>🗄️ Активная игра (файл БД)</h2>
+      <p class="hint">Каждый файл БД — отдельная «игра». Переключение требует
+         перезапуска. Сейчас активна: <code>{{ active_db }}</code>. Впишите новое имя,
+         чтобы начать новую игру (файл создастся при запуске).</p>
+      <label>
+        Выбрать существующую
+        <select name="db_select">
+          {% for f in db_files %}
+          <option value="{{ f }}" {{ 'selected' if f == active_db else '' }}>{{ f }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>
+        …или новая игра (имя файла)
+        <input type="text" name="new_db" placeholder="например game2.db" maxlength="100">
+      </label>
+      <button type="submit" class="btn ghost">🗄️ Переключить и перезапустить</button>
+    </form>
+
     <form class="card" method="post" action="{{ link('/app/settings') }}" autocomplete="off">
       <input type="hidden" name="action" value="extra_questions">
       <h2>❓ Доп. вопросы при регистрации</h2>
