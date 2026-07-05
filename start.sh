@@ -19,6 +19,12 @@ set -euo pipefail
 # Перейти в папку скрипта, чтобы запускать откуда угодно.
 cd "$(dirname "$0")"
 
+# Локальный config.py в .gitignore — создаём из шаблона при первом запуске.
+if [ ! -f "config.py" ]; then
+    echo "⚙️  Создаю config.py из config.template.py (отредактируйте под себя) ..."
+    cp config.template.py config.py
+fi
+
 PORT="${1:-8000}"
 HOST="${HOST:-127.0.0.1}"
 
