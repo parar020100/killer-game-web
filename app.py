@@ -26,7 +26,7 @@ import os
 
 import config
 import db  # noqa: F401 — импорт инициализирует БД
-from core import chat, auth, admin_log, settings as app_settings
+from core import chat, auth, admin_log, mode, settings as app_settings
 from core.game import Game
 from core.user import User
 
@@ -280,8 +280,7 @@ def notify_target(user: User):
     """Сообщить игроку его текущую цель (в эмулированный чат)."""
     target = user.get_target_user()
     if target:
-        user.notify(f"🎯 Твоя цель: {target.get_name()}\n"
-                    "Поймай её (сделай селфи) раньше, чем поймают тебя!")
+        user.notify(mode.t("target_hint", target=target.get_name()))
 
 
 def player_section(user: User):
@@ -293,7 +292,7 @@ def player_section(user: User):
     game = Game()
     # Приветствие — «шапка» на всю ширину (над двумя колонками).
     top = (f'<span class="hi">Привет, {escape(user.get_name())}!</span>\n'
-           "📷 Добро пожаловать в игру Папарацци!")
+           + mode.t("welcome"))
     # Левая колонка — статус игры; правая — «Ваша цель» (см. index.html).
     status = ['<span class="divider">══ 📋 Статус игры ══</span>', game.status_html()]
     target_html = ""
@@ -337,17 +336,17 @@ def _player_action_buttons(user: User, game: Game):
                           note="Регистрация сейчас закрыта — дождитесь, когда "
                                "организаторы её откроют."))
     elif not started:
-        b.append(_btn("📸 Сообщить о поимке цели", disabled=True, full=True,
+        b.append(_btn(mode.t("report_btn"), disabled=True, full=True,
                       note="Сообщить о поимке можно будет после старта игры."))
     elif not user.is_alive():
-        b.append(_btn("📸 Сообщить о поимке цели", disabled=True, full=True,
+        b.append(_btn(mode.t("report_btn"), disabled=True, full=True,
                       note="Вы выбыли из игры — ловить цель больше нельзя."))
     elif user.is_awaiting_confirmation():
-        b.append(_btn("✖️ Отменить заявку о поимке", "cancel_capture", full=True))
+        b.append(_btn("✖️ Отменить заявку", "cancel_capture", full=True))
     elif user.get_target_user():
-        b.append(_btn("📸 Сообщить о поимке цели", "report_capture", "ok", full=True))
+        b.append(_btn(mode.t("report_btn"), "report_capture", "ok", full=True))
     else:
-        b.append(_btn("📸 Сообщить о поимке цели", disabled=True, full=True,
+        b.append(_btn(mode.t("report_btn"), disabled=True, full=True,
                       note="Сейчас у вас нет активной цели."))
 
     # «Выйти из игры» — всегда на месте (как в боте b_leave); для не-игроков серая.
@@ -364,7 +363,7 @@ def _player_action_buttons(user: User, game: Game):
 def _player_game_split(user: User):
     """(строки-статуса-слева, html-цели-справа) для игрока в идущей игре."""
     game = Game()
-    lines = [f"🔪 Вы поймали целей: <strong>{user.get_score()}</strong>",
+    lines = [mode.t("score_line", score=user.get_score()),
              f"💚 Живых игроков: <strong>{game.count_alive()}</strong>"]
     if not user.is_alive():
         lines.append("")
@@ -424,8 +423,8 @@ def capture_prompt(user: User):
     # ВАЖНО: имя «охотника» раскрывать нельзя — анонимность преследователя
     # ключевая механика игры (как в боте: «Другой игрок сообщил…»).
     return {
-        "hint": "— вас поймали? —",
-        "message": "📸 <strong>Другой игрок сообщил, что поймал(а) вас.</strong>",
+        "hint": mode.t("caught_hint"),
+        "message": mode.t("caught_msg"),
         "kind": "alert",
         # Половинные кнопки в одну строку (сетка .keyboard — 2 колонки).
         "buttons": [
@@ -574,7 +573,7 @@ def do_join(user: User):
     game = Game()
     user.join(alive=not game.is_started())
     admin_log.log(f"➕ {user.get_name()} зарегистрировал(ся/ась) в игре")
-    user.notify("✅ Вы зарегистрированы в игре «Папарацци».")
+    user.notify(mode.t("joined"))
 
 
 _MEDALS = ["🥇", "🥈", "🥉"]
@@ -631,8 +630,7 @@ def apply_action(action: str, user: User):
     if action == "open_reg":
         game.open_registration()
         admin_log.log(f"🟡 {who} открыл(а) регистрацию")
-        _broadcast("🟡 Открыта регистрация на игру «Папарацци». "
-                   "Зайдите на сайт, чтобы зарегистрироваться!", players_only=False)
+        _broadcast(mode.t("bcast_reg_open"), players_only=False)
     elif action == "close_reg":
         game.close_registration()
         admin_log.log(f"🚫 {who} закрыл(а) регистрацию")
@@ -640,7 +638,7 @@ def apply_action(action: str, user: User):
         ok, msg = game.start()
         if ok:
             admin_log.log(f"🟢 {who} запустил(а) игру ({game.count_players()} игроков)")
-            _broadcast("🟢 Игра «Папарацци» началась! Узнайте свою цель на сайте.")
+            _broadcast(mode.t("bcast_started"))
             for ply in User.alive_players():
                 notify_target(ply)
         else:
@@ -846,6 +844,9 @@ def dashboard(request: Request):
             # меню админа по умолчанию раскрыто; свёрнуто только если явно выбрано
             show_adminmenu=request.cookies.get("adminmenu") != "0",
             support_contact=app_settings.support_contact(),
+            game_name=mode.term("name"),
+            game_tagline=mode.term("tagline"),
+            game_icon=mode.term("icon"),
         ),
     )
 
@@ -913,6 +914,7 @@ def _settings_ctx(request, user, saved="", **extra):
         rules_files=_rules_choices(),
         extra_questions=app_settings.extra_questions(),
         confirm_kills=app_settings.confirm_kills(),
+        game_mode=mode.current(),
         saved=saved,
         **extra,
     )
@@ -956,6 +958,12 @@ async def settings_save(request: Request):
         app_settings.set_rules_filename(form.get("rules_filename") or "")
         admin_log.log(f"📜 {user.get_name()} изменил(а) файл правил")
         saved = "Файл правил сохранён."
+    elif action == "game_mode":
+        new_mode = form.get("game_mode") or ""
+        mode.set_current(new_mode)
+        admin_log.log(f"🎭 {user.get_name()} выбрал(а) оформление игры: "
+                      f"{mode.term('name')}")
+        saved = f"Оформление игры: «{mode.term('name')}»."
     elif action == "confirm_kills":
         new = not app_settings.confirm_kills()
         app_settings.set_confirm_kills(new)

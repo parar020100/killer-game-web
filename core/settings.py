@@ -15,6 +15,7 @@ from db import query_one, execute
 DEFAULT_SUPPORT_CONTACT = "@parar020100"
 DEFAULT_RULES_FILENAME = "rules/un2026_1.html"
 DEFAULT_CONFIRM_KILLS = True
+DEFAULT_GAME_MODE = "paparazzi"  # 'killer' | 'paparazzi' (оформление игры)
 
 
 def _raw(key):
@@ -87,6 +88,17 @@ def extra_questions() -> list:
 
 def set_extra_questions(pairs):
     _set_raw("extra_questions", json.dumps(_normalize_pairs(pairs), ensure_ascii=False))
+
+
+# --- оформление игры («Киллер» / «Папарацци») -------------------------------
+
+def game_mode() -> str:
+    v = _raw("game_mode")
+    return v if v in ("killer", "paparazzi") else DEFAULT_GAME_MODE
+
+
+def set_game_mode(value: str):
+    _set_raw("game_mode", value if value in ("killer", "paparazzi") else DEFAULT_GAME_MODE)
 
 
 # --- root-пользователь (замена DEFAULT_ADMINS) ------------------------------

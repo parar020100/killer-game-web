@@ -322,75 +322,72 @@ class User:
         admin_log.log(text)
 
     def attempt_capture(self):
-        """Игрок сообщает о поимке своей текущей цели. (ok, сообщение)."""
+        """Игрок сообщает о поимке/устранении своей текущей цели. (ok, сообщение)."""
+        from core import settings, mode
         if not self.is_alive():
             return False, "Вы выбыли из игры."
         victim = self.get_target_user()
         if victim is None or not victim.is_alive():
             return False, "Сейчас у вас нет активной цели."
         if victim.is_being_caught():
-            return False, "По этой цели уже есть заявка на поимку."
+            return False, mode.t("err_already_pending")
 
-        from core import settings
         if not settings.confirm_kills():
             self.capture(victim)
-            return True, "Поимка засчитана."
+            return True, mode.t("attempt_instant_ok")
 
         victim.set_murderer(self)
-        self._log(f"📸 {self.get_name()} заявил(а) о поимке {victim.get_name()} "
-                  "(ждёт подтверждения)")
-        self.notify(f"📸 Вы заявили о поимке цели ({victim.get_name()}).\n"
-                    "⏳ Ожидайте подтверждения от игрока.")
-        victim.notify("📸 Другой игрок заявил, что поймал вас.\n"
-                      "Пожалуйста, подтвердите или опровергните это на сайте.")
-        return True, "Заявка отправлена, ждём подтверждения цели."
+        self._log(mode.t("attempt_log", name=self.get_name(), victim=victim.get_name()))
+        self.notify(mode.t("attempt_self", victim=victim.get_name()))
+        victim.notify(mode.t("attempt_victim"))
+        return True, mode.t("attempt_sent_ok")
 
     def cancel_capture(self):
         """Отозвать свою заявку о поимке цели (пока цель не ответила)."""
+        from core import mode
         victim = self.get_target_user()
         if victim and self.is_awaiting_confirmation():
             victim.set_murderer(None)
-            self._log(f"✖️ {self.get_name()} отозвал(а) заявку о поимке "
-                      f"{victim.get_name()}")
-            self.notify("✖️ Вы отозвали заявку о поимке.")
-            victim.notify("✅ Заявка о вашей поимке отозвана — тревога отменена.")
+            self._log(mode.t("cancel_log", name=self.get_name(), victim=victim.get_name()))
+            self.notify(mode.t("cancel_self"))
+            victim.notify(mode.t("cancel_victim"))
             return True, "Заявка отозвана."
         return False, "Нет активной заявки для отмены."
 
     def confirm_capture(self):
-        """Жертва подтверждает, что её поймали → устранение."""
+        """Жертва подтверждает, что её поймали → выбывание."""
+        from core import mode
         murderer = self.get_murderer()
         if murderer is None or not self.is_being_caught():
-            return False, "Сейчас никто не заявлял о вашей поимке."
-        self._log(f"✅ {self.get_name()} подтвердил(а) поимку игроком "
-                  f"{murderer.get_name()}")
+            return False, mode.t("confirm_none")
+        self._log(mode.t("confirm_log", name=self.get_name(), murderer=murderer.get_name()))
         murderer.capture(self)
-        return True, "Поимка подтверждена."
+        return True, mode.t("confirm_ok")
 
     def deny_capture(self):
         """Жертва опровергает поимку → остаётся в игре."""
+        from core import mode
         murderer = self.get_murderer()
         if not self.is_being_caught():
-            return False, "Сейчас никто не заявлял о вашей поимке."
+            return False, mode.t("confirm_none")
         self.set_murderer(None)
-        self._log(f"🚫 {self.get_name()} не подтвердил(а) поимку игроком "
-                  f"{murderer.get_name() if murderer else '?'}")
-        self.notify("💚 Вы отклонили заявку о поимке — остаётесь в игре.")
+        self._log(mode.t("deny_log", name=self.get_name(),
+                         murderer=murderer.get_name() if murderer else "?"))
+        self.notify(mode.t("deny_self"))
         if murderer:
-            murderer.notify(f"🚫 Игрок {self.get_name()} не подтвердил(а) поимку. "
-                            "Попробуйте ещё раз.")
-        return True, "Поимка отклонена."
+            murderer.notify(mode.t("deny_murderer", name=self.get_name()))
+        return True, mode.t("deny_ok")
 
     def capture(self, victim: "User"):
-        """Засчитать поимку victim игроком self: устранение, счёт, новая цель."""
-        self._log(f"📸 {self.get_name()} поймал(а) {victim.get_name()}")
+        """Засчитать поимку/устранение victim игроком self: выбывание, счёт, новая цель."""
+        from core import mode
+        self._log(mode.t("capture_log", name=self.get_name(), victim=victim.get_name()))
         self.increment_score()
         victim.set_alive(False)
         victim.set_target_id(None)
         victim.set_murderer(self)
 
-        victim.notify(f"🗿 Увы, вас поймал(а) {self.get_name()}. Вы выбыли из игры.\n"
-                      "Спасибо за игру!")
+        victim.notify(mode.t("capture_victim", name=self.get_name()))
 
         from core.game import Game
         game = Game()
@@ -400,10 +397,10 @@ class User:
 
         if self.is_alive() and not finished:
             new_target = self.get_target_user()
-            self.notify(f"📸 Поздравляем! Вы поймали {victim.get_name()}.\n"
-                        f"🎯 Ваша новая цель: {new_target.get_name() if new_target else '—'}")
+            self.notify(mode.t("capture_self_new", victim=victim.get_name(),
+                               target=new_target.get_name() if new_target else "—"))
         elif self.is_alive():
-            self.notify(f"📸 Поздравляем! Вы поймали {victim.get_name()}.")
+            self.notify(mode.t("capture_self_done", victim=victim.get_name()))
 
         if finished:
             game.announce_winner()
@@ -433,9 +430,10 @@ class User:
         """Устранить игрока (остаётся выбывшим игроком — можно оживить, учтётся в итогах)."""
         if not self.is_player():
             return "Пользователь не участвует в игре."
+        from core import mode
         was_alive = self.is_alive()
-        self._log(f"💀 {admin.get_name()} устранил(а) игрока {self.get_name()}")
-        self.notify("💀 Администратор устранил вас из игры.")
+        self._log(mode.t("admin_kill_log", admin=admin.get_name(), name=self.get_name()))
+        self.notify(mode.t("admin_kill_notify"))
         self.set_alive(False)
         self.set_target_id(None)
         self.set_murderer(None)
@@ -474,9 +472,11 @@ class User:
         return f"Игрок {self.get_name()} удалён из игры."
 
     def admin_set_score(self, admin: "User", value: int) -> str:
+        from core import mode
         self.set_score(value)
-        self._log(f"💯 {admin.get_name()} задал(а) счёт {value} игроку {self.get_name()}")
-        self.notify(f"💯 Администратор изменил ваш счёт поимок: {value}.")
+        self._log(mode.t("admin_setscore_log", admin=admin.get_name(),
+                         value=value, name=self.get_name()))
+        self.notify(mode.t("admin_setscore_notify", value=value))
         return f"Счёт игрока {self.get_name()} = {value}."
 
     def admin_randomize_order(self, admin: "User") -> str:
@@ -536,18 +536,16 @@ class User:
         old = self.get_murderer()
         if old and old.id == new_murderer.id:
             return "Поимка уже засчитана этому игроку."
+        from core import mode
         if old:
             old.decrement_score()
-            old.notify(f"➖ Администратор передал вашу поимку игрока "
-                       f"{self.get_name()} другому участнику.")
+            old.notify(mode.t("reassign_old", name=self.get_name()))
         new_murderer.increment_score()
         self.set_murderer(new_murderer)
-        self._log(f"🔁 {admin.get_name()} засчитал(а) поимку игрока "
-                  f"{self.get_name()} игроку {new_murderer.get_name()}")
-        new_murderer.notify(f"➕ Администратор засчитал вам поимку игрока "
-                            f"{self.get_name()}.")
-        return (f"Поимка игрока {self.get_name()} засчитана игроку "
-                f"{new_murderer.get_name()}.")
+        self._log(mode.t("reassign_log", admin=admin.get_name(),
+                         name=self.get_name(), new=new_murderer.get_name()))
+        new_murderer.notify(mode.t("reassign_new", name=self.get_name()))
+        return mode.t("reassign_ok", name=self.get_name(), new=new_murderer.get_name())
 
     def give_life(self, admin: "User") -> str:
         if self.is_alive():
