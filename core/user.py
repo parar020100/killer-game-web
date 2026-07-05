@@ -6,10 +6,7 @@
 """
 from db import query_one, query_all, execute
 from core.identity import Identity
-
-# Пользователи с этими username автоматически становятся админами при создании
-# (аналог DEFAULT_ADMINS из бота).
-DEFAULT_ADMINS = {"parar020100"}
+from config import DEFAULT_ADMINS
 
 
 def _is_default_admin(username) -> bool:

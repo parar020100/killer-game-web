@@ -61,6 +61,7 @@ python -m uvicorn app:app --reload
 killer_game_web/
 ├── start.sh             # запуск в один клик (venv + зависимости + uvicorn)
 ├── app.py               # FastAPI: маршруты (чат, вход, дашборд, действия)
+├── config.py            # все настройки (аналог config.py бота)
 ├── db.py                # SQLite: соединение (WAL), схема, init/drop
 ├── core/
 │   ├── game.py          # модель игры (состояние, счётчики)

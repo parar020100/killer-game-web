@@ -18,6 +18,7 @@ import hashlib
 import secrets
 
 from db import query_one, execute
+from config import LOGIN_TOKEN_BYTES
 
 
 def _hash(token: str) -> str:
@@ -31,7 +32,7 @@ def set_permanent_token(identity_id: int) -> str:
 
     Возвращает сырое значение — показать его нужно один раз, в БД хранится лишь хеш.
     """
-    token = secrets.token_urlsafe(32)
+    token = secrets.token_urlsafe(LOGIN_TOKEN_BYTES)
     execute(
         "INSERT OR REPLACE INTO persistent_login (identity_id, token_hash) VALUES (?, ?)",
         (identity_id, _hash(token)),

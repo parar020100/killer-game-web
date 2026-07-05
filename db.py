@@ -22,9 +22,11 @@ import os
 import sqlite3
 from pathlib import Path
 
+import config
+
 BASE_DIR = Path(__file__).parent
-DATA_DIR = BASE_DIR / "data"
-DB_PATH = DATA_DIR / "killer_game.db"
+DB_PATH = BASE_DIR / config.DB_NAME
+DATA_DIR = DB_PATH.parent
 
 
 def get_connection() -> sqlite3.Connection:

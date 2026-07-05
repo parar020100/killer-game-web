@@ -10,7 +10,6 @@
 Кнопки — обычные HTML-формы (POST → изменение состояния → редирект), без JavaScript.
 Запуск:  ./start.sh   (см. README.md)
 """
-import os
 import re
 from html import escape
 from pathlib import Path
@@ -21,6 +20,7 @@ from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
 from starlette.middleware.sessions import SessionMiddleware
 
+import config
 import db  # noqa: F401 — импорт инициализирует БД
 from core import chat, auth, admin_log
 from core.game import Game
@@ -31,14 +31,13 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 app = FastAPI(title="Killer / Paparazzi — web")
 
-# Подписанная cookie-сессия. Секрет — из переменной окружения (в проде обязателен).
-SECRET_KEY = os.getenv("SECRET_KEY", "dev-insecure-secret-change-me")
-app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
+# Подписанная cookie-сессия (секрет — в config, из переменной окружения).
+app.add_middleware(SessionMiddleware, secret_key=config.SECRET_KEY)
 
-SUPPORT_CONTACT = "@parar020100"
+SUPPORT_CONTACT = config.SUPPORT_CONTACT
 
 # Доп. вопрос при регистрации (как EXTRA_INFO в боте). Пусто = шаг отключён.
-EXTRA_QUESTION = ""
+EXTRA_QUESTION = config.EXTRA_INFO[1] if config.EXTRA_INFO else ""
 
 _NAME_RE = re.compile(r"^[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё \-]*$")
 
@@ -46,8 +45,8 @@ _NAME_RE = re.compile(r"^[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё \-]*$")
 def validate_real_name(raw: str):
     """Вернуть (имя, None) при успехе или (None, текст_ошибки)."""
     name = " ".join((raw or "").split())  # схлопнуть пробелы
-    if not (2 <= len(name) <= 50):
-        return None, "Имя должно быть от 2 до 50 символов."
+    if not (config.NAME_MIN_LEN <= len(name) <= config.NAME_MAX_LEN):
+        return None, f"Имя должно быть от {config.NAME_MIN_LEN} до {config.NAME_MAX_LEN} символов."
     if not _NAME_RE.match(name):
         return None, "Имя может содержать только буквы, пробел и дефис."
     return name, None
