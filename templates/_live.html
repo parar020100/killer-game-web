@@ -34,7 +34,18 @@
         }) && atBottom();
         regions.forEach(function (r, i) {
           var f = fresh[i];
-          if (f && f.innerHTML !== r.innerHTML) r.innerHTML = f.innerHTML;
+          if (!f) return;
+          // Перенести раскрытость <details data-keep> из текущего блока в свежий:
+          // тогда пользовательский спойлер (например, «показать цель») не считается
+          // изменением и остаётся открытым после подмены.
+          var open = {};
+          r.querySelectorAll('details[data-keep]').forEach(function (d) {
+            if (d.open) open[d.getAttribute('data-keep')] = true;
+          });
+          f.querySelectorAll('details[data-keep]').forEach(function (d) {
+            d.open = !!open[d.getAttribute('data-keep')];
+          });
+          if (f.innerHTML !== r.innerHTML) r.innerHTML = f.innerHTML;
         });
         if (stick) window.scrollTo(0, document.documentElement.scrollHeight);
       })

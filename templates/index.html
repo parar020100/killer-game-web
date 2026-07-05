@@ -70,16 +70,19 @@
   .titles .name { font-weight: 700; font-size: 16px; letter-spacing: .2px; }
   .titles .sub { font-size: 13px; color: var(--text-dim); }
 
-  .switch {
-    display: flex; background: var(--surface); border: 1px solid var(--border);
-    border-radius: 12px; padding: 4px; gap: 4px; box-shadow: var(--shadow-sm);
+  .bubble.alert { border-color: var(--accent-border); background: var(--accent-soft); }
+  .bubble details.spoiler { margin-top: 6px; }
+  .bubble details.spoiler summary {
+    display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+    padding: 9px 15px; border-radius: 11px; width: fit-content;
+    background: var(--accent-soft); border: 1px solid var(--accent-border);
+    color: var(--accent); font-weight: 650; font-size: 14px;
+    list-style: none; -webkit-user-select: none; user-select: none;
   }
-  .switch a {
-    flex: 1; text-align: center; text-decoration: none;
-    color: var(--text-dim); font-weight: 600; font-size: 14px;
-    padding: 9px 10px; border-radius: 9px; transition: background .18s, color .18s;
-  }
-  .switch a.active { background: var(--accent-soft); color: var(--accent); }
+  .bubble details.spoiler summary::-webkit-details-marker { display: none; }
+  .bubble details.spoiler summary::marker { content: ""; }
+  .bubble details.spoiler[open] summary { margin-bottom: 8px; }
+  .bubble details.spoiler .reveal { font-size: 18px; font-weight: 700; }
 
   .bubble {
     background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
@@ -140,13 +143,6 @@
       </div>
     </div>
 
-    {% if is_admin %}
-    <nav class="switch" aria-label="Роль">
-      <a href="{{ link('/app?role=player') }}" class="{{ 'active' if role == 'player' else '' }}">👤 Игрок</a>
-      <a href="{{ link('/app?role=admin') }}"  class="{{ 'active' if role == 'admin'  else '' }}">👑 Админ</a>
-    </nav>
-    {% endif %}
-
     <div class="devbar">
       <span>Вы вошли как <b>{{ user_name }}</b>{% if dev_user %} <span title="Вкладка привязана к {{ dev_user }} через ?user= — своя на каждую вкладку, независимо от cookie">🕶 {{ dev_user }}</span>{% endif %}</span>
       <span class="as-links">{% if dev_user %}<span title="Вкладка в отладочном входе ?user=; чтобы «выйти», просто закройте её">отладочная вкладка</span>{% else %}<a href="/logout">выйти</a>{% endif %}</span>
@@ -155,26 +151,27 @@
     <div data-live="4000" style="display:contents">
     <div class="bubble">{{ message_html | safe }}<span class="support">ℹ️ В случае ошибок, вопросов или разногласий, напишите сообщение этому боту (желательно) или <a href="#">{{ support_contact }}</a>.</span></div>
 
-    <p class="section-hint">{{ "— управление игрой —" if role == "admin" else "— доступные действия —" }}</p>
-
-    <div class="keyboard">
-      {% for b in buttons %}
-        {% if b.href %}
-        <a class="btn{% if b.kind %} {{ b.kind }}{% endif %}{% if b.full %} full{% endif %}" href="{{ link(b.href) }}">{{ b.label }}</a>
-        {% elif b.action %}
-        <form method="post" action="{{ link('/act') }}">
-          <input type="hidden" name="action" value="{{ b.action }}">
-          <input type="hidden" name="role" value="{{ role }}">
-          <button type="submit" class="btn{% if b.kind %} {{ b.kind }}{% endif %}{% if b.full %} full{% endif %}">{{ b.label }}</button>
-        </form>
-        {% else %}
-        <button class="btn{% if b.kind %} {{ b.kind }}{% endif %}{% if b.full %} full{% endif %}" disabled>{{ b.label }}</button>
-        {% endif %}
-      {% endfor %}
+    {% for s in sections %}
+      {% if s.message or s.buttons %}
+      {% if s.message %}<div class="bubble{% if s.kind %} {{ s.kind }}{% endif %}">{{ s.message | safe }}</div>{% endif %}
+      <p class="section-hint">{{ s.hint }}</p>
+      <div class="keyboard">
+        {% for b in s.buttons %}
+          {% if b.href %}
+          <a class="btn{% if b.kind %} {{ b.kind }}{% endif %}{% if b.full %} full{% endif %}" href="{{ link(b.href) }}">{{ b.label }}</a>
+          {% elif b.action %}
+          <form method="post" action="{{ link('/act') }}">
+            <input type="hidden" name="action" value="{{ b.action }}">
+            <button type="submit" class="btn{% if b.kind %} {{ b.kind }}{% endif %}{% if b.full %} full{% endif %}">{{ b.label }}</button>
+          </form>
+          {% else %}
+          <button class="btn{% if b.kind %} {{ b.kind }}{% endif %}{% if b.full %} full{% endif %}" disabled>{{ b.label }}</button>
+          {% endif %}
+        {% endfor %}
+      </div>
+      {% endif %}
+    {% endfor %}
     </div>
-    </div>
-
-    <p class="foot">Серверный рендер на FastAPI · вход по постоянной ссылке из чата бота.</p>
   </main>
   {% include "_live.html" %}
 </body>

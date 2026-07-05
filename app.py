@@ -166,7 +166,12 @@ def notify_target(user: User):
                     "Поймай её (сделай селфи) раньше, чем поймают тебя!")
 
 
-def player_view(user: User):
+def player_section(user: User):
+    """Сообщение-пузырь игрока и его игровые кнопки.
+
+    Без общих кнопок «Правила/Обновить» — их добавляет маршрут в конце последнего
+    раздела (у админа это раздел управления, у обычного игрока — этот же).
+    """
     game = Game()
     lines = [
         f'<span class="hi">Привет, {escape(user.get_name())}!</span>',
@@ -194,9 +199,6 @@ def player_view(user: User):
         if game.is_paused():
             buttons.append(_btn("🏁 Итоги игры", href="/app/results", full=True))
 
-    if has_rules():
-        buttons.append(_btn("📜 Правила", href="/rules", full=True))
-    buttons.append(_btn("🔄 Обновить", "noop", full=True))
     return "\n".join(lines), buttons
 
 
@@ -209,18 +211,20 @@ def _player_game_lines(user: User):
         lines.append("")
         lines.append("☠️ <em>Вы выбыли из игры.</em> Спасибо за участие!")
         return lines
-    if user.is_being_caught():
-        catcher = user.get_murderer()
-        who = escape(catcher.get_name()) if catcher else "другой игрок"
-        lines.append("")
-        lines.append(f"📸 <strong>{who}</strong> заявил(а), что поймал(а) вас!")
-        lines.append("Подтвердите или отклоните это ниже.")
-        return lines
+    # Событие «вас поймали» больше НЕ показывается здесь — для него отдельная
+    # секция (capture_prompt), чтобы не прятать цель и кнопку «сообщить о поимке».
     target = user.get_target_user()
     tname = escape(target.get_name()) if target else "—"
     lines.append("")
-    lines.append(f'<span class="divider">══ 🎯 Ваша цель ══</span>')
-    lines.append(f"🎯 <strong>{tname}</strong>")
+    lines.append('<span class="divider">══ 🎯 Ваша цель ══</span>')
+    # Цель скрыта под спойлером — раскрывается по клику (data-keep сохраняет
+    # раскрытое состояние при живом обновлении страницы, см. templates/_live.html).
+    lines.append(
+        '<details class="spoiler" data-keep="target">'
+        '<summary>👁️ Показать цель</summary>'
+        f'<span class="reveal">🎯 <strong>{tname}</strong></span>'
+        '</details>'
+    )
     if _awaiting_confirmation(user):
         lines.append("⏳ <em>Вы заявили о поимке — ждём подтверждения цели.</em>")
     return lines
@@ -234,12 +238,14 @@ def _awaiting_confirmation(user: User) -> bool:
 
 
 def _player_game_buttons(user: User):
-    """Кнопки для игрока в идущей игре — зависят от его состояния в цикле поимок."""
+    """Кнопки игрока по его СОБСТВЕННОЙ цели (независимо от того, ловят ли его).
+
+    Событие «вас поймали» вынесено в отдельную секцию (capture_prompt), поэтому
+    кнопка «сообщить о поимке цели» здесь не исчезает, даже если игрока в этот
+    момент кто-то пытается поймать.
+    """
     if not user.is_alive():
         return []
-    if user.is_being_caught():
-        return [_btn("✅ Подтвердить поимку", "confirm_capture", "primary", full=True),
-                _btn("🚫 Это не так", "deny_capture", "danger", full=True)]
     if user.is_awaiting_confirmation():
         return [_btn("✖️ Отменить заявку о поимке", "cancel_capture", full=True)]
     if user.get_target_user():
@@ -247,18 +253,31 @@ def _player_game_buttons(user: User):
     return []
 
 
-def admin_view(user: User):
-    game = Game()
-    message = "\n".join([
-        f'<span class="hi">Привет, {escape(user.get_name())}!</span>',
-        "📷 Ты — администратор игры.",
-        "",
-        '<span class="divider">══ 📋 Статус игры ══</span>',
-        game.status_html(),
-        f"👥 Игроков: <strong>{game.count_players()}</strong> "
-        f"(живы: <strong>{game.count_alive()}</strong>)",
-    ])
+def capture_prompt(user: User):
+    """Секция «вас поймали»: сообщение + кнопки подтвердить/это не так.
 
+    Возвращает dict секции или None, если игрока сейчас никто не ловит.
+    """
+    if not (user.is_player() and user.is_alive() and user.is_being_caught()):
+        return None
+    catcher = user.get_murderer()
+    who = escape(catcher.get_name()) if catcher else "Другой игрок"
+    message = (f"📸 <strong>{who}</strong> заявил(а), что поймал(а) вас!\n"
+               "Если это правда — подтвердите поимку. Если нет — отклоните.")
+    return {
+        "hint": "— вас поймали? —",
+        "message": message,
+        "kind": "alert",
+        "buttons": [
+            _btn("✅ Подтвердить поимку", "confirm_capture", "primary", full=True),
+            _btn("🚫 Это не так", "deny_capture", "danger", full=True),
+        ],
+    }
+
+
+def admin_management_buttons(user: User):
+    """Кнопки раздела «управление игрой» (показываются админу под кнопками игрока)."""
+    game = Game()
     buttons = []
     if not game.is_started():
         buttons.append(_btn("▶️ Запустить игру", "start_game", "primary"))
@@ -279,11 +298,8 @@ def admin_view(user: User):
     buttons.append(_btn("📢 Рассылка", href="/broadcast", full=True))
     buttons.append(_btn("🔑 Пароль регистрации", href="/app/password", full=True))
     buttons.append(_btn("📋 Журнал (admin log)", href="/admin-log", full=True))
-    if has_rules():
-        buttons.append(_btn("📜 Правила", href="/rules", full=True))
     buttons.append(_btn("♻️ Сбросить игру", "reset_game", "danger", full=True))
-    buttons.append(_btn("🔄 Обновить", "noop", full=True))
-    return message, buttons
+    return buttons
 
 
 # ---------------------------------------------------------------------------
@@ -566,26 +582,42 @@ def rules_page(request: Request):
 # ---------------------------------------------------------------------------
 
 @app.get("/app", response_class=HTMLResponse)
-def dashboard(request: Request, role: str = "player"):
+def dashboard(request: Request):
     user = current_user(request)
     if user is None:
         return RedirectResponse(url="/", status_code=303)
 
-    if role == "admin" and user.is_admin():
-        message, buttons = admin_view(user)
-    else:
-        role = "player"
-        message, buttons = player_view(user)
+    # Один экран без вкладок: статус-пузырь, затем секции, разделённые линиями.
+    message, player_buttons = player_section(user)
+    sections = []
+
+    # Секция «вас поймали» — сразу под статусом, если игрока сейчас ловят.
+    prompt = capture_prompt(user)
+    if prompt:
+        sections.append(prompt)
+
+    sections.append({"hint": "— доступные действия —", "buttons": player_buttons})
+
+    # Админу — второй раздел с управлением игрой.
+    if user.is_admin():
+        sections.append({"hint": "— управление игрой —",
+                         "buttons": admin_management_buttons(user)})
+
+    # Общие кнопки (правила/обновить) — в конец последнего раздела.
+    footer = []
+    if has_rules():
+        footer.append(_btn("📜 Правила", href="/rules", full=True))
+    footer.append(_btn("🔄 Обновить", "noop", full=True))
+    sections[-1]["buttons"] = sections[-1].get("buttons", []) + footer
 
     return templates.TemplateResponse(
         request, "index.html",
         _ctx(
             request,
-            role=role,
             is_admin=user.is_admin(),
             user_name=user.get_name(),
             message_html=message,
-            buttons=buttons,
+            sections=sections,
             support_contact=SUPPORT_CONTACT,
         ),
     )
@@ -779,12 +811,17 @@ def user_action(request: Request, uid: int, action: str = Form(...),
 
 
 @app.get("/app/users", response_class=HTMLResponse)
-def users_list(request: Request):
+def users_list(request: Request, view: str = "menu"):
     user = current_user(request)
     if user is None:
         return RedirectResponse(url="/", status_code=303)
     if not user.is_admin():
         return _redirect(request, "/app")
+
+    # Две версии списка: "menu" — компактная таблица с кнопкой «Управление»
+    # (открывает отдельную страницу); "inline" — раскрывающиеся строки с
+    # кнопками действий прямо на месте.
+    view = "inline" if view == "inline" else "menu"
 
     game = Game()
     all_users = User.all()
@@ -792,15 +829,24 @@ def users_list(request: Request):
     players.sort(key=lambda u: (u.get_game_order() is None, u.get_game_order() or 0, u.id))
     non_players = [u for u in all_users if not u.is_player()]
 
+    def row(u: User) -> dict:
+        r = user_row(u, game)
+        if view == "inline":  # кнопки действий считаем только для inline-версии
+            r["buttons"] = user_menu_buttons(u)
+            r["can_set_score"] = u.is_player()
+            r["score"] = u.get_score()
+        return r
+
     return templates.TemplateResponse(
         request, "users.html",
         _ctx(
             request,
+            view=view,
             total_users=len(all_users),
             total_players=len(players),
             game_started=game.is_started(),
-            players=[user_row(u, game) for u in players],
-            non_players=[user_row(u, game) for u in non_players],
+            players=[row(u) for u in players],
+            non_players=[row(u) for u in non_players],
         ),
     )
 
@@ -861,14 +907,13 @@ def join_submit(request: Request, real_name: str = Form(""),
 
 
 @app.post("/act")
-def act(request: Request, action: str = Form(...), role: str = Form("player")):
+def act(request: Request, action: str = Form(...)):
     """Применить действие текущего пользователя и вернуться (Post/Redirect/Get)."""
     user = current_user(request)
     if user is None:
         return RedirectResponse(url="/", status_code=303)
     apply_action(action, user)
-    role = "admin" if role == "admin" and user.is_admin() else "player"
-    return _redirect(request, f"/app?role={role}")
+    return _redirect(request, "/app")
 
 
 # ---------------------------------------------------------------------------

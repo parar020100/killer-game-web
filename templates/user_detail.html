@@ -119,9 +119,13 @@
       </div>
     </div>
 
+    {% if u.username %}
+    <a class="btn full" href="/chat/{{ u.username }}" target="_blank" rel="noopener"
+       title="переписка бота с игроком, откроется в новой вкладке">💬 История сообщений</a>
+    {% endif %}
     {% if allow_dev %}
     <a class="btn full" href="/app?user={{ u.username or u.id }}" target="_blank" rel="noopener"
-       title="откроется в новой вкладке, независимо от вашей cookie-сессии">🕶 Открыть как этот пользователь (новая вкладка)</a>
+       title="открыть игру от лица этого игрока в новой вкладке (для теста), независимо от вашей cookie-сессии">🕶 Войти как этот игрок (новая вкладка)</a>
     {% endif %}
 
     <p class="section-hint">— действия над пользователем —</p>
