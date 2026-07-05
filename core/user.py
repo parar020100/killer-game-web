@@ -133,6 +133,9 @@ class User:
     # --- роль / статус ----------------------------------------------------
 
     def is_admin(self) -> bool:  return bool(self._get("is_admin"))
+    def is_default_admin(self) -> bool:
+        """Дефолт-админ (из DEFAULT_ADMINS) — права нельзя снять."""
+        return _is_default_admin(self.get_username())
     def is_player(self) -> bool: return bool(self._get("is_player"))
     def is_alive(self) -> bool:  return bool(self._get("is_alive"))
     def get_score(self) -> int:  return self._get("kill_count") or 0

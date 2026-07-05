@@ -54,6 +54,9 @@
   td.st { font-size: 16px; }
   td.num { color: var(--text-dim); font-variant-numeric: tabular-nums; }
   td.name { white-space: normal; font-weight: 600; }
+  td.name a { color: var(--accent); text-decoration: none; }
+  td.name a:hover { text-decoration: underline; }
+  tbody tr:hover { background: var(--btn-bg-hover); }
   td.nick { color: var(--text-dim); }
   .empty { padding: 16px; text-align: center; color: var(--text-dim); font-size: 14px; }
   .legend { font-size: 12px; color: var(--text-dim); margin: 2px; line-height: 1.7; }
@@ -83,7 +86,7 @@
             <td class="num">{{ u.order if u.order is not none else '—' }}</td>
             <td class="num">{{ u.kills }}</td>
             <td class="nick">{{ u.nick }}</td>
-            <td class="name">{{ u.name }}</td>
+            <td class="name"><a href="/app/users/{{ u.id }}">{{ u.name }}</a></td>
           </tr>
         {% endfor %}
         </tbody>
@@ -104,7 +107,7 @@
             <td class="st">{{ u.status }}</td>
             <td class="num">{{ u.id }}</td>
             <td class="nick">{{ u.nick }}</td>
-            <td class="name">{{ u.name }}</td>
+            <td class="name"><a href="/app/users/{{ u.id }}">{{ u.name }}</a></td>
           </tr>
         {% endfor %}
         </tbody>

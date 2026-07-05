@@ -315,6 +315,84 @@ def dashboard(request: Request, role: str = "player"):
     )
 
 
+def user_menu_buttons(target: User):
+    """Все действия админа над пользователем. todo=True → пока не реализовано."""
+    buttons = []
+    # --- реализованные ---
+    if not target.is_admin():
+        buttons.append({"label": "👑 Выдать админа", "action": "promote"})
+    elif not target.is_default_admin():
+        buttons.append({"label": "🧹 Забрать админа", "action": "demote"})
+    # --- запланированные (зачёркнуты) ---
+    todo = [
+        "✍️ Написать игроку", "📊 Инфо о пользователе", "🔪 Устранить", "♻️ Оживить",
+        "🎁 Подарить жизнь", "🚫 Отобрать жизнь", "🔀 Сменить порядок в круге",
+        "💯 Изменить счёт", "✅ Засчитать поимку", "❌ Отклонить поимку",
+        "👋 Удалить из игры", "🗑️ Удалить из системы",
+    ]
+    buttons.extend({"label": t, "todo": True} for t in todo)
+    return buttons
+
+
+@app.get("/app/users/{uid}", response_class=HTMLResponse)
+def user_detail(request: Request, uid: int):
+    admin = current_user(request)
+    if admin is None:
+        return RedirectResponse(url="/", status_code=303)
+    if not admin.is_admin():
+        return RedirectResponse(url="/app", status_code=303)
+    target = User.by_id(uid)
+    if target is None:
+        return RedirectResponse(url="/app/users", status_code=303)
+
+    game = Game()
+    idents = [{"label": i.label(), "muted": i.is_muted(),
+               "log": i.is_admin_log_enabled()} for i in target.identities()]
+    info = {
+        "id": target.id,
+        "name": target.get_name(),
+        "username": target.get_username(),
+        "real_name": target.get_real_name(),
+        "extra_info": target.get_extra_info(),
+        "status": bot_status_emoji(target) + game_status_emoji(target, game),
+        "is_admin": target.is_admin(),
+        "is_default_admin": target.is_default_admin(),
+        "is_player": target.is_player(),
+        "is_alive": target.is_alive(),
+        "score": target.get_score(),
+        "order": target.get_game_order(),
+        "target": target.get_target(),
+        "killed_by": target.get_killed_by(),
+        "identities": idents,
+    }
+    return templates.TemplateResponse(
+        request, "user_detail.html",
+        {"u": info, "buttons": user_menu_buttons(target)},
+    )
+
+
+@app.post("/app/users/{uid}/act")
+def user_action(request: Request, uid: int, action: str = Form(...)):
+    admin = current_user(request)
+    if admin is None:
+        return RedirectResponse(url="/", status_code=303)
+    if not admin.is_admin():
+        return RedirectResponse(url="/app", status_code=303)
+    target = User.by_id(uid)
+    if target is None:
+        return RedirectResponse(url="/app/users", status_code=303)
+
+    if action == "promote" and not target.is_admin():
+        target.set_admin(True)
+        admin_log.log(f"👑 {admin.get_name()} выдал(а) права админа: {target.get_name()}")
+        target.notify("👑 Вам выданы права администратора игры.")
+    elif action == "demote" and target.is_admin() and not target.is_default_admin():
+        target.set_admin(False)
+        admin_log.log(f"🧹 {admin.get_name()} снял(а) права админа: {target.get_name()}")
+        target.notify("Права администратора сняты.")
+    return RedirectResponse(url=f"/app/users/{uid}", status_code=303)
+
+
 @app.get("/app/users", response_class=HTMLResponse)
 def users_list(request: Request):
     user = current_user(request)
