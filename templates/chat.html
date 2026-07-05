@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Чат · {{ username }}</title>
+<style>
+  :root {
+    --bg: #eaeef4; --surface: #ffffff; --btn-bg: #f4f6fa; --btn-bg-hover: #eaeef4;
+    --text: #171a21; --text-dim: #6a7280; --border: #e2e7ef;
+    --accent: #e23b4e; --accent-soft: rgba(226,59,78,.10); --accent-border: rgba(226,59,78,.28);
+    --bot-bg: #ffffff; --user-bg: #d9ecff; --user-text: #0b3a66;
+    --shadow: 0 6px 24px rgba(23,26,40,.10); --shadow-sm: 0 2px 6px rgba(23,26,40,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1116; --surface: #191d24; --btn-bg: #222831; --btn-bg-hover: #2a313b;
+      --text: #e9ecf1; --text-dim: #9aa4b2; --border: #2a313b;
+      --accent: #ff5069; --accent-soft: rgba(255,80,105,.14); --accent-border: rgba(255,80,105,.35);
+      --bot-bg: #222831; --user-bg: #244a72; --user-text: #dcefff;
+      --shadow: 0 8px 30px rgba(0,0,0,.45); --shadow-sm: 0 2px 8px rgba(0,0,0,.35);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+                 "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+    line-height: 1.5; min-height: 100dvh; display: flex; justify-content: center;
+    padding: 16px 12px calc(16px + env(safe-area-inset-bottom));
+  }
+  .app { width: 100%; max-width: 460px; display: flex; flex-direction: column; gap: 12px; }
+
+  .topbar {
+    display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-sm);
+  }
+  .topbar .ava {
+    width: 38px; height: 38px; flex: 0 0 38px; border-radius: 50%;
+    display: grid; place-items: center; font-size: 18px;
+    background: linear-gradient(135deg, var(--accent), #8a1f2b); color: #fff;
+  }
+  .topbar .who { display: flex; flex-direction: column; min-width: 0; }
+  .topbar .who b { font-size: 15px; }
+  .topbar .who span { font-size: 12px; color: var(--text-dim); }
+  .topbar .back { margin-left: auto; text-decoration: none; color: var(--accent); font-weight: 600; font-size: 13px; }
+
+  .thread { display: flex; flex-direction: column; gap: 8px; }
+  .row { display: flex; }
+  .row.user { justify-content: flex-end; }
+  .msg {
+    max-width: 82%; padding: 9px 13px; border-radius: 16px; font-size: 15px;
+    white-space: pre-wrap; word-break: break-word; box-shadow: var(--shadow-sm);
+  }
+  .row.bot .msg { background: var(--bot-bg); border: 1px solid var(--border); border-bottom-left-radius: 5px; }
+  .row.user .msg { background: var(--user-bg); color: var(--user-text); border-bottom-right-radius: 5px; }
+  .msg .ts { display: block; font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+  .row.user .msg .ts { color: inherit; opacity: .7; }
+  .msg a { color: var(--accent); }
+  .row.user .msg a { color: inherit; text-decoration: underline; }
+
+  .empty { text-align: center; color: var(--text-dim); font-size: 14px; padding: 20px; }
+
+  .composer {
+    position: sticky; bottom: 0; display: flex; gap: 8px; padding-top: 4px;
+  }
+  .composer form { flex: 1; display: flex; }
+  .cmd {
+    flex: 1; appearance: none; border: 1px solid var(--accent-border); background: var(--accent-soft);
+    color: var(--accent); font: inherit; font-weight: 650; font-size: 15px;
+    padding: 13px; border-radius: 13px; cursor: pointer;
+  }
+  .cmd:hover { filter: brightness(1.05); }
+</style>
+</head>
+<body>
+  <main class="app">
+    <div class="topbar">
+      <div class="ava">🤖</div>
+      <div class="who">
+        <b>Бот игры</b>
+        <span>чат с @{{ username }}</span>
+      </div>
+      <a class="back" href="/">← сменить id</a>
+    </div>
+
+    {% if messages %}
+    <div class="thread">
+      {% for m in messages %}
+      <div class="row {{ m.tag }}">
+        <div class="msg">{{ m.html }}<span class="ts">{{ m.ts }}</span></div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty">Сообщений пока нет.<br>Нажмите <b>/start</b>, чтобы бот прислал ссылку для входа.</div>
+    {% endif %}
+
+    <div class="composer">
+      <form method="post" action="/chat/{{ username }}/start">
+        <button type="submit" class="cmd">/start</button>
+      </form>
+    </div>
+  </main>
+</body>
+</html>

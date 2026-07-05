@@ -140,20 +140,16 @@
       </div>
     </div>
 
+    {% if is_admin %}
     <nav class="switch" aria-label="Роль">
-      <a href="/?role=player&as={{ as_id }}" class="{{ 'active' if role == 'player' else '' }}">👤 Игрок</a>
-      <a href="/?role=admin&as={{ as_id }}"  class="{{ 'active' if role == 'admin'  else '' }}">👑 Админ</a>
+      <a href="/app?role=player" class="{{ 'active' if role == 'player' else '' }}">👤 Игрок</a>
+      <a href="/app?role=admin"  class="{{ 'active' if role == 'admin'  else '' }}">👑 Админ</a>
     </nav>
+    {% endif %}
 
     <div class="devbar">
-      <span>DEV · вы: <b>Тест {{ as_id }}</b> (id&nbsp;{{ user_id }})</span>
-      <span class="as-links">
-        сменить:
-        <a href="/?role={{ role }}&as=1">1</a>
-        <a href="/?role={{ role }}&as=2">2</a>
-        <a href="/?role={{ role }}&as=3">3</a>
-        · <a href="/inbox/{{ as_id }}?role={{ role }}">📨 входящие</a>
-      </span>
+      <span>Вы вошли как <b>{{ user_name }}</b></span>
+      <span class="as-links"><a href="/logout">выйти</a></span>
     </div>
 
     <div class="bubble">{{ message_html | safe }}<span class="support">ℹ️ В случае ошибок, вопросов или разногласий, напишите сообщение этому боту (желательно) или <a href="#">{{ support_contact }}</a>.</span></div>
@@ -168,7 +164,6 @@
         <form method="post" action="/act">
           <input type="hidden" name="action" value="{{ b.action }}">
           <input type="hidden" name="role" value="{{ role }}">
-          <input type="hidden" name="as" value="{{ as_id }}">
           <button type="submit" class="btn{% if b.kind %} {{ b.kind }}{% endif %}{% if b.full %} full{% endif %}">{{ b.label }}</button>
         </form>
         {% else %}
@@ -177,7 +172,7 @@
       {% endfor %}
     </div>
 
-    <p class="foot">Серверный рендер на FastAPI — кнопки меняют состояние игры (пока в памяти, без БД и входа).</p>
+    <p class="foot">Серверный рендер на FastAPI · вход по одноразовой ссылке из чата бота.</p>
   </main>
 </body>
 </html>

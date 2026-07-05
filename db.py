@@ -193,10 +193,11 @@ def drop_db():
         p = Path(str(DB_PATH) + suffix)
         if p.exists():
             p.unlink()
-    inbox_dir = DATA_DIR / "inboxes"
-    if inbox_dir.exists():
-        for f in inbox_dir.glob("*.txt"):
-            f.unlink()
+    for sub in ("inboxes", "chats"):
+        d = DATA_DIR / sub
+        if d.exists():
+            for f in d.glob("*.txt"):
+                f.unlink()
     admin_log = DATA_DIR / "admin_log.txt"
     if admin_log.exists():
         admin_log.unlink()

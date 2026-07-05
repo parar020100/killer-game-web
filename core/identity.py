@@ -99,9 +99,13 @@ class Identity:
 
     def deliver(self, text: str):
         platform = self.get_platform()
-        if platform == "test":
+        if platform == "tg":
+            # Пока Telegram эмулируется страницей чата (core/chat.py).
+            from core.chat import add_bot_message
+            add_bot_message(self.get_platform_uid(), text)
+        elif platform == "test":
             from core.inbox import deliver_test
             deliver_test(self.get_platform_uid(), text)
         else:
-            # Реальные боты Telegram/VK подключим на шаге уведомлений.
+            # Реальные боты (vk и т.п.) подключим на шаге уведомлений.
             print(f"[notify:{platform}] -> {self.get_platform_uid()}: {text}")

@@ -14,20 +14,22 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-_TS_RE = re.compile(r"^\[(.*?)\]$")
+# [время] или [время] тег  — тег опционален (используется чатом: bot / user)
+_HEAD_RE = re.compile(r"^\[(.*?)\](?:\s+(\S+))?$")
 
 
-def append(path: Path, text: str):
-    """Дописать запись с текущей меткой времени в конец файла."""
+def append(path: Path, text: str, tag: str = None):
+    """Дописать запись с текущей меткой времени (и опц. тегом) в конец файла."""
     path.parent.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    head = f"[{ts}] {tag}" if tag else f"[{ts}]"
     body = "\n".join(line.rstrip() for line in str(text).strip().splitlines())
     with open(path, "a", encoding="utf-8") as f:
-        f.write(f"[{ts}]\n{body}\n\n")
+        f.write(f"{head}\n{body}\n\n")
 
 
 def read(path: Path):
-    """Список записей, новые сверху: [{'ts': ..., 'body': ...}, ...]."""
+    """Список записей, новые сверху: [{'ts':.., 'tag':.., 'body':..}, ...]."""
     if not path.exists():
         return []
     msgs = []
@@ -36,10 +38,11 @@ def read(path: Path):
         if not chunk:
             continue
         lines = chunk.split("\n")
-        m = _TS_RE.match(lines[0])
+        m = _HEAD_RE.match(lines[0])
         if m:
-            msgs.append({"ts": m.group(1), "body": "\n".join(lines[1:]).strip()})
+            msgs.append({"ts": m.group(1), "tag": m.group(2),
+                         "body": "\n".join(lines[1:]).strip()})
         else:
-            msgs.append({"ts": "", "body": chunk})
+            msgs.append({"ts": "", "tag": None, "body": chunk})
     msgs.reverse()
     return msgs

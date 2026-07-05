@@ -1,26 +1,28 @@
-"""Веб-версия игры «Киллер / Папарацци» — каркас (FastAPI + Jinja2).
+"""Веб-версия игры «Киллер / Папарацци».
 
-Состояние игры, игроки и их каналы связи хранятся в SQLite (db.py, core/).
-
-Входа по аккаунту пока нет — вместо него DEV-режим на **тестовой** платформе:
-текущий пользователь выбирается параметром `?as=<N>` в адресе (по умолчанию 1).
-Каждое N — отдельная тестовая идентичность (platform='test'), поэтому в разных
-вкладках можно открыть разных пользователей (`?as=1`, `?as=2`, ...), не заводя
-реальных аккаунтов Telegram/VK. Уведомления такому пользователю падают в его
-«входящие» — их видно на странице /inbox/<N>.
+Архитектура входа:
+  /                     — эмуляция чата с ботом: поле «id» → открыть чат
+  /chat/<username>      — переписка с ботом: история + кнопка /start
+  /chat/<username>/start— бот присылает одноразовую ссылку для входа (magic-link)
+  /login?token=...      — проверка токена → подписанная cookie-сессия → /app
+  /app                  — игровой дашборд (доступен только вошедшему пользователю)
 
 Кнопки — обычные HTML-формы (POST → изменение состояния → редирект), без JavaScript.
-
 Запуск:  ./start.sh   (см. README.md)
 """
+import os
+import re
+from html import escape
 from pathlib import Path
 
 from fastapi import FastAPI, Request, Form, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from markupsafe import Markup
+from starlette.middleware.sessions import SessionMiddleware
 
 import db  # noqa: F401 — импорт инициализирует БД
-from core import inbox, admin_log
+from core import chat, auth, admin_log
 from core.game import Game
 from core.user import User
 
@@ -29,24 +31,36 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 app = FastAPI(title="Killer / Paparazzi — web")
 
+# Подписанная cookie-сессия. Секрет — из переменной окружения (в проде обязателен).
+SECRET_KEY = os.getenv("SECRET_KEY", "dev-insecure-secret-change-me")
+app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
+
 SUPPORT_CONTACT = "@parar020100"
 
 
 # ---------------------------------------------------------------------------
-# DEV: текущий пользователь по ?as=<N> (заменится входом по ссылке)
+# Текущий пользователь (по сессии)
 # ---------------------------------------------------------------------------
 
-def dev_current_user(as_id: str) -> User:
-    """Берёт/создаёт тестового пользователя с test-идентичностью uid = N."""
-    try:
-        uid = str(int(as_id))
-    except (TypeError, ValueError):
-        uid = "1"
-    return User.get_or_create_by_test(uid, username=f"test{uid}", name=f"Тест {uid}")
+def current_user(request: Request):
+    uid = request.session.get("uid")
+    return User.by_id(uid) if uid else None
+
+
+_URL_RE = re.compile(r"(https?://[^\s]+)")
+
+
+def linkify(text: str) -> Markup:
+    """Экранировать текст и превратить ссылки в кликабельные."""
+    out = _URL_RE.sub(
+        lambda m: f'<a href="{escape(m.group(1))}">{escape(m.group(1))}</a>',
+        escape(text),
+    )
+    return Markup(out.replace("\n", "<br>"))
 
 
 # ---------------------------------------------------------------------------
-# Кнопки и экраны
+# Кнопки и экраны игрового дашборда
 # ---------------------------------------------------------------------------
 
 def _btn(label, action=None, kind="", full=False, href=None):
@@ -56,7 +70,7 @@ def _btn(label, action=None, kind="", full=False, href=None):
 def player_view(user: User):
     game = Game()
     lines = [
-        f'<span class="hi">Привет, {user.get_name()}!</span>',
+        f'<span class="hi">Привет, {escape(user.get_name())}!</span>',
         "📷 Добро пожаловать в игру Папарацци!",
         "",
         '<span class="divider">══ 📋 Статус игры ══</span>',
@@ -78,10 +92,10 @@ def player_view(user: User):
     return "\n".join(lines), buttons
 
 
-def admin_view(user: User, as_id: str):
+def admin_view(user: User):
     game = Game()
     message = "\n".join([
-        f'<span class="hi">Привет, {user.get_name()}!</span>',
+        f'<span class="hi">Привет, {escape(user.get_name())}!</span>',
         "📷 Ты — администратор игры.",
         "",
         '<span class="divider">══ 📋 Статус игры ══</span>',
@@ -100,14 +114,13 @@ def admin_view(user: User, as_id: str):
     else:
         buttons.append(_btn("✅ Открыть регистрацию", "open_reg"))
 
-    buttons.append(_btn("📋 Журнал (admin log)",
-                        href=f"/admin-log?role=admin&as={as_id}", full=True))
+    buttons.append(_btn("📋 Журнал (admin log)", href="/admin-log", full=True))
     buttons.append(_btn("🔄 Обновить", "noop", full=True))
     return message, buttons
 
 
 # ---------------------------------------------------------------------------
-# Действия кнопок
+# Действия кнопок дашборда
 # ---------------------------------------------------------------------------
 
 def _broadcast(text, players_only=True):
@@ -149,25 +162,97 @@ def apply_action(action: str, user: User):
 
 
 # ---------------------------------------------------------------------------
-# Маршруты
+# Чат с ботом (эмуляция) + вход по ссылке
 # ---------------------------------------------------------------------------
 
 @app.get("/", response_class=HTMLResponse)
-def index(request: Request, role: str = "player", as_id: str = Query("1", alias="as")):
-    user = dev_current_user(as_id)
-    if role == "admin":
-        message, buttons = admin_view(user, as_id)
+def chat_entry(request: Request):
+    return templates.TemplateResponse(request, "chat_entry.html",
+                                      {"support_contact": SUPPORT_CONTACT})
+
+
+@app.get("/chat")
+def chat_open(id: str = ""):
+    username = chat.normalize(id)
+    if not username:
+        return RedirectResponse(url="/", status_code=303)
+    return RedirectResponse(url=f"/chat/{username}", status_code=303)
+
+
+@app.get("/chat/{username}", response_class=HTMLResponse)
+def chat_view(request: Request, username: str):
+    username = chat.normalize(username)
+    if not username:
+        return RedirectResponse(url="/", status_code=303)
+    # Открытие чата создаёт профиль при необходимости (как первый контакт с ботом).
+    User.get_or_create_by_tg(username, username=username, name=username)
+    messages = [
+        {"tag": m["tag"] or "bot", "ts": m["ts"], "html": linkify(m["body"])}
+        for m in chat.read(username)
+    ]
+    return templates.TemplateResponse(
+        request, "chat.html",
+        {"username": username, "messages": messages},
+    )
+
+
+@app.post("/chat/{username}/start")
+def chat_start(request: Request, username: str):
+    username = chat.normalize(username)
+    user = User.get_or_create_by_tg(username, username=username, name=username)
+    chat.add_user_message(username, "/start")
+    token = auth.create_login_token(user.id)
+    link = f"{request.base_url}login?token={token}"
+    chat.add_bot_message(
+        username,
+        "Здравствуйте! Нажмите на ссылку, чтобы войти в игру «Папарацци»:\n"
+        f"{link}\n"
+        "Ссылка одноразовая и действует 15 минут.",
+    )
+    return RedirectResponse(url=f"/chat/{username}", status_code=303)
+
+
+@app.get("/login")
+def login(request: Request, token: str = ""):
+    uid = auth.consume_token(token)
+    if uid is None:
+        return HTMLResponse(
+            "<h3>Ссылка недействительна или устарела.</h3>"
+            "<p>Вернитесь в чат и нажмите <b>/start</b> ещё раз.</p>",
+            status_code=400,
+        )
+    request.session["uid"] = uid
+    return RedirectResponse(url="/app", status_code=303)
+
+
+@app.get("/logout")
+def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse(url="/", status_code=303)
+
+
+# ---------------------------------------------------------------------------
+# Игровой дашборд (только для вошедших)
+# ---------------------------------------------------------------------------
+
+@app.get("/app", response_class=HTMLResponse)
+def dashboard(request: Request, role: str = "player"):
+    user = current_user(request)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+
+    if role == "admin" and user.is_admin():
+        message, buttons = admin_view(user)
     else:
         role = "player"
         message, buttons = player_view(user)
 
     return templates.TemplateResponse(
-        request,
-        "index.html",
+        request, "index.html",
         {
             "role": role,
-            "as_id": as_id,
-            "user_id": user.id,
+            "is_admin": user.is_admin(),
+            "user_name": user.get_name(),
             "message_html": message,
             "buttons": buttons,
             "support_contact": SUPPORT_CONTACT,
@@ -176,37 +261,14 @@ def index(request: Request, role: str = "player", as_id: str = Query("1", alias=
 
 
 @app.post("/act")
-def act(action: str = Form(...), role: str = Form("player"), as_id: str = Form("1", alias="as")):
+def act(request: Request, action: str = Form(...), role: str = Form("player")):
     """Применить действие текущего пользователя и вернуться (Post/Redirect/Get)."""
-    user = dev_current_user(as_id)
+    user = current_user(request)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
     apply_action(action, user)
-    role = "admin" if role == "admin" else "player"
-    return RedirectResponse(url=f"/?role={role}&as={as_id}", status_code=303)
-
-
-# ---------------------------------------------------------------------------
-# DEV: «входящие» тестовых идентичностей (симуляция уведомлений бота)
-# ---------------------------------------------------------------------------
-
-@app.get("/inbox/{uid}", response_class=HTMLResponse)
-def inbox_view(request: Request, uid: str, role: str = Query("player")):
-    messages = inbox.read_messages(uid)
-    return templates.TemplateResponse(
-        request,
-        "inbox.html",
-        {
-            "uid": uid,
-            "role": role if role == "admin" else "player",
-            "messages": messages,
-            "others": inbox.list_inboxes(),
-        },
-    )
-
-
-@app.post("/inbox/{uid}/clear")
-def inbox_clear(uid: str, role: str = Form("player")):
-    inbox.clear_inbox(uid)
-    return RedirectResponse(url=f"/inbox/{uid}?role={role}", status_code=303)
+    role = "admin" if role == "admin" and user.is_admin() else "player"
+    return RedirectResponse(url=f"/app?role={role}", status_code=303)
 
 
 # ---------------------------------------------------------------------------
@@ -214,15 +276,18 @@ def inbox_clear(uid: str, role: str = Form("player")):
 # ---------------------------------------------------------------------------
 
 @app.get("/admin-log", response_class=HTMLResponse)
-def admin_log_view(request: Request, as_id: str = Query("1", alias="as")):
+def admin_log_view(request: Request):
+    user = current_user(request)
+    if user is None or not user.is_admin():
+        return RedirectResponse(url="/app", status_code=303)
     return templates.TemplateResponse(
-        request,
-        "admin_log.html",
-        {"as_id": as_id, "messages": admin_log.read_messages()},
+        request, "admin_log.html", {"messages": admin_log.read_messages()},
     )
 
 
 @app.post("/admin-log/clear")
-def admin_log_clear(as_id: str = Form("1", alias="as")):
-    admin_log.clear()
-    return RedirectResponse(url=f"/admin-log?as={as_id}", status_code=303)
+def admin_log_clear(request: Request):
+    user = current_user(request)
+    if user and user.is_admin():
+        admin_log.clear()
+    return RedirectResponse(url="/admin-log", status_code=303)
