@@ -71,6 +71,7 @@
   .btn.full { grid-column: 1 / -1; }
   .btn.todo { cursor: not-allowed; color: var(--text-dim); opacity: .75; }
   .btn.todo s { text-decoration: line-through; }
+  .btn.muted { cursor: not-allowed; color: var(--text-dim); opacity: .5; }
   .score {
     grid-column: 1 / -1; display: flex; gap: 8px; align-items: stretch;
     background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 8px;
@@ -121,11 +122,11 @@
 
     {% if u.username %}
     <a class="btn full" href="/chat/{{ u.username }}" target="_blank" rel="noopener"
-       title="переписка бота с игроком, откроется в новой вкладке">💬 История сообщений</a>
+       title="переписка с игроком, откроется в новой вкладке">💬 Сообщения</a>
     {% endif %}
     {% if allow_dev %}
     <a class="btn full" href="/app?user={{ u.username or u.id }}" target="_blank" rel="noopener"
-       title="открыть игру от лица этого игрока в новой вкладке (для теста), независимо от вашей cookie-сессии">🕶 Войти как этот игрок (новая вкладка)</a>
+       title="открыть игру от лица этого игрока в новой вкладке (для теста), независимо от вашей cookie-сессии">🕶 Открыть меню от имени игрока</a>
     {% endif %}
 
     <p class="section-hint">— действия над пользователем —</p>
@@ -133,6 +134,8 @@
       {% for b in buttons %}
         {% if b.todo %}
         <button class="btn todo full" disabled title="ещё не реализовано"><s>{{ b.label }}</s></button>
+        {% elif b.disabled %}
+        <button class="btn muted full" disabled title="{{ b.note }}">{{ b.label }}</button>
         {% else %}
         <form method="post" action="{{ link('/app/users/' ~ u.id ~ '/act') }}">
           <input type="hidden" name="action" value="{{ b.action }}">

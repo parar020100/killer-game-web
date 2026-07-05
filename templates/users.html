@@ -78,8 +78,10 @@
   .ucard > summary .chev { margin-left: auto; color: var(--text-dim); font-size: 14px; }
   .ucard[open] > summary { border-bottom: 1px solid var(--border); background: var(--btn-bg-hover); }
   .ucard[open] > summary .chev { color: var(--accent); }
-  .uactions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px 13px; }
-  .uactions > a.btn, .uactions > .score { grid-column: 1 / -1; }
+  /* действия — «чипы» по размеру текста, несколько в ряд; недоступные — серые;
+     счёт/позиция — сворачиваемое «окошко» на всю ширину */
+  .uactions { display: flex; flex-wrap: wrap; gap: 7px; padding: 12px 13px; align-items: flex-start; }
+  .uactions > form { display: contents; margin: 0; }
 
   .btn {
     appearance: none; border: 1px solid var(--border); background: var(--btn-bg); color: var(--text);
@@ -90,15 +92,30 @@
   .btn:hover { background: var(--btn-bg-hover); }
   .btn.primary { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-weight: 650; }
   .btn.danger { background: var(--danger-soft); border-color: var(--danger-border); color: var(--danger); }
-  .btn.todo { cursor: not-allowed; color: var(--text-dim); opacity: .75; }
+  .btn.todo { cursor: not-allowed; color: var(--text-dim); opacity: .6; }
   .btn.todo s { text-decoration: line-through; }
-  .uactions form { display: flex; gap: 8px; }
-  .uactions form .btn { width: 100%; }
-  .score input {
-    flex: 1; min-width: 0; font: inherit; font-size: 14px; padding: 8px 10px;
-    border: 1px solid var(--border); border-radius: 9px; background: var(--btn-bg); color: var(--text);
+
+  .uactions .btn.chip {
+    width: auto; min-height: 36px; padding: 8px 13px; font-size: 13px; white-space: nowrap;
   }
-  .score .btn { width: auto; flex: 0 0 auto; }
+  .uactions .btn.muted { color: var(--text-dim); opacity: .5; cursor: not-allowed; background: var(--btn-bg); }
+  .uactions .rowfull, .uactions .mini { flex: 1 0 100%; }
+
+  .mini > summary { list-style: none; cursor: pointer; }
+  .mini > summary::-webkit-details-marker { display: none; }
+  .mini > summary.chip { width: 100%; }
+  .mini[open] > summary { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+  .mini-body {
+    margin-top: 7px; padding: 11px; background: var(--btn-bg);
+    border: 1px solid var(--border); border-radius: 12px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .mini-body form { display: flex; gap: 8px; }
+  .mini-body input {
+    flex: 1; min-width: 0; font: inherit; font-size: 14px; padding: 8px 10px;
+    border: 1px solid var(--border); border-radius: 9px; background: var(--surface); color: var(--text);
+  }
+  .mini-body .btn { width: auto; flex: 0 0 auto; }
 </style>
 </head>
 <body>
@@ -123,7 +140,7 @@
     {% endif %}
 
     <div data-live="5000" style="display:contents">
-      {{ ul.userlist(players, non_players) }}
+      {{ ul.userlist(players, non_players, '/app/users') }}
     </div>
   </main>
   {% include "_live.html" %}

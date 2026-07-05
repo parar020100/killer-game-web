@@ -194,11 +194,11 @@ def player_section(user: User):
         lines.append(f"👥 Игроков: <strong>{game.count_players()}</strong>")
         buttons.append(_btn("🔴 Выйти из игры", "leave", "danger", full=True))
     else:
-        # Игра идёт — показываем игровое состояние конкретного игрока.
+        # Игра идёт (в т.ч. на паузе) — показываем игровое состояние игрока.
+        # Пауза — это НЕ конец игры, поэтому итоги игроку здесь не показываем
+        # (их рассылает админ при завершении). Промежуточные итоги — только у админа.
         lines += _player_game_lines(user)
         buttons += _player_game_buttons(user)
-        if game.is_paused():
-            buttons.append(_btn("🏁 Итоги игры", href="/app/results", full=True))
 
     return "\n".join(lines), buttons
 
@@ -737,20 +737,23 @@ def settings_save(request: Request, password: str = Form("")):
 
 
 def user_menu_buttons(target: User):
-    """Действия админа над пользователем — доступность зависит от состояния игры.
+    """Действия админа над пользователем — все кнопки видны всегда, но те, что
+    требуют паузы, показываются бледно-серыми (disabled) с подсказкой.
 
-    Порт условий из бота (menu/m_profile.py): устранить/оживить/счёт — на паузе;
-    порядок в круге и удаление из игры — на паузе или пока игра не запущена;
-    подарить/отобрать жизнь — пока игрок мёртв; засчитать/отклонить поимку —
-    когда есть заявка. `todo=True` → ещё не реализовано (зачёркнуто).
+    Порт условий из бота (menu/m_profile.py): устранить/оживить — на паузе;
+    подарить/отобрать жизнь — пока игрок мёртв; удалить из игры — на паузе или
+    пока игра не запущена; засчитать/отклонить поимку — когда есть заявка.
+    Позиция в круге и счёт живут отдельными «окошками» в шаблоне карточки.
     """
     game = Game()
     paused = game.is_paused()
     started = game.is_started()
+    pause_note = "доступно на паузе"
     b = []
 
-    def add(label, action, kind=""):
-        b.append({"label": label, "action": action, "kind": kind})
+    def add(label, action, kind="", disabled=False, note=""):
+        b.append({"label": label, "action": action, "kind": kind,
+                  "disabled": disabled, "note": note})
 
     # роль
     if not target.is_admin():
@@ -766,25 +769,20 @@ def user_menu_buttons(target: User):
     # игровые действия (только для участников)
     if target.is_player():
         if target.is_alive():
-            if paused:
-                add("🔪 Устранить", "kill", "danger")
+            add("🔪 Устранить", "kill", "danger", disabled=not paused, note=pause_note)
         else:
-            if paused:
-                add("♻️ Оживить", "revive", "primary")
+            add("♻️ Оживить", "revive", "primary", disabled=not paused, note=pause_note)
             if target.is_queued_for_revival():
-                add("🚫 Отобрать шанс жизни", "take_life")
+                add("🚫 Отобрать жизнь", "take_life")
             else:
                 add("🎁 Подарить жизнь", "give_life")
-        if paused or not started:
-            add("🎲 Случайный порядок", "randomize_order")
-            add("👋 Удалить из игры", "kick", "danger")
+        add("👋 Удалить из игры", "kick", "danger",
+            disabled=not (paused or not started), note="доступно на паузе или до старта")
 
     # удаление из системы — только для не-игроков (нельзя себя/дефолт-админа)
     if not target.is_player() and not target.is_default_admin():
         add("🗑️ Удалить из системы", "delete", "danger")
 
-    # ещё не реализовано (личные сообщения отложены)
-    b.append({"label": "✍️ Написать игроку", "todo": True})
     return b
 
 
@@ -854,12 +852,15 @@ def user_detail(request: Request, uid: int):
 
 @app.post("/app/users/{uid}/act")
 def user_action(request: Request, uid: int, action: str = Form(...),
-                value: str = Form("")):
+                value: str = Form(""), next_url: str = Form("", alias="next")):
     admin = current_user(request)
     if admin is None:
         return RedirectResponse(url="/", status_code=303)
     if not admin.is_admin():
         return _redirect(request, "/app")
+    # Куда вернуться после действия: туда, откуда пришли (дашборд/список), а не на
+    # отдельную страницу игрока. По умолчанию — на страницу пользователя.
+    dest = next_url if next_url.startswith("/app") else f"/app/users/{uid}"
     target = User.by_id(uid)
     if target is None:
         return _redirect(request, "/app/users")
@@ -890,14 +891,16 @@ def user_action(request: Request, uid: int, action: str = Form(...),
             before = _snapshot_targets()
             target.delete_from_system(admin)
             _notify_retargets(before)
-            return _redirect(request, "/app/users")
+            # удалённого игрока уже нет — возвращаемся к списку, не на его страницу
+            back = dest if dest != f"/app/users/{uid}" else "/app/users"
+            return _redirect(request, back)
     elif action in _USER_ACTIONS:
         method, structural = _USER_ACTIONS[action]
         before = _snapshot_targets() if structural else None
         method(target, admin)
         if structural:
             _notify_retargets(before)
-    return _redirect(request, f"/app/users/{uid}")
+    return _redirect(request, dest)
 
 
 def _user_list_data():

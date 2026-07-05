@@ -225,19 +225,34 @@
   .upanel-body .cw { display: none; }  /* компактно: без слова «управлять» */
   .ucard[open] > summary { border-bottom: 1px solid var(--border); background: var(--btn-bg-hover); }
   .ucard[open] > summary .chev { color: var(--accent); }
-  /* действия внутри карточки — по две в ряд, компактные; длинные ссылки и поля
-     ввода (счёт/позиция) занимают всю ширину */
-  .uactions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 10px 11px; }
-  .uactions .btn { min-height: 38px; font-size: 13px; padding: 8px 10px; box-shadow: none; }
-  .uactions form { display: flex; gap: 6px; margin: 0; }
-  .uactions form .btn { width: 100%; }
-  .uactions > a.btn { grid-column: 1 / -1; }
-  .uactions .score { grid-column: 1 / -1; }
-  .score input {
-    flex: 1; min-width: 0; font: inherit; font-size: 13px; padding: 7px 10px;
-    border: 1px solid var(--border); border-radius: 9px; background: var(--btn-bg); color: var(--text);
+  /* действия внутри карточки — «чипы», несколько в ряд, по размеру текста
+     (без переносов); недоступные — бледно-серые; счёт/позиция — «окошко». */
+  .uactions { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px; align-items: flex-start; }
+  .uactions > form { display: contents; margin: 0; }
+  .uactions .btn.chip {
+    width: auto; min-height: 34px; padding: 7px 12px; font-size: 12.5px; font-weight: 550;
+    white-space: nowrap; box-shadow: none;
   }
-  .score .btn { width: auto; flex: 0 0 auto; }
+  .uactions .btn.muted { color: var(--text-dim); opacity: .5; cursor: not-allowed; background: var(--btn-bg); }
+  .uactions .btn.todo { color: var(--text-dim); opacity: .5; cursor: not-allowed; }
+  .uactions .btn.todo s { text-decoration: line-through; }
+  .uactions .rowfull, .uactions .mini { flex: 1 0 100%; }
+
+  .mini > summary { list-style: none; cursor: pointer; }
+  .mini > summary::-webkit-details-marker { display: none; }
+  .mini > summary.chip { width: 100%; }
+  .mini[open] > summary { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+  .mini-body {
+    margin-top: 6px; padding: 10px; background: var(--btn-bg);
+    border: 1px solid var(--border); border-radius: 11px;
+    display: flex; flex-direction: column; gap: 7px;
+  }
+  .mini-body form { display: flex; gap: 7px; }
+  .mini-body input {
+    flex: 1; min-width: 0; font: inherit; font-size: 13px; padding: 7px 9px;
+    border: 1px solid var(--border); border-radius: 9px; background: var(--surface); color: var(--text);
+  }
+  .mini-body .btn { width: auto; flex: 0 0 auto; min-height: 36px; box-shadow: none; }
 
   @media (min-width: 500px) { .bubble { font-size: 15.5px; } }
 </style>
@@ -308,7 +323,7 @@
       {% if user_list.game_started and not user_list.game_paused %}
       <p class="legend">⏸️ Устранение / оживление / счёт / порядок в круге — на паузе.</p>
       {% endif %}
-      {{ ul.userlist(user_list.players, user_list.non_players) }}
+      {{ ul.userlist(user_list.players, user_list.non_players, '/app') }}
     </div>
     </div>
   </aside>

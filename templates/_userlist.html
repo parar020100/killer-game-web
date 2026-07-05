@@ -1,8 +1,9 @@
 {# Раскрывающаяся карточка пользователя с кнопками действий. Общий фрагмент для
    отдельной страницы /app/users и встроенного списка на дашборде.
-   Импортировать: {% import "_userlist.html" as ul with context %} #}
+   Импортировать: {% import "_userlist.html" as ul with context %}
+   `back` — путь, куда вернуться после действия (/app или /app/users). #}
 
-{% macro card(u) -%}
+{% macro card(u, back) -%}
   <details class="ucard" data-keep="u{{ u.id }}">
     <summary>
       <span class="st">{{ u.status }}</span>
@@ -15,45 +16,74 @@
     <div class="uactions">
       {% for b in u.buttons %}
         {% if b.todo %}
-        <button class="btn todo" disabled title="ещё не реализовано"><s>{{ b.label }}</s></button>
+        <button class="btn chip todo" disabled title="ещё не реализовано"><s>{{ b.label }}</s></button>
+        {% elif b.disabled %}
+        <button class="btn chip muted" disabled title="{{ b.note }}">{{ b.label }}</button>
         {% else %}
         <form method="post" action="{{ link('/app/users/' ~ u.id ~ '/act') }}">
           <input type="hidden" name="action" value="{{ b.action }}">
-          <button type="submit" class="btn {{ b.kind or '' }}">{{ b.label }}</button>
+          <input type="hidden" name="next" value="{{ back }}">
+          <button type="submit" class="btn chip {{ b.kind or '' }}">{{ b.label }}</button>
         </form>
         {% endif %}
       {% endfor %}
+
+      {# позиция в круге — компактная кнопка, открывающая «окошко» с вводом #}
       {% if u.can_set_order %}
-      <form class="score" method="post" action="{{ link('/app/users/' ~ u.id ~ '/act') }}">
-        <input type="hidden" name="action" value="set_order">
-        <input type="number" name="value" min="1" value="{{ u.order if u.order is not none else '' }}"
-               placeholder="позиция в круге" aria-label="Позиция в круге">
-        <button type="submit" class="btn">🔢 Позиция</button>
-      </form>
+      <details class="mini" data-keep="ord{{ u.id }}">
+        <summary class="btn chip">🔢 Изменить позицию</summary>
+        <div class="mini-body">
+          <form method="post" action="{{ link('/app/users/' ~ u.id ~ '/act') }}">
+            <input type="hidden" name="action" value="set_order">
+            <input type="hidden" name="next" value="{{ back }}">
+            <input type="number" name="value" min="1" value="{{ u.order if u.order is not none else '' }}"
+                   placeholder="номер в круге" aria-label="Позиция в круге">
+            <button type="submit" class="btn primary">Задать номер</button>
+          </form>
+          <form method="post" action="{{ link('/app/users/' ~ u.id ~ '/act') }}">
+            <input type="hidden" name="action" value="randomize_order">
+            <input type="hidden" name="next" value="{{ back }}">
+            <button type="submit" class="btn">🎲 Случайный номер</button>
+          </form>
+        </div>
+      </details>
+      {% else %}
+      <button class="btn chip muted rowfull" disabled title="доступно на паузе">🔢 Изменить позицию</button>
       {% endif %}
+
+      {# счёт — компактная кнопка, открывающая «окошко» с вводом #}
       {% if u.can_set_score %}
-      <form class="score" method="post" action="{{ link('/app/users/' ~ u.id ~ '/act') }}">
-        <input type="hidden" name="action" value="set_score">
-        <input type="number" name="value" min="0" value="{{ u.score }}" aria-label="Счёт поимок">
-        <button type="submit" class="btn primary">💯 Счёт</button>
-      </form>
+      <details class="mini" data-keep="scr{{ u.id }}">
+        <summary class="btn chip">💯 Счёт</summary>
+        <div class="mini-body">
+          <form method="post" action="{{ link('/app/users/' ~ u.id ~ '/act') }}">
+            <input type="hidden" name="action" value="set_score">
+            <input type="hidden" name="next" value="{{ back }}">
+            <input type="number" name="value" min="0" value="{{ u.score }}"
+                   placeholder="новый счёт" aria-label="Счёт поимок">
+            <button type="submit" class="btn primary">Задать счёт</button>
+          </form>
+        </div>
+      </details>
+      {% else %}
+      <button class="btn chip muted rowfull" disabled title="доступно на паузе">💯 Счёт</button>
       {% endif %}
-      <a class="btn" href="{{ link('/app/users/' ~ u.id) }}">⚙️ Полная страница управления</a>
-      {% if u.username %}<a class="btn" href="/chat/{{ u.username }}" target="_blank" rel="noopener">💬 История сообщений</a>{% endif %}
-      {% if allow_dev %}<a class="btn" href="/app?user={{ u.username or u.id }}" target="_blank" rel="noopener">🕶 Войти как этот игрок ↗</a>{% endif %}
+
+      {% if u.username %}<a class="btn chip" href="/chat/{{ u.username }}" target="_blank" rel="noopener">💬 Сообщения</a>{% endif %}
+      {% if allow_dev %}<a class="btn chip" href="/app?user={{ u.username or u.id }}" target="_blank" rel="noopener">🕶 Открыть меню от имени игрока</a>{% endif %}
     </div>
   </details>
 {%- endmacro %}
 
-{% macro userlist(players, non_players) -%}
+{% macro userlist(players, non_players, back) -%}
   <h2>🎯 Активные игроки ({{ players | length }})</h2>
   {% if players %}
-  <div class="cards">{% for u in players %}{{ card(u) }}{% endfor %}</div>
+  <div class="cards">{% for u in players %}{{ card(u, back) }}{% endfor %}</div>
   {% else %}<div class="section empty">Пока нет активных игроков.</div>{% endif %}
 
   <h2>👀 Вне игры ({{ non_players | length }})</h2>
   {% if non_players %}
-  <div class="cards">{% for u in non_players %}{{ card(u) }}{% endfor %}</div>
+  <div class="cards">{% for u in non_players %}{{ card(u, back) }}{% endfor %}</div>
   {% else %}<div class="section empty">Все пользователи в игре.</div>{% endif %}
 
   <p class="legend">
