@@ -244,16 +244,20 @@
   .mini[open] > summary { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
   .mini-body {
     position: absolute; top: calc(100% + 5px); left: 0; z-index: 30;
-    width: 210px; max-width: calc(100vw - 32px); padding: 10px;
-    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
-    box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 7px;
+    width: 208px; max-width: calc(100vw - 32px); padding: 9px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 11px;
+    box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 6px;
   }
-  .mini-body form { display: flex; gap: 7px; }
+  .mini-body form { display: flex; gap: 6px; align-items: stretch; }
   .mini-body input {
-    flex: 1; min-width: 0; font: inherit; font-size: 13px; padding: 7px 9px;
-    border: 1px solid var(--border); border-radius: 9px; background: var(--surface); color: var(--text);
+    flex: 1 1 auto; min-width: 0; width: 100%; font: inherit; font-size: 12.5px; padding: 6px 8px;
+    border: 1px solid var(--border); border-radius: 8px; background: var(--btn-bg); color: var(--text);
   }
-  .mini-body .btn { width: auto; flex: 0 0 auto; min-height: 36px; box-shadow: none; }
+  .mini-body .btn {
+    width: auto; flex: 0 0 auto; min-height: 30px; font-size: 12px; padding: 5px 11px;
+    white-space: nowrap; box-shadow: none;
+  }
+  .mini-body .btn.wide { flex: 1 1 100%; width: 100%; }
 
   @media (min-width: 500px) { .bubble { font-size: 15.5px; } }
 </style>

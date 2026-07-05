@@ -37,13 +37,13 @@
             <input type="hidden" name="action" value="set_order">
             <input type="hidden" name="next" value="{{ back }}">
             <input type="number" name="value" min="1" value="{{ u.order if u.order is not none else '' }}"
-                   placeholder="номер в круге" aria-label="Позиция в круге">
-            <button type="submit" class="btn primary">Задать номер</button>
+                   placeholder="номер" aria-label="Позиция в круге">
+            <button type="submit" class="btn primary">Задать</button>
           </form>
           <form method="post" action="{{ link('/app/users/' ~ u.id ~ '/act') }}">
             <input type="hidden" name="action" value="randomize_order">
             <input type="hidden" name="next" value="{{ back }}">
-            <button type="submit" class="btn">🎲 Случайный номер</button>
+            <button type="submit" class="btn wide">🎲 Случайный номер</button>
           </form>
         </div>
       </details>
@@ -54,19 +54,19 @@
       {# счёт — компактная кнопка, открывающая «окошко» с вводом #}
       {% if u.can_set_score %}
       <details class="mini" data-keep="scr{{ u.id }}">
-        <summary class="btn chip">💯 Счёт</summary>
+        <summary class="btn chip">💯 Редактировать счёт</summary>
         <div class="mini-body">
           <form method="post" action="{{ link('/app/users/' ~ u.id ~ '/act') }}">
             <input type="hidden" name="action" value="set_score">
             <input type="hidden" name="next" value="{{ back }}">
             <input type="number" name="value" min="0" value="{{ u.score }}"
-                   placeholder="новый счёт" aria-label="Счёт поимок">
-            <button type="submit" class="btn primary">Задать счёт</button>
+                   placeholder="счёт" aria-label="Счёт поимок">
+            <button type="submit" class="btn primary">Задать</button>
           </form>
         </div>
       </details>
       {% else %}
-      <button class="btn chip muted" disabled title="доступно на паузе">💯 Счёт</button>
+      <button class="btn chip muted" disabled title="доступно на паузе">💯 Редактировать счёт</button>
       {% endif %}
 
       {% if u.username %}<a class="btn chip" href="/chat/{{ u.username }}" target="_blank" rel="noopener">💬 Сообщения</a>{% endif %}
