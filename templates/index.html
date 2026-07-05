@@ -225,12 +225,16 @@
   .upanel-body .cw { display: none; }  /* компактно: без слова «управлять» */
   .ucard[open] > summary { border-bottom: 1px solid var(--border); background: var(--btn-bg-hover); }
   .ucard[open] > summary .chev { color: var(--accent); }
-  .uactions { display: flex; flex-direction: column; gap: 7px; padding: 11px 12px; }
-  .uactions .btn { min-height: 42px; box-shadow: none; }
-  .uactions form { display: flex; gap: 7px; }
+  /* действия внутри карточки — по две в ряд, компактные; длинные ссылки и поля
+     ввода (счёт/позиция) занимают всю ширину */
+  .uactions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 10px 11px; }
+  .uactions .btn { min-height: 38px; font-size: 13px; padding: 8px 10px; box-shadow: none; }
+  .uactions form { display: flex; gap: 6px; margin: 0; }
   .uactions form .btn { width: 100%; }
+  .uactions > a.btn { grid-column: 1 / -1; }
+  .uactions .score { grid-column: 1 / -1; }
   .score input {
-    flex: 1; min-width: 0; font: inherit; font-size: 14px; padding: 8px 10px;
+    flex: 1; min-width: 0; font: inherit; font-size: 13px; padding: 7px 10px;
     border: 1px solid var(--border); border-radius: 9px; background: var(--btn-bg); color: var(--text);
   }
   .score .btn { width: auto; flex: 0 0 auto; }
