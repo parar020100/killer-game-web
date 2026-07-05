@@ -328,6 +328,16 @@
     white-space: nowrap; box-shadow: none;
   }
   .mini-body .btn.wide { flex: 1 1 100%; width: 100%; }
+  /* окошко ввода сообщения — заметно шире и колонкой (побольше поле).
+     right:0 прижимает поповер к правому краю чипа, чтобы не вылезал за панель. */
+  .mini-body.msg { width: 360px; max-width: calc(100vw - 28px); left: auto; right: 0; }
+  .mini-body.msg form { flex-direction: column; align-items: stretch; }
+  .mini-body.msg textarea {
+    width: 100%; font: inherit; font-size: 12.5px; padding: 7px 9px; resize: vertical;
+    min-height: 76px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--btn-bg); color: var(--text);
+  }
+  .mini-body.msg textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
   @media (min-width: 500px) { .bubble { font-size: 15.5px; } }
 </style>

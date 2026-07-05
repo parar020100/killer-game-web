@@ -108,10 +108,25 @@
           </form>
         </div>
       </details>
+      {% else %}
+      <button type="button" class="btn chip muted"
+              data-note="Переназначить поимку можно только у выбывшего игрока."
+              title="только у выбывшего">🔁 Засчитать другому</button>
       {% endif %}
 
-      {# TODO: страница переписки админ↔игрок ещё не реализована — пока заглушка #}
-      <button type="button" class="btn chip todo" data-note="Личные сообщения с игроком ещё не реализованы." title="ещё не реализовано"><s>💬 Сообщения</s></button>
+      {# одностороннее сообщение админа игроку (уведомление) #}
+      <details class="mini" data-keep="msg{{ u.id }}">
+        <summary class="btn chip">✉️ Написать сообщение</summary>
+        <div class="mini-body msg">
+          <form method="post" action="{{ link('/app/users/' ~ u.id ~ '/act') }}">
+            <input type="hidden" name="action" value="message">
+            <input type="hidden" name="next" value="{{ back }}">
+            <textarea name="value" rows="4" maxlength="1000" placeholder="сообщение игроку"
+                      aria-label="Сообщение игроку"></textarea>
+            <button type="submit" class="btn primary wide">✉️ Отправить</button>
+          </form>
+        </div>
+      </details>
       {% if allow_dev %}<a class="btn chip" href="/app?user={{ u.username or u.id }}" target="_blank" rel="noopener">🕶 Меню от имени игрока</a>{% endif %}
     </div>
   </details>

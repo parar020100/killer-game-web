@@ -120,10 +120,14 @@
       </div>
     </div>
 
-    {% if u.username %}
-    <a class="btn full" href="/chat/{{ u.username }}" target="_blank" rel="noopener"
-       title="переписка с игроком, откроется в новой вкладке">💬 Сообщения</a>
-    {% endif %}
+    <form method="post" action="{{ link('/app/users/' ~ u.id ~ '/act') }}"
+          style="display:flex;flex-direction:column;gap:8px;width:100%">
+      <input type="hidden" name="action" value="message">
+      <textarea name="value" rows="4" maxlength="1000" placeholder="сообщение игроку"
+                aria-label="Сообщение игроку"
+                style="font:inherit;font-size:14px;padding:10px;resize:vertical;min-height:84px;border:1px solid var(--border);border-radius:11px;background:var(--btn-bg);color:var(--text);width:100%"></textarea>
+      <button type="submit" class="btn">✉️ Написать сообщение</button>
+    </form>
     {% if allow_dev %}
     <a class="btn full" href="/app?user={{ u.username or u.id }}" target="_blank" rel="noopener"
        title="открыть игру от лица этого игрока в новой вкладке (для теста), независимо от вашей cookie-сессии">🕶 Меню от имени игрока</a>

@@ -164,6 +164,15 @@
     white-space: nowrap;
   }
   .mini-body .btn.wide { flex: 1 1 100%; width: 100%; }
+  /* окошко ввода сообщения — заметно шире и колонкой (побольше поле) */
+  .mini-body.msg { width: 440px; max-width: calc(100vw - 28px); left: auto; right: 0; }
+  .mini-body.msg form { flex-direction: column; align-items: stretch; }
+  .mini-body.msg textarea {
+    width: 100%; font: inherit; font-size: 13px; padding: 8px 10px; resize: vertical;
+    min-height: 84px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--btn-bg); color: var(--text);
+  }
+  .mini-body.msg textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 </style>
 </head>
 <body>

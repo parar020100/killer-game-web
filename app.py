@@ -842,7 +842,7 @@ def dashboard(request: Request):
         player_buttons.append(_btn("📜 Правила", href="/rules"))
     player_buttons.append(_btn("👤 Настройки профиля", href="/app/profile"))
     player_buttons.append(_btn("🤫 Узнать секрет", href="/app/secret"))
-    player_buttons.append(_btn("✍️ Написать организаторам", todo=True))
+    # «Написать организаторам» временно убрана (вернуть — см. TODO).
     sections.append({"hint": "— доступные действия —", "buttons": player_buttons})
 
     # Админу — второй раздел с управлением игрой (сворачиваемый переключателем).
@@ -1257,6 +1257,10 @@ def user_menu_buttons(target: User):
     game = Game()
     paused = game.is_paused()
     started = game.is_started()
+    is_player = target.is_player()
+    alive = target.is_alive()
+    caught = target.is_being_caught()
+    root = target.is_default_admin()
     tname = target.get_name()
     b = []
 
@@ -1267,38 +1271,69 @@ def user_menu_buttons(target: User):
         b.append({"label": label, "action": action, "kind": kind,
                   "disabled": disabled, "note": note, "confirm": confirm})
 
-    # роль
-    if not target.is_admin():
-        add("👑 Выдать админа", "promote")
-    elif not target.is_default_admin():
+    not_player_note = "Пользователь не участвует в игре."
+
+    # 1) Роль администратора — один слот-переключатель (всегда на месте).
+    if root:
+        add("🧹 Забрать админа", None, disabled=True,
+            note="root-пользователя нельзя разжаловать.")
+    elif target.is_admin():
         add("🧹 Забрать админа", "demote")
+    else:
+        add("👑 Выдать админа", "promote")
 
-    # модерация текущей заявки о поимке (пока идёт игра)
-    if target.is_being_caught():
-        add("✅ Засчитать поимку", "force_accept", "primary")
-        add("❌ Отклонить поимку", "force_deny",
-            confirm=f"Отклонить заявку о поимке игрока {tname}?")
+    # 2) Модерация заявки о поимке — засчитать / отклонить (серые, если заявки нет).
+    add("✅ Засчитать поимку", "force_accept", "primary", disabled=not caught,
+        note="Сейчас нет заявки о поимке этого игрока.")
+    add("❌ Отклонить поимку", "force_deny", disabled=not caught,
+        note="Сейчас нет заявки о поимке этого игрока.",
+        confirm=f"Отклонить заявку о поимке игрока {tname}?")
 
-    # игровые действия (только для участников)
-    if target.is_player():
-        if target.is_alive():
-            add("🔪 Устранить", "kill", "danger", disabled=not paused,
-                note="Устранять игрока можно только во время паузы.",
-                confirm=f"Устранить игрока {tname} из игры?")
-        else:
-            add("♻️ Оживить", "revive", "primary", disabled=not paused,
-                note="Оживлять игрока можно только во время паузы.")
-            if target.is_queued_for_revival():
-                add("🚫 Отобрать жизнь", "take_life")
-            else:
-                add("🎁 Подарить жизнь", "give_life")
-        add("👋 Удалить из игры", "kick", "danger",
-            disabled=not (paused or not started),
-            note="Убирать игрока из игры можно во время паузы или до старта игры.",
-            confirm=f"Удалить игрока {tname} из игры?")
+    # 3) Устранить (живого игрока, на паузе).
+    if not is_player:
+        kill_note = not_player_note
+    elif not alive:
+        kill_note = "Игрок уже выбыл из игры."
+    else:
+        kill_note = "Устранять игрока можно только во время паузы."
+    add("🔪 Устранить", "kill", "danger", disabled=not (is_player and alive and paused),
+        note=kill_note, confirm=f"Устранить игрока {tname} из игры?")
 
-    # удаление из системы — только для не-игроков (нельзя себя/дефолт-админа)
-    if not target.is_player() and not target.is_default_admin():
+    # 4) Оживить (выбывшего игрока, на паузе).
+    if not is_player:
+        revive_note = not_player_note
+    elif alive:
+        revive_note = "Игрок сейчас в игре — оживлять некого."
+    else:
+        revive_note = "Оживлять игрока можно только во время паузы."
+    add("♻️ Оживить", "revive", "primary",
+        disabled=not (is_player and not alive and paused), note=revive_note)
+
+    # 5) Жизнь (очередь возрождения) — только выбывшему игроку; слот-переключатель.
+    if is_player and not alive and target.is_queued_for_revival():
+        add("🚫 Отобрать жизнь", "take_life")
+    elif is_player and not alive:
+        add("🎁 Подарить жизнь", "give_life")
+    else:
+        add("🎁 Подарить жизнь", None, disabled=True,
+            note=not_player_note if not is_player else "Подарить жизнь можно только выбывшему игроку.")
+
+    # 6) Удалить из игры (игрока, на паузе или до старта).
+    add("👋 Удалить из игры", "kick", "danger",
+        disabled=not (is_player and (paused or not started)),
+        note=not_player_note if not is_player
+             else "Убирать игрока из игры можно во время паузы или до старта игры.",
+        confirm=f"Удалить игрока {tname} из игры?")
+
+    # 7) Удалить из системы (не-игрока, не root).
+    if root:
+        add("🗑️ Удалить из системы", None, "danger", disabled=True,
+            note="root-пользователя удалить нельзя.")
+    elif is_player:
+        add("🗑️ Удалить из системы", None, "danger", disabled=True,
+            note="Сначала уберите игрока из игры («Удалить из игры»), "
+                 "потом его можно удалить из системы.")
+    else:
         add("🗑️ Удалить из системы", "delete", "danger",
             confirm=f"Удалить пользователя {tname} из системы? Это необратимо.")
 
@@ -1404,6 +1439,13 @@ def user_action(request: Request, uid: int, action: str = Form(...),
             _notify_retargets(before)
         except (ValueError, TypeError):
             pass
+    elif action == "message":
+        # Одностороннее сообщение админа игроку (как admin_msg в боте).
+        text = (value or "").strip()
+        if text:
+            target.notify(f"✉️ Сообщение от организаторов:\n{text}")
+            admin_log.log(f"✉️ {admin.get_name()} написал(а) игроку "
+                          f"{target.get_name()}: {text}")
     elif action == "reassign_kill" and target.is_player():
         # value — позиция в круге (#) нового «охотника», которому засчитать поимку.
         new_m = None
