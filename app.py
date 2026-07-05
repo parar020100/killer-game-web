@@ -20,7 +20,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 import db  # noqa: F401 — импорт инициализирует БД
-from core import inbox
+from core import inbox, admin_log
 from core.game import Game
 from core.user import User
 
@@ -49,8 +49,8 @@ def dev_current_user(as_id: str) -> User:
 # Кнопки и экраны
 # ---------------------------------------------------------------------------
 
-def _btn(label, action=None, kind="", full=False):
-    return {"label": label, "action": action, "kind": kind, "full": full}
+def _btn(label, action=None, kind="", full=False, href=None):
+    return {"label": label, "action": action, "kind": kind, "full": full, "href": href}
 
 
 def player_view(user: User):
@@ -78,7 +78,7 @@ def player_view(user: User):
     return "\n".join(lines), buttons
 
 
-def admin_view(user: User):
+def admin_view(user: User, as_id: str):
     game = Game()
     message = "\n".join([
         f'<span class="hi">Привет, {user.get_name()}!</span>',
@@ -100,6 +100,8 @@ def admin_view(user: User):
     else:
         buttons.append(_btn("✅ Открыть регистрацию", "open_reg"))
 
+    buttons.append(_btn("📋 Журнал (admin log)",
+                        href=f"/admin-log?role=admin&as={as_id}", full=True))
     buttons.append(_btn("🔄 Обновить", "noop", full=True))
     return message, buttons
 
@@ -116,25 +118,32 @@ def _broadcast(text, players_only=True):
 
 def apply_action(action: str, user: User):
     game = Game()
+    who = user.get_name()
     if action == "open_reg":
         game.open_registration()
+        admin_log.log(f"🟡 {who} открыл(а) регистрацию")
         _broadcast("🟡 Открыта регистрация на игру «Папарацци». "
                    "Зайдите на сайт, чтобы зарегистрироваться!", players_only=False)
     elif action == "close_reg":
         game.close_registration()
+        admin_log.log(f"🚫 {who} закрыл(а) регистрацию")
     elif action == "start_game":
         game.start()
+        admin_log.log(f"🟢 {who} запустил(а) игру ({game.count_players()} игроков)")
         _broadcast("🟢 Игра началась! Проверьте свою цель на сайте.")
     elif action == "stop_game":
         game.stop()
+        admin_log.log(f"🔴 {who} остановил(а) игру")
         _broadcast("🔴 Игра остановлена администратором.")
     elif action == "join":
         if game.is_registration_open() and not user.is_player():
             user.join(alive=not game.is_started())
+            admin_log.log(f"➕ {who} зарегистрировал(ся/ась) в игре")
             user.notify("✅ Вы зарегистрированы в игре «Папарацци».")
     elif action == "leave":
         if user.is_player():
             user.leave()
+            admin_log.log(f"➖ {who} вышел(ла) из игры")
             user.notify("🚪 Вы вышли из игры.")
     # "noop" / незнакомое — просто перерисовать
 
@@ -147,7 +156,7 @@ def apply_action(action: str, user: User):
 def index(request: Request, role: str = "player", as_id: str = Query("1", alias="as")):
     user = dev_current_user(as_id)
     if role == "admin":
-        message, buttons = admin_view(user)
+        message, buttons = admin_view(user, as_id)
     else:
         role = "player"
         message, buttons = player_view(user)
@@ -198,3 +207,22 @@ def inbox_view(request: Request, uid: str, role: str = Query("player")):
 def inbox_clear(uid: str, role: str = Form("player")):
     inbox.clear_inbox(uid)
     return RedirectResponse(url=f"/inbox/{uid}?role={role}", status_code=303)
+
+
+# ---------------------------------------------------------------------------
+# Общий журнал администраторов (один файл на всю игру)
+# ---------------------------------------------------------------------------
+
+@app.get("/admin-log", response_class=HTMLResponse)
+def admin_log_view(request: Request, as_id: str = Query("1", alias="as")):
+    return templates.TemplateResponse(
+        request,
+        "admin_log.html",
+        {"as_id": as_id, "messages": admin_log.read_messages()},
+    )
+
+
+@app.post("/admin-log/clear")
+def admin_log_clear(as_id: str = Form("1", alias="as")):
+    admin_log.clear()
+    return RedirectResponse(url=f"/admin-log?as={as_id}", status_code=303)

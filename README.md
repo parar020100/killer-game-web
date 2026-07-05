@@ -49,11 +49,14 @@ killer_game_web/
 │   ├── game.py          # модель игры (состояние, счётчики)
 │   ├── user.py          # модель пользователя (id с 1, профиль, регистрация)
 │   ├── identity.py      # канал связи профиля: tg / vk / test (+ доставка)
-│   └── inbox.py         # «входящие» тестовых идентичностей (файлы data/inboxes/)
-├── data/                # БД killer_game.db + inboxes/ (в .gitignore)
+│   ├── msgfile.py       # общий формат журнала сообщений в текстовом файле
+│   ├── inbox.py         # «входящие» тестовых идентичностей (data/inboxes/)
+│   └── admin_log.py     # общий журнал админов (data/admin_log.txt)
+├── data/                # БД + inboxes/ + admin_log.txt (в .gitignore)
 ├── templates/
 │   ├── index.html       # Jinja2-шаблон главного экрана (light/dark)
-│   └── inbox.html       # страница «входящих» тестовой идентичности
+│   ├── inbox.html       # страница «входящих» тестовой идентичности
+│   └── admin_log.html   # страница общего журнала администраторов
 ├── requirements.txt
 ├── CONCEPT.md           # концепция и целевая архитектура
 └── FEATURES.md          # инвентаризация всех фич бота — спецификация для порта

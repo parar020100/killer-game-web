@@ -197,6 +197,9 @@ def drop_db():
     if inbox_dir.exists():
         for f in inbox_dir.glob("*.txt"):
             f.unlink()
+    admin_log = DATA_DIR / "admin_log.txt"
+    if admin_log.exists():
+        admin_log.unlink()
     print("[db] Файл базы данных удалён.")
 
 

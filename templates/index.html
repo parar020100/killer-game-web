@@ -105,6 +105,7 @@
     min-height: 48px; display: flex; align-items: center; justify-content: center; gap: 7px;
     transition: transform .06s ease, background .16s, border-color .16s;
     box-shadow: var(--shadow-sm); -webkit-tap-highlight-color: transparent;
+    text-decoration: none;
   }
   .btn:hover { background: var(--btn-bg-hover); }
   .btn:active { transform: translateY(1px) scale(.995); }
@@ -161,7 +162,9 @@
 
     <div class="keyboard">
       {% for b in buttons %}
-        {% if b.action %}
+        {% if b.href %}
+        <a class="btn{% if b.kind %} {{ b.kind }}{% endif %}{% if b.full %} full{% endif %}" href="{{ b.href }}">{{ b.label }}</a>
+        {% elif b.action %}
         <form method="post" action="/act">
           <input type="hidden" name="action" value="{{ b.action }}">
           <input type="hidden" name="role" value="{{ role }}">
