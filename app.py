@@ -37,6 +37,21 @@ app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 
 SUPPORT_CONTACT = "@parar020100"
 
+# Доп. вопрос при регистрации (как EXTRA_INFO в боте). Пусто = шаг отключён.
+EXTRA_QUESTION = ""
+
+_NAME_RE = re.compile(r"^[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё \-]*$")
+
+
+def validate_real_name(raw: str):
+    """Вернуть (имя, None) при успехе или (None, текст_ошибки)."""
+    name = " ".join((raw or "").split())  # схлопнуть пробелы
+    if not (2 <= len(name) <= 50):
+        return None, "Имя должно быть от 2 до 50 символов."
+    if not _NAME_RE.match(name):
+        return None, "Имя может содержать только буквы, пробел и дефис."
+    return name, None
+
 
 # ---------------------------------------------------------------------------
 # Текущий пользователь (по сессии)
@@ -86,7 +101,7 @@ def player_view(user: User):
     if user.is_player():
         buttons.append(_btn("🔴 Выйти из игры", "leave", "danger", full=True))
     elif game.is_registration_open():
-        buttons.append(_btn("🟢 Зарегистрироваться", "join", "primary", full=True))
+        buttons.append(_btn("🟢 Зарегистрироваться", href="/app/join", kind="primary", full=True))
 
     buttons.append(_btn("🔄 Обновить", "noop", full=True))
     return "\n".join(lines), buttons
@@ -129,6 +144,14 @@ def _broadcast(text, players_only=True):
         u.notify(text)
 
 
+def do_join(user: User):
+    """Завести игрока в игру (после успешной валидации формы регистрации)."""
+    game = Game()
+    user.join(alive=not game.is_started())
+    admin_log.log(f"➕ {user.get_name()} зарегистрировал(ся/ась) в игре")
+    user.notify("✅ Вы зарегистрированы в игре «Папарацци».")
+
+
 def apply_action(action: str, user: User):
     game = Game()
     who = user.get_name()
@@ -148,11 +171,6 @@ def apply_action(action: str, user: User):
         game.stop()
         admin_log.log(f"🔴 {who} остановил(а) игру")
         _broadcast("🔴 Игра остановлена администратором.")
-    elif action == "join":
-        if game.is_registration_open() and not user.is_player():
-            user.join(alive=not game.is_started())
-            admin_log.log(f"➕ {who} зарегистрировал(ся/ась) в игре")
-            user.notify("✅ Вы зарегистрированы в игре «Папарацци».")
     elif action == "leave":
         if user.is_player():
             user.leave()
@@ -258,6 +276,60 @@ def dashboard(request: Request, role: str = "player"):
             "support_contact": SUPPORT_CONTACT,
         },
     )
+
+
+def _render_register(request, user, game, values, errors):
+    return templates.TemplateResponse(
+        request, "register.html",
+        {
+            "needs_password": bool(game.get_password()),
+            "extra_question": EXTRA_QUESTION,
+            "values": values,
+            "errors": errors,
+        },
+    )
+
+
+@app.get("/app/join", response_class=HTMLResponse)
+def join_form(request: Request):
+    user = current_user(request)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+    game = Game()
+    if user.is_player() or not game.is_registration_open():
+        return RedirectResponse(url="/app", status_code=303)
+    values = {"real_name": user.get_real_name(), "extra": user.get_extra_info()}
+    return _render_register(request, user, game, values, {})
+
+
+@app.post("/app/join", response_class=HTMLResponse)
+def join_submit(request: Request, real_name: str = Form(""),
+                password: str = Form(""), extra: str = Form("")):
+    user = current_user(request)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+    game = Game()
+    if user.is_player() or not game.is_registration_open():
+        return RedirectResponse(url="/app", status_code=303)
+
+    errors = {}
+    name, err = validate_real_name(real_name)
+    if err:
+        errors["real_name"] = err
+    if game.get_password() and password != game.get_password():
+        errors["password"] = "Неверный пароль игры."
+    if EXTRA_QUESTION and not extra.strip():
+        errors["extra"] = "Пожалуйста, ответьте на вопрос."
+
+    if errors:
+        values = {"real_name": real_name, "extra": extra}
+        return _render_register(request, user, game, values, errors)
+
+    user.set_real_name(name)
+    if EXTRA_QUESTION:
+        user.set_extra_info(extra.strip())
+    do_join(user)
+    return RedirectResponse(url="/app", status_code=303)
 
 
 @app.post("/act")

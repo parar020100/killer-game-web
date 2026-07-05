@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Регистрация · Киллер / Папарацци</title>
+<style>
+  :root {
+    --bg: #eaeef4; --surface: #ffffff; --btn-bg: #f4f6fa;
+    --text: #171a21; --text-dim: #6a7280; --border: #e2e7ef;
+    --accent: #e23b4e; --accent-soft: rgba(226,59,78,.10); --accent-border: rgba(226,59,78,.28);
+    --err: #d64550; --err-soft: rgba(214,69,80,.10); --err-border: rgba(214,69,80,.4);
+    --shadow: 0 6px 24px rgba(23,26,40,.10); --shadow-sm: 0 2px 6px rgba(23,26,40,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1116; --surface: #191d24; --btn-bg: #222831;
+      --text: #e9ecf1; --text-dim: #9aa4b2; --border: #2a313b;
+      --accent: #ff5069; --accent-soft: rgba(255,80,105,.14); --accent-border: rgba(255,80,105,.35);
+      --err: #ff6161; --err-soft: rgba(255,97,97,.12); --err-border: rgba(255,97,97,.45);
+      --shadow: 0 8px 30px rgba(0,0,0,.45); --shadow-sm: 0 2px 8px rgba(0,0,0,.35);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+                 "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+    line-height: 1.5; min-height: 100dvh; display: flex; justify-content: center; align-items: flex-start;
+    padding: 20px 14px calc(20px + env(safe-area-inset-bottom));
+  }
+  .card {
+    width: 100%; max-width: 440px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 20px; box-shadow: var(--shadow);
+    padding: 22px 20px; display: flex; flex-direction: column; gap: 16px;
+  }
+  h1 { margin: 0; font-size: 19px; }
+  .hint { margin: 0; font-size: 13.5px; color: var(--text-dim); }
+  label { display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600; }
+  input, textarea {
+    font: inherit; font-size: 15px; font-weight: 400; padding: 11px 13px;
+    border: 1px solid var(--border); border-radius: 11px; background: var(--btn-bg); color: var(--text);
+  }
+  input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  label.bad input, label.bad textarea { border-color: var(--err-border); background: var(--err-soft); }
+  .err { color: var(--err); font-size: 12.5px; font-weight: 500; }
+  .row { display: flex; gap: 10px; margin-top: 4px; }
+  .btn {
+    flex: 1; appearance: none; border: 1px solid var(--border); background: var(--btn-bg);
+    color: var(--text); text-decoration: none; text-align: center;
+    font: inherit; font-weight: 600; font-size: 15px; padding: 12px; border-radius: 12px; cursor: pointer;
+  }
+  .btn.primary { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-weight: 650; }
+</style>
+</head>
+<body>
+  <main class="card">
+    <h1>📷 Регистрация в игре</h1>
+    <p class="hint">Заполните данные, чтобы участвовать. Имя увидят другие игроки и админ.</p>
+
+    <form method="post" action="/app/join" autocomplete="off" style="display:flex;flex-direction:column;gap:16px;">
+      <label class="{{ 'bad' if errors.real_name else '' }}">
+        Имя в игре
+        <input type="text" name="real_name" value="{{ values.real_name or '' }}"
+               placeholder="Настоящее имя" maxlength="50" autofocus>
+        {% if errors.real_name %}<span class="err">{{ errors.real_name }}</span>{% endif %}
+      </label>
+
+      {% if needs_password %}
+      <label class="{{ 'bad' if errors.password else '' }}">
+        Пароль игры
+        <input type="password" name="password" placeholder="Спросите у организатора">
+        {% if errors.password %}<span class="err">{{ errors.password }}</span>{% endif %}
+      </label>
+      {% endif %}
+
+      {% if extra_question %}
+      <label class="{{ 'bad' if errors.extra else '' }}">
+        {{ extra_question }}
+        <textarea name="extra" rows="2" maxlength="200">{{ values.extra or '' }}</textarea>
+        {% if errors.extra %}<span class="err">{{ errors.extra }}</span>{% endif %}
+      </label>
+      {% endif %}
+
+      <div class="row">
+        <a class="btn" href="/app">Отмена</a>
+        <button type="submit" class="btn primary">Зарегистрироваться</button>
+      </div>
+    </form>
+  </main>
+</body>
+</html>
