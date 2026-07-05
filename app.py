@@ -1259,7 +1259,6 @@ def user_menu_buttons(target: User):
     started = game.is_started()
     is_player = target.is_player()
     alive = target.is_alive()
-    caught = target.is_being_caught()
     root = target.is_default_admin()
     tname = target.get_name()
     b = []
@@ -1282,12 +1281,9 @@ def user_menu_buttons(target: User):
     else:
         add("👑 Выдать админа", "promote")
 
-    # 2) Модерация заявки о поимке — засчитать / отклонить (серые, если заявки нет).
-    add("✅ Засчитать поимку", "force_accept", "primary", disabled=not caught,
-        note="Сейчас нет заявки о поимке этого игрока.")
-    add("❌ Отклонить поимку", "force_deny", disabled=not caught,
-        note="Сейчас нет заявки о поимке этого игрока.",
-        confirm=f"Отклонить заявку о поимке игрока {tname}?")
+    # Модерация заявки о поимке (засчитать/отклонить) вынесена в отдельную красную
+    # строку-заявку прямо над карточкой «жертвы» в списке (см. _userlist.html),
+    # поэтому в наборе кнопок карточки её больше нет.
 
     # 3) Устранить (живого игрока, на паузе).
     if not is_player:
@@ -1458,19 +1454,9 @@ def _user_list_data():
         r["score"] = u.get_score()
         return r
 
-    # Неподтверждённые поимки (заявки, ждущие ответа жертвы) — отдельным красным
-    # блоком над списком, сразу с кнопками «Засчитать» / «Отклонить».
-    pending = []
-    for u in players:
-        if u.is_being_caught():
-            murderer = u.get_murderer()
-            pending.append({
-                "victim_id": u.id,
-                "victim_name": u.get_name(),
-                "victim_order": u.get_game_order(),
-                "hunter_name": murderer.get_name() if murderer else "?",
-            })
-
+    # Неподтверждённые поимки показываются inline — красной строкой-заявкой прямо
+    # над карточкой «жертвы» в списке (по данным карточки: kill_pending + killed_by),
+    # см. _userlist.html. Отдельный список pending больше не нужен.
     return {
         "total_users": len(all_users),
         "total_players": len(players),
@@ -1478,7 +1464,6 @@ def _user_list_data():
         "game_paused": game.is_paused(),
         "players": [row(u) for u in players],
         "non_players": [row(u) for u in non_players],
-        "pending": pending,
     }
 
 

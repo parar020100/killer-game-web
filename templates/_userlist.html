@@ -132,7 +132,26 @@
   </details>
 {%- endmacro %}
 
-{% macro userlist(players, non_players, back, pending=None) -%}
+{# красная строка-заявка о неподтверждённой поимке — рисуется прямо над карточкой
+   «жертвы» (u.kill_pending), с кнопками «Засчитать» / «Отклонить» #}
+{% macro pending_row(u, back) -%}
+  <div class="prow">
+    <span class="ptxt">📸 <strong>{{ u.killed_by }}</strong> → {{ u.name }}{% if u.order is not none %} <span class="unick">#{{ u.order }}</span>{% endif %} — ждёт подтверждения</span>
+    <form method="post" action="{{ link('/app/users/' ~ u.id ~ '/act') }}">
+      <input type="hidden" name="action" value="force_accept">
+      <input type="hidden" name="next" value="{{ back }}">
+      <button type="submit" class="btn chip primary">✅ Засчитать</button>
+    </form>
+    <form method="post" action="{{ link('/app/users/' ~ u.id ~ '/act') }}"
+          onsubmit="return confirm('Отклонить заявку о поимке {{ u.name }}?')">
+      <input type="hidden" name="action" value="force_deny">
+      <input type="hidden" name="next" value="{{ back }}">
+      <button type="submit" class="btn chip danger">❌ Отклонить</button>
+    </form>
+  </div>
+{%- endmacro %}
+
+{% macro userlist(players, non_players, back) -%}
   {# живой поиск: применяется по мере ввода; Enter и стрелки ‹/› листают совпадения
      (см. _search.html) #}
   <div class="usearch-row">
@@ -144,31 +163,9 @@
 
   {# прокручивается только этот блок; поиск сверху и подсказка снизу — всегда видны #}
   <div class="ulist-scroll">
-  {% if pending %}
-  <div class="pending">
-    <h2>⏳ Неподтверждённые поимки ({{ pending | length }})</h2>
-    {% for p in pending %}
-    <div class="prow">
-      <span class="ptxt">📸 <strong>{{ p.hunter_name }}</strong> → {{ p.victim_name }}{% if p.victim_order is not none %} <span class="unick">#{{ p.victim_order }}</span>{% endif %}</span>
-      <form method="post" action="{{ link('/app/users/' ~ p.victim_id ~ '/act') }}">
-        <input type="hidden" name="action" value="force_accept">
-        <input type="hidden" name="next" value="{{ back }}">
-        <button type="submit" class="btn chip primary">✅ Засчитать</button>
-      </form>
-      <form method="post" action="{{ link('/app/users/' ~ p.victim_id ~ '/act') }}"
-            onsubmit="return confirm('Отклонить заявку о поимке {{ p.victim_name }}?')">
-        <input type="hidden" name="action" value="force_deny">
-        <input type="hidden" name="next" value="{{ back }}">
-        <button type="submit" class="btn chip danger">❌ Отклонить</button>
-      </form>
-    </div>
-    {% endfor %}
-  </div>
-  {% endif %}
-
   <h2>🎯 Активные игроки ({{ players | length }})</h2>
   {% if players %}
-  <div class="cards">{% for u in players %}{{ card(u, back) }}{% endfor %}</div>
+  <div class="cards">{% for u in players %}{% if u.kill_pending %}{{ pending_row(u, back) }}{% endif %}{{ card(u, back) }}{% endfor %}</div>
   {% else %}<div class="section empty">Пока нет активных игроков.</div>{% endif %}
 
   <h2>👀 Вне игры ({{ non_players | length }})</h2>

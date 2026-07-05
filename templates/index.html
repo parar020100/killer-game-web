@@ -224,19 +224,19 @@
   /* прокручиваемая середина списка (поиск и подсказка — вне неё) */
   .ulist-scroll { display: flex; flex-direction: column; gap: 8px; }
 
-  /* красный блок неподтверждённых поимок (заявки, ждущие ответа жертвы) */
-  .pending {
+  /* красная строка-заявка о неподтверждённой поимке — прямо над карточкой жертвы */
+  .prow {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12.5px;
     background: var(--danger-soft); border: 1px solid var(--danger-border);
-    border-radius: 13px; padding: 9px 11px; display: flex; flex-direction: column; gap: 7px;
+    border-radius: 10px; padding: 6px 10px;
   }
-  .pending h2 { margin: 0; font-size: 13px; color: var(--danger); }
-  .prow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12.5px; }
-  .prow .ptxt { flex: 1 1 140px; min-width: 0; word-break: break-word; }
+  .prow .ptxt { flex: 1 1 140px; min-width: 0; word-break: break-word; color: var(--danger); }
   .prow form { display: contents; margin: 0; }
   .prow .btn.chip {
     width: auto; min-height: 30px; padding: 5px 10px; font-size: 12px; font-weight: 550;
     white-space: nowrap; box-shadow: none; border-radius: 9px;
   }
+  .cards .prow { margin-bottom: -1px; }
 
   /* карточки внутри встроенного списка (те же классы, что на /app/users) */
   .upanel-body h2 { margin: 4px 2px 0; font-size: 14px; }
@@ -424,7 +424,7 @@
   <aside class="userpanel">
     <div data-live="5000" style="display:contents">
     <div class="upanel-body">
-      {% if is_admin and user_list %}{{ ul.userlist(user_list.players, user_list.non_players, '/app', user_list.pending) }}{% endif %}
+      {% if is_admin and user_list %}{{ ul.userlist(user_list.players, user_list.non_players, '/app') }}{% endif %}
     </div>
     </div>
   </aside>
