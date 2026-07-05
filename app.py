@@ -1,9 +1,13 @@
 """Веб-версия игры «Киллер / Папарацци» — каркас (FastAPI + Jinja2).
 
-Шаг: состояние игры и регистрация игроков хранятся в **SQLite** (см. db.py, core/).
-Входа по аккаунту пока нет — вместо него DEV-режим: текущий пользователь выбирается
-параметром `?as=<N>` в адресе (по умолчанию 1). Каждое N — отдельный тестовый игрок,
-поэтому в разных вкладках можно открыть разных пользователей (`?as=1`, `?as=2`, ...).
+Состояние игры, игроки и их каналы связи хранятся в SQLite (db.py, core/).
+
+Входа по аккаунту пока нет — вместо него DEV-режим на **тестовой** платформе:
+текущий пользователь выбирается параметром `?as=<N>` в адресе (по умолчанию 1).
+Каждое N — отдельная тестовая идентичность (platform='test'), поэтому в разных
+вкладках можно открыть разных пользователей (`?as=1`, `?as=2`, ...), не заводя
+реальных аккаунтов Telegram/VK. Уведомления такому пользователю падают в его
+«входящие» — их видно на странице /inbox/<N>.
 
 Кнопки — обычные HTML-формы (POST → изменение состояния → редирект), без JavaScript.
 
@@ -16,6 +20,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 import db  # noqa: F401 — импорт инициализирует БД
+from core import inbox
 from core.game import Game
 from core.user import User
 
@@ -32,12 +37,12 @@ SUPPORT_CONTACT = "@parar020100"
 # ---------------------------------------------------------------------------
 
 def dev_current_user(as_id: str) -> User:
-    """Берёт/создаёт тестового пользователя с tg_id = N (N из ?as=)."""
+    """Берёт/создаёт тестового пользователя с test-идентичностью uid = N."""
     try:
-        tg = int(as_id)
+        uid = str(int(as_id))
     except (TypeError, ValueError):
-        tg = 1
-    return User.get_or_create_by_tg(tg, username=f"test{tg}", name=f"Тест {tg}")
+        uid = "1"
+    return User.get_or_create_by_test(uid, username=f"test{uid}", name=f"Тест {uid}")
 
 
 # ---------------------------------------------------------------------------
@@ -103,22 +108,34 @@ def admin_view(user: User):
 # Действия кнопок
 # ---------------------------------------------------------------------------
 
+def _broadcast(text, players_only=True):
+    users = User.all_players() if players_only else User.all()
+    for u in users:
+        u.notify(text)
+
+
 def apply_action(action: str, user: User):
     game = Game()
     if action == "open_reg":
         game.open_registration()
+        _broadcast("🟡 Открыта регистрация на игру «Папарацци». "
+                   "Зайдите на сайт, чтобы зарегистрироваться!", players_only=False)
     elif action == "close_reg":
         game.close_registration()
     elif action == "start_game":
         game.start()
+        _broadcast("🟢 Игра началась! Проверьте свою цель на сайте.")
     elif action == "stop_game":
         game.stop()
+        _broadcast("🔴 Игра остановлена администратором.")
     elif action == "join":
         if game.is_registration_open() and not user.is_player():
             user.join(alive=not game.is_started())
+            user.notify("✅ Вы зарегистрированы в игре «Папарацци».")
     elif action == "leave":
         if user.is_player():
             user.leave()
+            user.notify("🚪 Вы вышли из игры.")
     # "noop" / незнакомое — просто перерисовать
 
 
@@ -156,3 +173,28 @@ def act(action: str = Form(...), role: str = Form("player"), as_id: str = Form("
     apply_action(action, user)
     role = "admin" if role == "admin" else "player"
     return RedirectResponse(url=f"/?role={role}&as={as_id}", status_code=303)
+
+
+# ---------------------------------------------------------------------------
+# DEV: «входящие» тестовых идентичностей (симуляция уведомлений бота)
+# ---------------------------------------------------------------------------
+
+@app.get("/inbox/{uid}", response_class=HTMLResponse)
+def inbox_view(request: Request, uid: str, role: str = Query("player")):
+    messages = inbox.read_messages(uid)
+    return templates.TemplateResponse(
+        request,
+        "inbox.html",
+        {
+            "uid": uid,
+            "role": role if role == "admin" else "player",
+            "messages": messages,
+            "others": inbox.list_inboxes(),
+        },
+    )
+
+
+@app.post("/inbox/{uid}/clear")
+def inbox_clear(uid: str, role: str = Form("player")):
+    inbox.clear_inbox(uid)
+    return RedirectResponse(url=f"/inbox/{uid}?role={role}", status_code=303)

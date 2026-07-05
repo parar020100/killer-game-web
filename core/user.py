@@ -1,10 +1,11 @@
-"""Модель пользователя — доступ к таблице user.
+"""Модель пользователя — профиль и игровое состояние (таблица user).
 
-Аналог user.py из бота, адаптированный под сквозной id + мультиплатформенные
-tg_id / vk_id. Пока реализовано то, что нужно для регистрации и статуса;
-цели/поимки/воскрешения добавятся на следующих шагах.
+Всё, что относится к каналу связи (tg/vk/test, username, имя, mute, ADMIN LOG),
+живёт в таблице `identity` и модели Identity. У одного пользователя может быть
+несколько идентичностей; уведомления доставляются в каждую неприглушённую.
 """
-from db import query_one, execute
+from db import query_one, query_all, execute
+from core.identity import Identity
 
 
 class User:
@@ -21,44 +22,57 @@ class User:
         return cls(row["id"]) if row else None
 
     @classmethod
+    def by_identity(cls, platform, platform_uid):
+        ident = Identity.by_platform(platform, platform_uid)
+        return cls(ident.get_user_id()) if ident else None
+
+    @classmethod
+    def get_or_create_by_identity(cls, platform, platform_uid, username=None, name=None):
+        """Найти пользователя по идентичности или создать новый профиль с ней."""
+        ident = Identity.by_platform(platform, platform_uid)
+        if ident:
+            ident.update_profile(username, name)
+            return cls(ident.get_user_id())
+        new_id = execute("INSERT INTO user DEFAULT VALUES")
+        Identity.create(new_id, platform, platform_uid, username, name)
+        return cls(new_id)
+
+    # тонкие обёртки для конкретных платформ
+    @classmethod
     def by_tg(cls, tg_id):
-        row = query_one("SELECT id FROM user WHERE tg_id = ?", (tg_id,))
-        return cls(row["id"]) if row else None
+        return cls.by_identity("tg", tg_id)
 
     @classmethod
     def by_vk(cls, vk_id):
-        row = query_one("SELECT id FROM user WHERE vk_id = ?", (vk_id,))
-        return cls(row["id"]) if row else None
+        return cls.by_identity("vk", vk_id)
 
     @classmethod
     def get_or_create_by_tg(cls, tg_id, username=None, name=None):
-        user = cls.by_tg(tg_id)
-        if user:
-            if username is not None:
-                user._set("tg_username", username)
-            if name is not None:
-                user._set("tg_name", name)
-            return user
-        new_id = execute(
-            "INSERT INTO user (tg_id, tg_username, tg_name) VALUES (?, ?, ?)",
-            (tg_id, username, name),
-        )
-        return cls(new_id)
+        return cls.get_or_create_by_identity("tg", tg_id, username, name)
 
     @classmethod
     def get_or_create_by_vk(cls, vk_id, username=None, name=None):
-        user = cls.by_vk(vk_id)
-        if user:
-            if username is not None:
-                user._set("vk_username", username)
-            if name is not None:
-                user._set("vk_name", name)
-            return user
-        new_id = execute(
-            "INSERT INTO user (vk_id, vk_username, vk_name) VALUES (?, ?, ?)",
-            (vk_id, username, name),
-        )
-        return cls(new_id)
+        return cls.get_or_create_by_identity("vk", vk_id, username, name)
+
+    @classmethod
+    def get_or_create_by_test(cls, uid, username=None, name=None):
+        return cls.get_or_create_by_identity("test", uid, username, name)
+
+    # --- выборки ----------------------------------------------------------
+
+    @classmethod
+    def all(cls):
+        return [cls(r["id"]) for r in query_all("SELECT id FROM user ORDER BY id")]
+
+    @classmethod
+    def all_players(cls):
+        return [cls(r["id"]) for r in
+                query_all("SELECT id FROM user WHERE is_player = 1 ORDER BY id")]
+
+    @classmethod
+    def all_admins(cls):
+        return [cls(r["id"]) for r in
+                query_all("SELECT id FROM user WHERE is_admin = 1 ORDER BY id")]
 
     # --- служебное чтение/запись ------------------------------------------
 
@@ -69,14 +83,19 @@ class User:
     def _set(self, field: str, value):
         execute(f"UPDATE user SET {field} = ? WHERE id = ?", (value, self.id))
 
-    # --- профиль / идентичность -------------------------------------------
+    # --- идентичности / каналы --------------------------------------------
 
-    def get_tg_id(self):        return self._get("tg_id")
-    def get_vk_id(self):        return self._get("vk_id")
-    def get_tg_username(self):  return self._get("tg_username")
-    def get_vk_username(self):  return self._get("vk_username")
-    def get_tg_name(self):      return self._get("tg_name")
-    def get_vk_name(self):      return self._get("vk_name")
+    def identities(self):
+        return Identity.for_user(self.id)
+
+    def identity(self, platform):
+        for ident in self.identities():
+            if ident.get_platform() == platform:
+                return ident
+        return None
+
+    # --- профиль ----------------------------------------------------------
+
     def get_real_name(self):    return self._get("real_name")
     def get_extra_info(self):   return self._get("extra_info")
 
@@ -84,9 +103,15 @@ class User:
     def set_extra_info(self, value): self._set("extra_info", value)
 
     def get_name(self) -> str:
-        """Лучшее доступное имя для показа: игровое → из TG → из VK."""
-        return (self.get_real_name() or self.get_tg_name()
-                or self.get_vk_name() or f"Игрок #{self.id}")
+        """Лучшее доступное имя: игровое → из любой привязанной платформы."""
+        rn = self.get_real_name()
+        if rn:
+            return rn
+        for ident in self.identities():
+            nm = ident.get_name()
+            if nm:
+                return nm
+        return f"Игрок #{self.id}"
 
     # --- роль / статус ----------------------------------------------------
 
@@ -99,47 +124,13 @@ class User:
     def set_player(self, value: bool): self._set("is_player", int(value))
     def set_alive(self, value: bool):  self._set("is_alive", int(value))
 
-    # --- уведомления (mute отдельно по платформам) ------------------------
+    # --- уведомления ------------------------------------------------------
 
-    def is_tg_muted(self) -> bool: return bool(self._get("tg_muted"))
-    def is_vk_muted(self) -> bool: return bool(self._get("vk_muted"))
-
-    def set_tg_muted(self, value: bool): self._set("tg_muted", int(value))
-    def set_vk_muted(self, value: bool): self._set("vk_muted", int(value))
-
-    def is_muted(self, platform: str) -> bool:
-        """platform ∈ {'tg', 'vk'} — заглушены ли игровые уведомления на платформе."""
-        return {"tg": self.is_tg_muted, "vk": self.is_vk_muted}[platform]()
-
-    def set_muted(self, platform: str, value: bool):
-        {"tg": self.set_tg_muted, "vk": self.set_vk_muted}[platform](value)
-
-    # ADMIN LOG — отдельная категория уведомлений, тоже по платформам
-    def is_tg_admin_log_enabled(self) -> bool: return bool(self._get("tg_admin_log_enabled"))
-    def is_vk_admin_log_enabled(self) -> bool: return bool(self._get("vk_admin_log_enabled"))
-
-    def set_tg_admin_log_enabled(self, value: bool): self._set("tg_admin_log_enabled", int(value))
-    def set_vk_admin_log_enabled(self, value: bool): self._set("vk_admin_log_enabled", int(value))
-
-    def is_admin_log_enabled(self, platform: str) -> bool:
-        return {"tg": self.is_tg_admin_log_enabled, "vk": self.is_vk_admin_log_enabled}[platform]()
-
-    def set_admin_log_enabled(self, platform: str, value: bool):
-        {"tg": self.set_tg_admin_log_enabled, "vk": self.set_vk_admin_log_enabled}[platform](value)
-
-    # --- к какому каналу реально доставлять (для будущего registry) --------
-
-    def _linked(self, platform: str):
-        return self.get_tg_id() if platform == "tg" else self.get_vk_id()
-
-    def wants_notifications(self, platform: str) -> bool:
-        """Привязан ли аккаунт на платформе и не заглушены ли игровые уведомления."""
-        return self._linked(platform) is not None and not self.is_muted(platform)
-
-    def wants_admin_log(self, platform: str) -> bool:
-        """Слать ли ADMIN LOG в этот канал (привязан, админ и лог включён)."""
-        return (self._linked(platform) is not None
-                and self.is_admin() and self.is_admin_log_enabled(platform))
+    def notify(self, text: str):
+        """Доставить сообщение во все неприглушённые каналы пользователя."""
+        for ident in self.identities():
+            if not ident.is_muted():
+                ident.deliver(text)
 
     # --- регистрация в игре (упрощённо) -----------------------------------
 

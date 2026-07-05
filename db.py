@@ -1,21 +1,24 @@
 """Слой базы данных (SQLite) для веб-версии игры «Киллер / Папарацци».
 
-Схема — по мотивам telegram-бота, но адаптирована под мультиплатформенность:
-  * у пользователя теперь сквозной **id** (INTEGER PK, назначается по порядку с 1),
-    а идентификаторы платформ вынесены в отдельные поля **tg_id** и **vk_id**;
-  * ссылки target / killed_by / очередь воскрешения указывают на user(id),
-    а не на tg-идентификатор, как было в боте.
+Схема — по мотивам telegram-бота, но адаптирована под мультиплатформенность.
 
-Соответствие полей боту (что переименовано):
-  tg_user_id (PK)  → id (PK) + tg_id / vk_id
-  tg_nickname      → tg_username / vk_username         (@username / screen_name)
-  tg_name          → tg_name / vk_name                 (имя из платформы, у каждой своё)
-  bot_stopped      → tg_muted / vk_muted               (не слать игровые уведомления)
-  admin_log_enabled→ tg_admin_log_enabled / vk_admin_log_enabled  (доставка ADMIN LOG)
+Ключевое отличие от бота и от прошлой версии этой схемы: всё, что относится к
+**каналу связи** (идентификатор в платформе, username, имя, mute, доставка
+ADMIN LOG), вынесено из таблицы `user` в отдельную таблицу `identity`. Один
+профиль (`user`) может иметь несколько идентичностей — например Telegram и VK
+одновременно, — а также специальную тестовую идентичность (platform='test'),
+которая не требует реального аккаунта: её «входящие» пишутся в текстовый файл
+(см. core/inbox.py) и показываются на отдельной веб-странице.
 
-Всё, что связано с каналом (идентификатор, имя, доставка уведомлений), разделено по
-платформам, т.к. один профиль может быть привязан и к TG, и к VK. Игровые поля (счёт,
-цель, роль и т.п.) — общие для профиля и повторяют бот 1:1.
+  user      — профиль и игровое состояние (общее для человека)
+  identity  — привязка к каналу связи: tg / vk / test  (0..N на пользователя)
+
+Соответствие полей боту:
+  tg_user_id (PK)   → user.id  +  identity(platform='tg', platform_uid=tg_id)
+  tg_nickname       → identity.username
+  tg_name           → identity.name
+  bot_stopped       → identity.muted
+  admin_log_enabled → identity.admin_log_enabled
 """
 import os
 import sqlite3
@@ -83,36 +86,46 @@ def init_db():
     """)
 
     # Пользователи. id — сквозной, с 1 (AUTOINCREMENT).
+    # Только профиль и игровое состояние — никаких полей канала связи.
     cur.execute("""
     CREATE TABLE IF NOT EXISTS user (
         id           INTEGER PRIMARY KEY AUTOINCREMENT,
-        tg_id        INTEGER UNIQUE,          -- Telegram user id (может быть NULL)
-        vk_id        INTEGER UNIQUE,          -- VK user id (может быть NULL)
-        tg_username  TEXT,                    -- @username в TG (для показа/поиска)
-        vk_username  TEXT,                    -- screen_name во VK (при наличии)
-        tg_name      TEXT,                    -- имя из Telegram
-        vk_name      TEXT,                    -- имя из VK
-        real_name    TEXT NOT NULL DEFAULT '',-- имя в игре (вводит игрок)
-        extra_info   TEXT NOT NULL DEFAULT '',-- ответ на доп. вопрос регистрации
+        real_name    TEXT NOT NULL DEFAULT '',   -- имя в игре (вводит игрок)
+        extra_info   TEXT NOT NULL DEFAULT '',   -- ответ на доп. вопрос регистрации
 
         is_player    BOOLEAN NOT NULL DEFAULT 0,
         is_alive     BOOLEAN NOT NULL DEFAULT 0,
         kill_count   INTEGER NOT NULL DEFAULT 0,
-        game_order   INTEGER UNIQUE,          -- позиция в круге целей
+        game_order   INTEGER UNIQUE,             -- позиция в круге целей
         target       INTEGER REFERENCES user(id),
         killed_by    INTEGER REFERENCES user(id),
 
         is_admin     BOOLEAN NOT NULL DEFAULT 0,
 
-        -- доставка уведомлений — отдельно по платформам
-        tg_muted             BOOLEAN NOT NULL DEFAULT 0,  -- не слать игровые уведомления в TG
-        vk_muted             BOOLEAN NOT NULL DEFAULT 0,  -- не слать игровые уведомления во VK
-        tg_admin_log_enabled BOOLEAN NOT NULL DEFAULT 1,  -- слать ADMIN LOG в TG
-        vk_admin_log_enabled BOOLEAN NOT NULL DEFAULT 1,  -- слать ADMIN LOG во VK
-
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """)
+
+    # Идентичности — привязки профиля к каналам связи.
+    #   platform     : 'tg' | 'vk' | 'test'
+    #   platform_uid : id пользователя в платформе (для test — произвольная метка)
+    #   muted             : не слать игровые уведомления в этот канал
+    #   admin_log_enabled : слать ADMIN LOG в этот канал (если пользователь админ)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS identity (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id       INTEGER NOT NULL REFERENCES user(id) ON DELETE CASCADE,
+        platform      TEXT NOT NULL,
+        platform_uid  TEXT NOT NULL,
+        username      TEXT,
+        name          TEXT,
+        muted             BOOLEAN NOT NULL DEFAULT 0,
+        admin_log_enabled BOOLEAN NOT NULL DEFAULT 1,
+        created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (platform, platform_uid)
+    );
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_identity_user ON identity(user_id)")
 
     # Очередь на воскрешение (подаренные жизни).
     cur.execute("""
@@ -135,24 +148,7 @@ def init_db():
     );
     """)
 
-    # Мягкая миграция: добавить недостающие колонки в уже существующую БД
-    # (CREATE TABLE IF NOT EXISTS не меняет схему существующей таблицы).
-    _ensure_columns(cur, "user", {
-        "vk_username": "TEXT",
-        "tg_name": "TEXT",
-        "vk_name": "TEXT",
-        "tg_muted": "BOOLEAN NOT NULL DEFAULT 0",
-        "vk_muted": "BOOLEAN NOT NULL DEFAULT 0",
-        "tg_admin_log_enabled": "BOOLEAN NOT NULL DEFAULT 1",
-        "vk_admin_log_enabled": "BOOLEAN NOT NULL DEFAULT 1",
-    })
-    # бэкфилл имени из старой единой колонки display_name, если она была
-    cols = {row["name"] for row in cur.execute("PRAGMA table_info(user)")}
-    if "display_name" in cols:
-        cur.execute("UPDATE user SET tg_name = display_name "
-                    "WHERE tg_name IS NULL AND tg_id IS NOT NULL")
-        cur.execute("UPDATE user SET vk_name = display_name "
-                    "WHERE vk_name IS NULL AND vk_id IS NOT NULL AND tg_id IS NULL")
+    _migrate_flat_to_identity(cur)
 
     if cur.execute("SELECT COUNT(*) FROM game").fetchone()[0] == 0:
         cur.execute("INSERT INTO game (id) VALUES (1)")
@@ -162,21 +158,45 @@ def init_db():
     print("[db] База данных инициализирована:", DB_PATH)
 
 
-def _ensure_columns(cur, table: str, columns: dict):
-    """Добавляет отсутствующие колонки в таблицу (простая миграция)."""
-    existing = {row["name"] for row in cur.execute(f"PRAGMA table_info({table})")}
-    for name, decl in columns.items():
-        if name not in existing:
-            cur.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
-            print(f"[db] миграция: добавлена колонка {table}.{name}")
+def _migrate_flat_to_identity(cur):
+    """Разовый перенос старых плоских колонок user.tg_*/vk_* в таблицу identity.
+
+    Нужен только для dev-БД, созданных прошлой версией схемы. Сами колонки не
+    удаляем (SQLite это делает лишь пересозданием таблицы) — они просто перестают
+    использоваться. INSERT OR IGNORE не создаёт дублей благодаря UNIQUE.
+    """
+    cols = {row["name"] for row in cur.execute("PRAGMA table_info(user)")}
+
+    def col(name, default):
+        return name if name in cols else default
+
+    for platform, id_col in (("tg", "tg_id"), ("vk", "vk_id")):
+        if id_col not in cols:
+            continue
+        uname = col(f"{platform}_username", "NULL")
+        name = col(f"{platform}_name", col("display_name", "NULL"))
+        muted = col(f"{platform}_muted", "0")
+        log = col(f"{platform}_admin_log_enabled", "1")
+        cur.execute(
+            f"INSERT OR IGNORE INTO identity "
+            f"(user_id, platform, platform_uid, username, name, muted, admin_log_enabled) "
+            f"SELECT id, '{platform}', {id_col}, {uname}, {name}, {muted}, {log} "
+            f"FROM user WHERE {id_col} IS NOT NULL"
+        )
+        if cur.rowcount:
+            print(f"[db] миграция: перенесено {cur.rowcount} '{platform}'-идентичностей")
 
 
 def drop_db():
-    """Полный сброс: удаляет файл БД (и WAL/SHM-спутники)."""
+    """Полный сброс: удаляет файл БД (+ WAL/SHM) и тестовые «входящие»."""
     for suffix in ("", "-wal", "-shm"):
         p = Path(str(DB_PATH) + suffix)
         if p.exists():
             p.unlink()
+    inbox_dir = DATA_DIR / "inboxes"
+    if inbox_dir.exists():
+        for f in inbox_dir.glob("*.txt"):
+            f.unlink()
     print("[db] Файл базы данных удалён.")
 
 
