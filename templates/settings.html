@@ -35,21 +35,21 @@
   .head h1 { margin: 0; font-size: 18px; }
   .head .back { margin-left: auto; text-decoration: none; color: var(--accent); font-weight: 600; font-size: 13px; }
   .card {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 18px;
-    box-shadow: var(--shadow); padding: 18px 18px; display: flex; flex-direction: column; gap: 12px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    box-shadow: var(--shadow); padding: 14px 15px; display: flex; flex-direction: column; gap: 9px;
   }
-  .card h2 { margin: 0; font-size: 15px; display: flex; align-items: center; gap: 7px; }
-  .hint { margin: 0; font-size: 13.5px; color: var(--text-dim); }
-  label { display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600; }
+  .card h2 { margin: 0; font-size: 14px; display: flex; align-items: center; gap: 7px; }
+  .hint { margin: 0; font-size: 12.5px; color: var(--text-dim); }
+  label { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; font-weight: 600; }
   input {
-    font: inherit; font-size: 15px; font-weight: 400; padding: 11px 13px;
-    border: 1px solid var(--border); border-radius: 11px; background: var(--btn-bg); color: var(--text);
+    font: inherit; font-size: 13.5px; font-weight: 400; padding: 8px 10px;
+    border: 1px solid var(--border); border-radius: 9px; background: var(--btn-bg); color: var(--text);
   }
   input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
   .btn {
     appearance: none; border: 1px solid var(--accent-border); background: var(--accent-soft);
-    color: var(--accent); font: inherit; font-weight: 650; font-size: 15px; padding: 12px;
-    border-radius: 12px; cursor: pointer; align-self: flex-start;
+    color: var(--accent); font: inherit; font-weight: 600; font-size: 13px; padding: 8px 14px;
+    border-radius: 10px; cursor: pointer; align-self: flex-start;
   }
   .note {
     background: var(--ok-soft); border: 1px solid var(--ok-border); color: var(--ok);
@@ -59,6 +59,14 @@
   .card.soon { opacity: .85; }
   .soon .lock { font-size: 12px; color: var(--text-dim); }
   .soon s { color: var(--text-dim); }
+  .btn.ghost { background: var(--btn-bg); border-color: var(--border); color: var(--text); font-weight: 600; }
+  .qrow { display: flex; gap: 8px; }
+  .qrow input:first-child { flex: 0 0 34%; min-width: 0; }
+  .qrow input:last-child { flex: 1 1 auto; min-width: 0; }
+  code { background: var(--btn-bg); border: 1px solid var(--border); border-radius: 5px; padding: 0 5px; font-size: 12.5px; }
+  .card.danger { border-color: var(--danger-border, rgba(214,69,80,.4)); }
+  .btn.danger { background: rgba(214,69,80,.1); border-color: rgba(214,69,80,.4); color: #d64550; }
+  @media (prefers-color-scheme: dark) { .btn.danger { color: #ff6161; } }
 </style>
 </head>
 <body>
@@ -68,11 +76,13 @@
       <a class="back" href="{{ link('/app') }}">← в меню</a>
     </div>
 
+    {% if saved %}<div class="note">✅ {{ saved }}</div>{% endif %}
+
     <form class="card" method="post" action="{{ link('/app/settings') }}" autocomplete="off">
+      <input type="hidden" name="action" value="password">
       <h2>🔑 Пароль регистрации</h2>
       <p class="hint">Если задан, игроки при регистрации должны ввести этот пароль.
          Оставьте поле пустым и сохраните, чтобы убрать пароль.</p>
-      {% if saved %}<div class="note">✅ Сохранено.</div>{% endif %}
       <p class="state">Сейчас: {{ ('«' ~ current ~ '»') if current else 'пароль не задан (регистрация свободная)' }}</p>
       <label>
         Новый пароль
@@ -81,17 +91,71 @@
       <button type="submit" class="btn">💾 Сохранить</button>
     </form>
 
-    <div class="card soon">
-      <h2>❓ <s>Доп. вопросы при регистрации</s> <span class="lock">скоро</span></h2>
-      <p class="hint"><s>Настроить один или несколько дополнительных вопросов, которые
-         игрок заполняет при регистрации (комната, номер телефона и т.п.).</s></p>
-    </div>
+    <form class="card" method="post" action="{{ link('/app/settings') }}" autocomplete="off">
+      <input type="hidden" name="action" value="support">
+      <h2>📞 Контакт поддержки</h2>
+      <p class="hint">Показывается игрокам внизу под сообщениями («напишите напрямую …»).</p>
+      <label>
+        Контакт
+        <input type="text" name="support_contact" value="{{ support_contact }}" placeholder="@username или ссылка" maxlength="200">
+      </label>
+      <button type="submit" class="btn">💾 Сохранить</button>
+    </form>
 
-    <div class="card soon">
-      <h2>📋 <s>Уведомления администратора (ADMIN LOG)</s> <span class="lock">скоро</span></h2>
-      <p class="hint"><s>Включить/выключить получение журнала значимых событий игры
-         в свой канал.</s></p>
-    </div>
+    <form class="card" method="post" action="{{ link('/app/settings') }}" autocomplete="off">
+      <input type="hidden" name="action" value="rules">
+      <h2>📜 Файл правил</h2>
+      <p class="hint">Путь к HTML-файлу с правилами (относительно папки проекта).
+         Пусто = кнопка «Правила» скрыта. Готовые наборы лежат в папке <code>rules/</code>.</p>
+      <label>
+        Путь к файлу
+        <input type="text" name="rules_filename" value="{{ rules_filename }}" placeholder="rules/пример.html" maxlength="200">
+      </label>
+      <button type="submit" class="btn">💾 Сохранить</button>
+    </form>
+
+    <form class="card" method="post" action="{{ link('/app/settings') }}">
+      <input type="hidden" name="action" value="confirm_kills">
+      <h2>📸 Подтверждение поимок</h2>
+      <p class="hint">Если включено — заявку о поимке должна подтвердить жертва.
+         Если выключено — поимка засчитывается сразу, как только охотник о ней сообщил.</p>
+      <p class="state">Сейчас: {{ '✅ поимку подтверждает жертва' if confirm_kills else '⚡ засчитывается сразу' }}</p>
+      <button type="submit" class="btn ghost">{{ '⚡ Засчитывать сразу' if confirm_kills else '✅ Требовать подтверждение' }}</button>
+    </form>
+
+    <form class="card" method="post" action="{{ link('/app/settings') }}"
+          onsubmit="return confirm('Перезапустить приложение? На пару секунд сайт будет недоступен, данные игры сохранятся.')">
+      <input type="hidden" name="action" value="restart">
+      <h2>🔁 Перезапуск приложения</h2>
+      <p class="hint">Перезагружает сервер приложения (например, после обновления кода
+         или изменения настроек). Данные игры сохраняются, занимает пару секунд.</p>
+      <button type="submit" class="btn ghost">🔁 Перезапустить приложение</button>
+    </form>
+
+    <form class="card" method="post" action="{{ link('/app/settings') }}" autocomplete="off">
+      <input type="hidden" name="action" value="extra_questions">
+      <h2>❓ Доп. вопросы при регистрации</h2>
+      <p class="hint">Игрок отвечает на эти вопросы при регистрации (комната, телефон и т.п.).
+         «Метка» — короткое название поля (для списка игроков), «Вопрос» — что видит игрок.
+         Чтобы удалить вопрос — очистите его поля. Пустые строки внизу — для новых вопросов.</p>
+      {% set rows = extra_questions + [['', ''], ['', '']] %}
+      {% for pair in rows %}
+      <div class="qrow">
+        <input type="text" name="label_{{ loop.index0 }}" value="{{ pair[0] }}" placeholder="Метка" maxlength="40">
+        <input type="text" name="q_{{ loop.index0 }}" value="{{ pair[1] }}" placeholder="Текст вопроса" maxlength="200">
+      </div>
+      {% endfor %}
+      <button type="submit" class="btn">💾 Сохранить вопросы</button>
+    </form>
+
+    <form class="card danger" method="post" action="{{ link('/app/settings') }}"
+          onsubmit="return confirm('Полностью стереть базу данных? Все пользователи, игроки и настройки будут удалены безвозвратно.')">
+      <input type="hidden" name="action" value="full_reset">
+      <h2>💣 Полный сброс базы данных</h2>
+      <p class="hint">Безвозвратно удаляет всех пользователей, игроков и все данные игры,
+         пересоздавая пустую базу. Используйте только между разными мероприятиями.</p>
+      <button type="submit" class="btn danger">💣 Стереть всё и начать заново</button>
+    </form>
   </main>
 </body>
 </html>

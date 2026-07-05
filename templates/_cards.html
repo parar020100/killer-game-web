@@ -29,4 +29,11 @@
     }
   }, true);
 })();
+
+// Неактивные (серые) и ещё не реализованные кнопки: по клику показываем подсказку,
+// почему действие сейчас недоступно (текст — в data-note).
+document.addEventListener('click', function (e) {
+  var b = e.target.closest('.btn.muted[data-note], .btn.todo[data-note]');
+  if (b) { e.preventDefault(); alert(b.getAttribute('data-note')); }
+});
 </script>

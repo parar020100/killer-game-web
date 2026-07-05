@@ -106,8 +106,16 @@
 
   .bubble {
     background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
-    padding: 18px 18px 16px; box-shadow: var(--shadow);
-    white-space: pre-wrap; word-break: break-word; font-size: 15px;
+    padding: 18px 18px 16px; box-shadow: var(--shadow); font-size: 15px;
+  }
+  /* pre-wrap только на текстовых блоках, чтобы отступы разметки не давали пустот */
+  .btop, .bcol { white-space: pre-wrap; word-break: break-word; }
+  /* верхняя часть: две колонки — статус (слева) и цель (справа), на узком — стопкой */
+  .bcols { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+  @media (min-width: 440px) {
+    .bcols { flex-direction: row; gap: 16px; align-items: flex-start; }
+    .bcols .bcol { flex: 1 1 0; min-width: 0; }
+    .bcol-target { border-left: 1px dashed var(--border); padding-left: 16px; }
   }
   .bubble .divider { color: var(--text-dim); font-weight: 700; }
   .bubble strong { font-weight: 700; }
@@ -156,11 +164,17 @@
   .btn:active { transform: translateY(1px) scale(.995); }
   .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .btn.full { grid-column: 1 / -1; }
+  /* второстепенные кнопки (не на всю ширину) — компактнее основных */
+  .keyboard .btn:not(.full) {
+    min-height: 40px; padding: 9px 10px; font-size: 13px; font-weight: 500; border-radius: 11px;
+  }
   .btn.primary { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-weight: 650; }
   .btn.danger { background: var(--danger-soft); border-color: var(--danger-border); color: var(--danger); }
   .btn.ok { background: var(--ok-soft); border-color: var(--ok-border); color: var(--ok); font-weight: 650; }
   .btn.todo { cursor: not-allowed; color: var(--text-dim); opacity: .7; box-shadow: none; }
   .btn.todo s { text-decoration: line-through; }
+  /* недоступное по состоянию игры действие — бледно-серое, но на своём месте */
+  .btn.muted { cursor: not-allowed; color: var(--text-dim); opacity: .5; box-shadow: none; }
 
   .devbar {
     display: flex; justify-content: space-between; align-items: center; gap: 8px;
@@ -174,9 +188,11 @@
   .section-hint { text-align: center; font-size: 12px; color: var(--text-dim); margin: 2px 0 -2px; }
 
   /* кнопка-переключатель списка (в меню, рядом с «Пауза»); её текст меняется, а
-     состояние живёт в классе html.show-userlist (и в куке — переживает перезагрузку). */
+     состояние живёт в классе html.show-userlist (и в куке — переживает перезагрузку).
+     Нажатое состояние — приглушённый оттенок (как у раскрытой строки игрока), не красный. */
   html.show-userlist .ul-toggle {
-    background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-weight: 650;
+    background: var(--btn-bg-hover); border-color: var(--text-dim); color: var(--text);
+    font-weight: 650; box-shadow: inset 0 1px 3px rgba(0,0,0,.12);
   }
 
   /* ── панель списка игроков: по умолчанию скрыта; видна при html.show-userlist.
@@ -198,6 +214,14 @@
     background: var(--btn-bg); border-radius: 12px;
   }
   .upanel-body .legend { font-size: 11.5px; color: var(--text-dim); margin: 2px; line-height: 1.7; }
+  /* поле живого поиска над списком */
+  .usearch {
+    width: 100%; font: inherit; font-size: 13.5px; padding: 9px 12px;
+    border: 1px solid var(--border); border-radius: 11px; background: var(--surface);
+    color: var(--text); box-shadow: var(--shadow-sm);
+  }
+  .usearch:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .usearch-empty { font-size: 13px; color: var(--text-dim); margin: 2px; text-align: center; }
   /* Компактный список: один игрок — одна строка (без переносов), рассчитан на
      ~сотню игроков. Имя при нехватке места усекается многоточием. */
   .cards { display: flex; flex-direction: column; gap: 5px; }
@@ -221,10 +245,20 @@
     font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; flex: 0 0 auto;
     background: var(--btn-bg); border: 1px solid var(--border); border-radius: 999px; padding: 0 7px;
   }
+  .ucard > summary .ubadge.kb { color: var(--danger); max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ucard > summary .chev { margin-left: auto; color: var(--text-dim); font-size: 12px; flex: 0 0 auto; }
   .upanel-body .cw { display: none; }  /* компактно: без слова «управлять» */
   .ucard[open] > summary { border-bottom: 1px solid var(--border); background: var(--btn-bg-hover); }
   .ucard[open] > summary .chev { color: var(--accent); }
+  /* совпадение с поиском — подсветка оранжевым */
+  .ucard.match { border-color: #f0932b; box-shadow: 0 0 0 2px rgba(240,147,43,.35); }
+  .ucard.match > summary { background: rgba(240,147,43,.14); }
+  /* полный набор полей в раскрытой карточке (как в .txt-списке бота) */
+  .uinfo { margin: 0; padding: 9px 12px 2px; display: flex; flex-direction: column; gap: 3px;
+           border-bottom: 1px solid var(--border); font-size: 12.5px; }
+  .uinfo > div { display: flex; gap: 8px; align-items: baseline; }
+  .uinfo dt { flex: 0 0 auto; color: var(--text-dim); margin: 0; }
+  .uinfo dd { margin: 0; min-width: 0; word-break: break-word; }
   /* действия внутри карточки — «чипы», несколько в ряд, по размеру текста
      (без переносов); недоступные — бледно-серые; счёт/позиция — «окошко». */
   .uactions { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px; align-items: flex-start; }
@@ -276,11 +310,17 @@
 
     <div class="devbar">
       <span>Вы вошли как <b>{{ user_name }}</b>{% if dev_user %} <span title="Вкладка привязана к {{ dev_user }} через ?user= — своя на каждую вкладку, независимо от cookie">🕶 {{ dev_user }}</span>{% endif %}</span>
-      <span class="as-links">{% if dev_user %}<span title="Вкладка в отладочном входе ?user=; чтобы «выйти», просто закройте её">отладочная вкладка</span>{% else %}<a href="/logout">выйти</a>{% endif %}</span>
+      <span class="as-links">{% if not dev_user %}<a href="/logout">выйти</a>{% endif %}</span>
     </div>
 
     <div data-live="4000" style="display:contents">
-    <div class="bubble">{{ message_html | safe }}<span class="support">ℹ️ В случае ошибок, вопросов или разногласий, напишите сообщение этому боту (желательно) или <a href="#">{{ support_contact }}</a>.</span></div>
+    <div class="bubble">
+      <div class="btop">{{ message_html | safe }}</div>
+      <div class="bcols">
+        <div class="bcol">{{ status_col | safe }}</div>
+        {% if target_html %}<div class="bcol bcol-target">{{ target_html | safe }}</div>{% endif %}
+      </div>
+      <span class="support">ℹ️ В случае ошибок, вопросов или разногласий, напишите сообщение в поддержку или напрямую {{ support_contact }}.</span></div>
 
     {% if notifications %}
     <details class="notifs" data-keep="notif">
@@ -303,11 +343,13 @@
           <button type="button" class="btn ul-toggle{% if b.full %} full{% endif %}" data-toggle="userlist"
                   data-on="🙈 Скрыть игроков" data-off="👥 Показать игроков">{{ '🙈 Скрыть игроков' if show_userlist else '👥 Показать игроков' }}</button>
           {% elif b.todo %}
-          <button class="btn todo{% if b.full %} full{% endif %}" disabled title="ещё не реализовано"><s>{{ b.label }}</s></button>
+          <button type="button" class="btn todo{% if b.full %} full{% endif %}" data-note="Эта функция ещё не реализована." title="ещё не реализовано"><s>{{ b.label }}</s></button>
+          {% elif b.disabled %}
+          <button type="button" class="btn muted{% if b.full %} full{% endif %}" data-note="{{ b.note }}" title="{{ b.note }}">{{ b.label }}</button>
           {% elif b.href %}
           <a class="btn{% if b.kind %} {{ b.kind }}{% endif %}{% if b.full %} full{% endif %}" href="{{ link(b.href) }}">{{ b.label }}</a>
           {% elif b.action %}
-          <form method="post" action="{{ link('/act') }}">
+          <form method="post" action="{{ link('/act') }}"{% if b.confirm %} onsubmit="return confirm('{{ b.confirm }}')"{% endif %}>
             <input type="hidden" name="action" value="{{ b.action }}">
             <button type="submit" class="btn{% if b.kind %} {{ b.kind }}{% endif %}{% if b.full %} full{% endif %}">{{ b.label }}</button>
           </form>
@@ -325,9 +367,6 @@
   <aside class="userpanel">
     <div data-live="5000" style="display:contents">
     <div class="upanel-body">
-      {% if user_list.game_started and not user_list.game_paused %}
-      <p class="legend">⏸️ Устранение / оживление / счёт / порядок в круге — на паузе.</p>
-      {% endif %}
       {{ ul.userlist(user_list.players, user_list.non_players, '/app') }}
     </div>
     </div>
@@ -336,6 +375,7 @@
   </div>
   {% include "_live.html" %}
   {% include "_cards.html" %}
+  {% include "_search.html" %}
   <script>
   // Один переключатель «Показать/Скрыть игроков»: меняет класс на <html>,
   // текст самой кнопки и запоминает выбор в куке (переживает перезагрузку и

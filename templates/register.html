@@ -75,13 +75,13 @@
       </label>
       {% endif %}
 
-      {% if extra_question %}
-      <label class="{{ 'bad' if errors.extra else '' }}">
-        {{ extra_question }}
-        <textarea name="extra" rows="2" maxlength="200">{{ values.extra or '' }}</textarea>
-        {% if errors.extra %}<span class="err">{{ errors.extra }}</span>{% endif %}
+      {% for f in extra_fields %}
+      <label class="{{ 'bad' if f.error else '' }}">
+        {{ f.question }}
+        <textarea name="extra_{{ f.i }}" rows="2" maxlength="200">{{ f.value }}</textarea>
+        {% if f.error %}<span class="err">{{ f.error }}</span>{% endif %}
       </label>
-      {% endif %}
+      {% endfor %}
 
       <div class="row">
         <a class="btn" href="{{ link('/app') }}">Отмена</a>

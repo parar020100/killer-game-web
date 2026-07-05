@@ -148,6 +148,16 @@ def init_db():
     );
     """)
 
+    # Редактируемые из UI настройки игры (ключ-значение): контакт поддержки, файл
+    # правил, доп. вопросы, режим подтверждения поимок, id root-пользователя и т.п.
+    # Раньше часть этого жила в config.py — теперь всё в БД (см. core/settings.py).
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS setting (
+        key   TEXT PRIMARY KEY,
+        value TEXT
+    );
+    """)
+
     _migrate_flat_to_identity(cur)
 
     if cur.execute("SELECT COUNT(*) FROM game").fetchone()[0] == 0:

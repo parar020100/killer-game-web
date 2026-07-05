@@ -8,11 +8,6 @@ import random
 
 from db import query_one, query_all, execute
 from core.identity import Identity
-from config import DEFAULT_ADMINS, CONFIRM_KILLS
-
-
-def _is_default_admin(username) -> bool:
-    return bool(username) and str(username).strip().lstrip("@").lower() in DEFAULT_ADMINS
 
 
 class User:
@@ -65,9 +60,6 @@ class User:
             new_id = execute("INSERT INTO user DEFAULT VALUES")
             Identity.create(new_id, platform, platform_uid, username, name)
             user = cls(new_id)
-        # Дефолт-админ: назначаем права по username (идемпотентно).
-        if _is_default_admin(username) and not user.is_admin():
-            user.set_admin(True)
         return user
 
     # тонкие обёртки для конкретных платформ
@@ -169,9 +161,13 @@ class User:
     # --- роль / статус ----------------------------------------------------
 
     def is_admin(self) -> bool:  return bool(self._get("is_admin"))
+    def is_root(self) -> bool:
+        """root-пользователь (создаётся при первом запуске) — особый админ."""
+        from core import settings
+        return settings.root_user_id() == self.id
     def is_default_admin(self) -> bool:
-        """Дефолт-админ (из DEFAULT_ADMINS) — права нельзя снять."""
-        return _is_default_admin(self.get_username())
+        """Совместимость: «неприкосновенный» админ = root (нельзя снять/удалить)."""
+        return self.is_root()
     def is_player(self) -> bool: return bool(self._get("is_player"))
     def is_alive(self) -> bool:  return bool(self._get("is_alive"))
     def get_score(self) -> int:  return self._get("kill_count") or 0
@@ -335,7 +331,8 @@ class User:
         if victim.is_being_caught():
             return False, "По этой цели уже есть заявка на поимку."
 
-        if not CONFIRM_KILLS:
+        from core import settings
+        if not settings.confirm_kills():
             self.capture(victim)
             return True, "Поимка засчитана."
 

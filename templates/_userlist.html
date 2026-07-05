@@ -1,26 +1,44 @@
 {# Раскрывающаяся карточка пользователя с кнопками действий. Общий фрагмент для
    отдельной страницы /app/users и встроенного списка на дашборде.
    Импортировать: {% import "_userlist.html" as ul with context %}
-   `back` — путь, куда вернуться после действия (/app или /app/users). #}
+   `back` — путь, куда вернуться после действия (/app или /app/users).
+   Требует в контексте: allow_dev, link, extra_label. #}
 
 {% macro card(u, back) -%}
-  <details class="ucard" data-keep="u{{ u.id }}">
+  {# data-search — строка для живого поиска (номер, ник, имена) в нижнем регистре #}
+  <details class="ucard" data-keep="u{{ u.id }}"
+    data-search="{{ (u.name ~ ' ' ~ u.nick ~ ' ' ~ (u.tg_name or '') ~ ' ' ~ (u.real_name or '') ~ ' ' ~ ('#' ~ u.order if u.order is not none else '') ~ ' ' ~ u.id) | lower }}">
     <summary>
       <span class="st">{{ u.status }}</span>
       <span class="uname">{{ u.name }}</span>
       {% if u.nick and u.nick != '—' %}<span class="unick">{{ u.nick }}</span>{% endif %}
       {% if u.order is not none %}<span class="ubadge">#{{ u.order }}</span>{% endif %}
       {% if u.kills is not none %}<span class="ubadge">🔪 {{ u.kills }}</span>{% endif %}
+      {# «кем пойман» коротко: ☠️ подтверждено / ⏳ ждём подтверждения #}
+      {% if u.killed_by %}<span class="ubadge kb" title="Кем пойман: {{ u.killed_by }}{{ ' (ждёт подтверждения)' if u.kill_pending else '' }}">{{ '⏳' if u.kill_pending else '☠️' }} {{ u.killed_by }}</span>{% endif %}
       <span class="chev">⚙️<span class="cw"> управлять</span> ▾</span>
     </summary>
+
+    {# полный набор полей (как в текстовом списке бота): показываем что есть #}
+    <dl class="uinfo">
+      <div><dt>🆔 ID</dt><dd>{{ u.id }}</dd></div>
+      {% if u.order is not none %}<div><dt>🔢 Позиция</dt><dd>{{ u.order }}</dd></div>{% endif %}
+      {% if u.kills is not none %}<div><dt>🔪 Поймал целей</dt><dd>{{ u.kills }}</dd></div>{% endif %}
+      {% if u.killed_by %}<div><dt>{{ '⏳ Заявка о поимке' if u.kill_pending else '☠️ Кем пойман' }}</dt><dd>{{ u.killed_by }}</dd></div>{% endif %}
+      <div><dt>🏷 Ник</dt><dd>{{ u.nick }}</dd></div>
+      {% if u.tg_name %}<div><dt>✈️ Имя в канале</dt><dd>{{ u.tg_name }}</dd></div>{% endif %}
+      {% if u.real_name %}<div><dt>🧑 Настоящее имя</dt><dd>{{ u.real_name }}</dd></div>{% endif %}
+      {% for label, ans in u.extra %}<div><dt>📝 {{ label }}</dt><dd>{{ ans }}</dd></div>{% endfor %}
+    </dl>
+
     <div class="uactions">
       {% for b in u.buttons %}
         {% if b.todo %}
-        <button class="btn chip todo" disabled title="ещё не реализовано"><s>{{ b.label }}</s></button>
+        <button type="button" class="btn chip todo" data-note="Эта функция ещё не реализована." title="ещё не реализовано"><s>{{ b.label }}</s></button>
         {% elif b.disabled %}
-        <button class="btn chip muted" disabled title="{{ b.note }}">{{ b.label }}</button>
+        <button type="button" class="btn chip muted" data-note="{{ b.note }}" title="{{ b.note }}">{{ b.label }}</button>
         {% else %}
-        <form method="post" action="{{ link('/app/users/' ~ u.id ~ '/act') }}">
+        <form method="post" action="{{ link('/app/users/' ~ u.id ~ '/act') }}"{% if b.confirm %} onsubmit="return confirm('{{ b.confirm }}')"{% endif %}>
           <input type="hidden" name="action" value="{{ b.action }}">
           <input type="hidden" name="next" value="{{ back }}">
           <button type="submit" class="btn chip {{ b.kind or '' }}">{{ b.label }}</button>
@@ -48,7 +66,9 @@
         </div>
       </details>
       {% else %}
-      <button class="btn chip muted" disabled title="доступно на паузе">🔢 Изменить позицию</button>
+      <button type="button" class="btn chip muted"
+              data-note="Менять позицию игрока в круге можно во время паузы или до старта игры."
+              title="во время паузы или до старта">🔢 Изменить позицию</button>
       {% endif %}
 
       {# счёт — компактная кнопка, открывающая «окошко» с вводом #}
@@ -66,16 +86,23 @@
         </div>
       </details>
       {% else %}
-      <button class="btn chip muted" disabled title="доступно на паузе">💯 Редактировать счёт</button>
+      <button type="button" class="btn chip muted"
+              data-note="Редактировать счёт можно только во время паузы."
+              title="во время паузы">💯 Редактировать счёт</button>
       {% endif %}
 
-      {% if u.username %}<a class="btn chip" href="/chat/{{ u.username }}" target="_blank" rel="noopener">💬 Сообщения</a>{% endif %}
+      {# TODO: страница переписки админ↔игрок ещё не реализована — пока заглушка #}
+      <button type="button" class="btn chip todo" data-note="Личные сообщения с игроком ещё не реализованы." title="ещё не реализовано"><s>💬 Сообщения</s></button>
       {% if allow_dev %}<a class="btn chip" href="/app?user={{ u.username or u.id }}" target="_blank" rel="noopener">🕶 Открыть меню от имени игрока</a>{% endif %}
     </div>
   </details>
 {%- endmacro %}
 
 {% macro userlist(players, non_players, back) -%}
+  {# живой поиск: без кнопок, применяется по мере ввода (см. _search.html) #}
+  <input type="search" class="usearch" id="usearch" autocomplete="off"
+         placeholder="🔍 Поиск по номеру, нику, имени…" aria-label="Поиск игрока">
+
   <h2>🎯 Активные игроки ({{ players | length }})</h2>
   {% if players %}
   <div class="cards">{% for u in players %}{{ card(u, back) }}{% endfor %}</div>
@@ -86,6 +113,7 @@
   <div class="cards">{% for u in non_players %}{{ card(u, back) }}{% endfor %}</div>
   {% else %}<div class="section empty">Все пользователи в игре.</div>{% endif %}
 
+  <p class="usearch-empty" hidden>Никто не найден.</p>
   <p class="legend">
     👑 админ · 👤 обычный · 🚫 отключил уведомления &nbsp;|&nbsp;
     ✅ в игре · 🔴 не в игре · 👀 зритель · 💚 жив · 💛 под прицелом · ☠️ выбыл · ♻️ ждёт воскрешения

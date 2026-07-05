@@ -1,0 +1,25 @@
+<script>
+// Живой поиск по списку игроков: подсвечивает совпадения оранжевым и прокручивает
+// к первому из них. Без кнопок — фильтр применяется по мере ввода. Делегирование
+// на document, поэтому переживает живое обновление списка (карточки заменяются).
+(function () {
+  function apply(input) {
+    var q = (input.value || '').trim().toLowerCase();
+    var cards = document.querySelectorAll('.ucard');
+    var first = null, count = 0;
+    cards.forEach(function (c) {
+      var hay = c.getAttribute('data-search') || '';
+      var hit = q !== '' && hay.indexOf(q) !== -1;
+      c.classList.toggle('match', hit);
+      if (hit) { count++; if (!first) first = c; }
+    });
+    var empty = document.querySelector('.usearch-empty');
+    if (empty) empty.hidden = !(q !== '' && count === 0);
+    // прокрутка к первому совпадению (по возможности внутри списка, не всей страницы)
+    if (first) first.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+  document.addEventListener('input', function (e) {
+    if (e.target && e.target.id === 'usearch') apply(e.target);
+  });
+})();
+</script>

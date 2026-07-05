@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Профиль · Киллер / Папарацци</title>
+<style>
+  :root {
+    --bg: #eaeef4; --surface: #ffffff; --btn-bg: #f4f6fa;
+    --text: #171a21; --text-dim: #6a7280; --border: #e2e7ef;
+    --accent: #e23b4e; --accent-soft: rgba(226,59,78,.10); --accent-border: rgba(226,59,78,.28);
+    --ok: #2e9b57; --ok-soft: rgba(46,155,87,.12); --ok-border: rgba(46,155,87,.4);
+    --danger: #d64550;
+    --shadow: 0 6px 24px rgba(23,26,40,.10); --shadow-sm: 0 2px 6px rgba(23,26,40,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1116; --surface: #191d24; --btn-bg: #222831;
+      --text: #e9ecf1; --text-dim: #9aa4b2; --border: #2a313b;
+      --accent: #ff5069; --accent-soft: rgba(255,80,105,.14); --accent-border: rgba(255,80,105,.35);
+      --ok: #55c98a; --ok-soft: rgba(85,201,138,.14); --ok-border: rgba(85,201,138,.4);
+      --danger: #ff6161;
+      --shadow: 0 8px 30px rgba(0,0,0,.45); --shadow-sm: 0 2px 8px rgba(0,0,0,.35);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+                 "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+    line-height: 1.5; min-height: 100dvh; display: flex; justify-content: center; align-items: flex-start;
+    padding: 20px 14px calc(20px + env(safe-area-inset-bottom));
+  }
+  .app { width: 100%; max-width: 460px; display: flex; flex-direction: column; gap: 14px; }
+  .head { display: flex; align-items: center; gap: 10px; }
+  .head h1 { margin: 0; font-size: 18px; }
+  .head .back { margin-left: auto; text-decoration: none; color: var(--accent); font-weight: 600; font-size: 13px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 18px;
+    box-shadow: var(--shadow); padding: 18px 18px; display: flex; flex-direction: column; gap: 12px;
+  }
+  .card h2 { margin: 0; font-size: 15px; display: flex; align-items: center; gap: 7px; }
+  .hint { margin: 0; font-size: 13.5px; color: var(--text-dim); }
+  label { display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600; }
+  input {
+    font: inherit; font-size: 15px; font-weight: 400; padding: 11px 13px;
+    border: 1px solid var(--border); border-radius: 11px; background: var(--btn-bg); color: var(--text);
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .err { color: var(--danger); font-size: 13px; font-weight: 500; }
+  .btn {
+    appearance: none; border: 1px solid var(--accent-border); background: var(--accent-soft);
+    color: var(--accent); font: inherit; font-weight: 650; font-size: 15px; padding: 12px;
+    border-radius: 12px; cursor: pointer; align-self: flex-start;
+  }
+  .btn.ghost { background: var(--btn-bg); border-color: var(--border); color: var(--text); font-weight: 600; }
+  .note {
+    background: var(--ok-soft); border: 1px solid var(--ok-border); color: var(--ok);
+    border-radius: 12px; padding: 10px 14px; font-size: 14px; font-weight: 550;
+  }
+  .state { font-size: 13px; color: var(--text-dim); }
+</style>
+</head>
+<body>
+  <main class="app">
+    <div class="head">
+      <h1>👤 Настройки профиля</h1>
+      <a class="back" href="{{ link('/app') }}">← в меню</a>
+    </div>
+
+    {% if saved %}<div class="note">✅ {{ saved }}</div>{% endif %}
+
+    <form class="card" method="post" action="{{ link('/app/profile') }}" autocomplete="off">
+      <input type="hidden" name="action" value="save">
+      <h2>✏️ Данные игрока</h2>
+      <p class="hint">Имя видят организаторы в списке участников. Меняйте, если ошиблись
+         при регистрации.</p>
+      <label>
+        Имя
+        <input type="text" name="real_name" value="{{ values.real_name }}" placeholder="Ваше имя" maxlength="60">
+      </label>
+      {% if errors.real_name %}<div class="err">{{ errors.real_name }}</div>{% endif %}
+      {% for f in extra_fields %}
+      <label>
+        {{ f.question }}
+        <input type="text" name="extra_{{ f.i }}" value="{{ f.value }}" placeholder="Ваш ответ" maxlength="200">
+      </label>
+      {% if f.error %}<div class="err">{{ f.error }}</div>{% endif %}
+      {% endfor %}
+      <button type="submit" class="btn">💾 Сохранить</button>
+    </form>
+
+    <form class="card" method="post" action="{{ link('/app/profile') }}">
+      <input type="hidden" name="action" value="{{ 'unmute' if muted else 'mute' }}">
+      <h2>🔔 Уведомления</h2>
+      <p class="hint">Игровые уведомления (цель, поимки, объявления организаторов)
+         приходят в ваш чат. Можно временно отключить.</p>
+      <p class="state">Сейчас: {{ '🔕 отключены' if muted else '🔔 включены' }}</p>
+      <button type="submit" class="btn ghost">{{ '🔔 Включить уведомления' if muted else '🔕 Отключить уведомления' }}</button>
+    </form>
+
+    {% if is_admin %}
+    <form class="card" method="post" action="{{ link('/app/profile') }}">
+      <input type="hidden" name="action" value="{{ 'log_off' if admin_log_on else 'log_on' }}">
+      <h2>📋 Уведомления о событиях игры</h2>
+      <p class="hint">Как администратор, вы можете получать в свои сообщения уведомления
+         обо всех значимых событиях игры (регистрации, поимки, действия других админов).</p>
+      <p class="state">Сейчас: {{ '🔔 включены' if admin_log_on else '🔕 выключены' }}</p>
+      <button type="submit" class="btn ghost">{{ '🔕 Выключить' if admin_log_on else '🔔 Включить' }}</button>
+    </form>
+    {% endif %}
+  </main>
+</body>
+</html>
