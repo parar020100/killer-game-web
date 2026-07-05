@@ -80,6 +80,22 @@ class User:
         return [cls(r["id"]) for r in
                 query_all("SELECT id FROM user WHERE is_admin = 1 ORDER BY id")]
 
+    @classmethod
+    def non_players(cls):
+        return [cls(r["id"]) for r in
+                query_all("SELECT id FROM user WHERE is_player = 0 ORDER BY id")]
+
+    @classmethod
+    def alive_players(cls):
+        return [cls(r["id"]) for r in query_all(
+            "SELECT id FROM user WHERE is_player = 1 AND is_alive = 1 "
+            "ORDER BY game_order IS NULL, game_order, id")]
+
+    @classmethod
+    def dead_players(cls):
+        return [cls(r["id"]) for r in query_all(
+            "SELECT id FROM user WHERE is_player = 1 AND is_alive = 0 ORDER BY id")]
+
     # --- служебное чтение/запись ------------------------------------------
 
     def _get(self, field: str):

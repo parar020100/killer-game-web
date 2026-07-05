@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Рассылка · Киллер / Папарацци</title>
+<style>
+  :root {
+    --bg: #eaeef4; --surface: #ffffff; --btn-bg: #f4f6fa; --btn-bg-hover: #eaeef4;
+    --text: #171a21; --text-dim: #6a7280; --border: #e2e7ef;
+    --accent: #e23b4e; --accent-soft: rgba(226,59,78,.10); --accent-border: rgba(226,59,78,.28);
+    --ok: #2e9b57; --ok-soft: rgba(46,155,87,.12); --ok-border: rgba(46,155,87,.4);
+    --err: #d64550; --err-soft: rgba(214,69,80,.10); --err-border: rgba(214,69,80,.4);
+    --shadow: 0 6px 24px rgba(23,26,40,.10); --shadow-sm: 0 2px 6px rgba(23,26,40,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1116; --surface: #191d24; --btn-bg: #222831; --btn-bg-hover: #2a313b;
+      --text: #e9ecf1; --text-dim: #9aa4b2; --border: #2a313b;
+      --accent: #ff5069; --accent-soft: rgba(255,80,105,.14); --accent-border: rgba(255,80,105,.35);
+      --ok: #55c98a; --ok-soft: rgba(85,201,138,.14); --ok-border: rgba(85,201,138,.4);
+      --err: #ff6161; --err-soft: rgba(255,97,97,.12); --err-border: rgba(255,97,97,.45);
+      --shadow: 0 8px 30px rgba(0,0,0,.45); --shadow-sm: 0 2px 8px rgba(0,0,0,.35);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+                 "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+    line-height: 1.5; min-height: 100dvh; display: flex; justify-content: center;
+    padding: 18px 12px calc(18px + env(safe-area-inset-bottom));
+  }
+  .app { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 14px; }
+  .topbar { display: flex; align-items: center; gap: 12px; }
+  .logo {
+    width: 44px; height: 44px; flex: 0 0 44px; border-radius: 14px;
+    display: grid; place-items: center; font-size: 22px;
+    background: linear-gradient(135deg, var(--accent), #8a1f2b); box-shadow: var(--shadow-sm);
+  }
+  .titles { display: flex; flex-direction: column; }
+  .titles .name { font-weight: 700; font-size: 16px; }
+  .titles .sub { font-size: 13px; color: var(--text-dim); }
+  .back { margin-left: auto; text-decoration: none; color: var(--accent); font-weight: 600; font-size: 13px; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 18px;
+    box-shadow: var(--shadow); padding: 18px; display: flex; flex-direction: column; gap: 14px;
+  }
+  fieldset { border: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  legend { font-weight: 600; font-size: 14px; padding: 0 0 4px; }
+  .aud {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+    border: 1px solid var(--border); border-radius: 11px; background: var(--btn-bg); cursor: pointer;
+  }
+  .aud:hover { background: var(--btn-bg-hover); }
+  .aud input { accent-color: var(--accent); width: 17px; height: 17px; }
+  .aud .lbl { font-weight: 550; font-size: 14.5px; }
+  .aud .cnt { margin-left: auto; color: var(--text-dim); font-size: 13px; font-variant-numeric: tabular-nums; }
+  label.field { display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600; }
+  textarea {
+    font: inherit; font-size: 15px; font-weight: 400; padding: 11px 13px; min-height: 110px; resize: vertical;
+    border: 1px solid var(--border); border-radius: 11px; background: var(--btn-bg); color: var(--text);
+  }
+  textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .bad textarea { border-color: var(--err-border); background: var(--err-soft); }
+  .err { color: var(--err); font-size: 12.5px; font-weight: 500; }
+  .btn {
+    appearance: none; border: 1px solid var(--accent-border); background: var(--accent-soft);
+    color: var(--accent); font: inherit; font-weight: 650; font-size: 15px; padding: 13px;
+    border-radius: 12px; cursor: pointer; box-shadow: var(--shadow-sm);
+  }
+  .btn:hover { filter: brightness(1.03); }
+  .note {
+    background: var(--ok-soft); border: 1px solid var(--ok-border); color: var(--ok);
+    border-radius: 12px; padding: 11px 14px; font-size: 14px; font-weight: 550;
+  }
+</style>
+</head>
+<body>
+  <main class="app">
+    <div class="topbar">
+      <div class="logo">📢</div>
+      <div class="titles">
+        <span class="name">Рассылка</span>
+        <span class="sub">сообщение выбранной группе</span>
+      </div>
+      <a class="back" href="{{ link('/app?role=admin') }}">← в меню админа</a>
+    </div>
+
+    {% if result %}
+    <div class="note">✅ Отправлено группе «{{ result.label }}» — получателей: {{ result.count }}.</div>
+    {% endif %}
+
+    <form class="card" method="post" action="{{ link('/broadcast') }}">
+      <fieldset>
+        <legend>Кому отправить</legend>
+        {% for a in audiences %}
+        <label class="aud">
+          <input type="radio" name="audience" value="{{ a.key }}"
+                 {{ 'checked' if values.audience == a.key else '' }}>
+          <span class="lbl">{{ a.label }}</span>
+          <span class="cnt">{{ a.count }} чел.</span>
+        </label>
+        {% endfor %}
+        {% if errors.audience %}<span class="err">{{ errors.audience }}</span>{% endif %}
+      </fieldset>
+
+      <label class="field {{ 'bad' if errors.text else '' }}">
+        Текст сообщения
+        <textarea name="text" placeholder="Что сообщить игрокам?">{{ values.text or '' }}</textarea>
+        {% if errors.text %}<span class="err">{{ errors.text }}</span>{% endif %}
+      </label>
+
+      <button type="submit" class="btn">📨 Отправить</button>
+    </form>
+  </main>
+</body>
+</html>

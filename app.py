@@ -194,6 +194,7 @@ def admin_view(user: User):
         buttons.append(_btn("✅ Открыть регистрацию", "open_reg"))
 
     buttons.append(_btn("👥 Список пользователей", href="/app/users", full=True))
+    buttons.append(_btn("📢 Рассылка", href="/broadcast", full=True))
     buttons.append(_btn("📋 Журнал (admin log)", href="/admin-log", full=True))
     if has_rules():
         buttons.append(_btn("📜 Правила", href="/rules", full=True))
@@ -245,6 +246,18 @@ def _broadcast(text, players_only=True):
     users = User.all_players() if players_only else User.all()
     for u in users:
         u.notify(text)
+
+
+# Аудитории адресной рассылки (админ → выбранная группа).
+# ключ → (метка для UI, функция-выборка -> список User)
+BROADCAST_AUDIENCES = {
+    "all":         ("Все пользователи",       User.all),
+    "players":     ("Все игроки",             User.all_players),
+    "alive":       ("Живые игроки",           User.alive_players),
+    "dead":        ("Выбывшие игроки",        User.dead_players),
+    "non_players": ("Не в игре (зрители)",    User.non_players),
+    "admins":      ("Администраторы",         User.all_admins),
+}
 
 
 def do_join(user: User):
@@ -573,6 +586,67 @@ def act(request: Request, action: str = Form(...), role: str = Form("player")):
     apply_action(action, user)
     role = "admin" if role == "admin" and user.is_admin() else "player"
     return _redirect(request, f"/app?role={role}")
+
+
+# ---------------------------------------------------------------------------
+# Адресная рассылка (админ → выбранная группа людей)
+# ---------------------------------------------------------------------------
+
+def _audience_options():
+    return [{"key": k, "label": label, "count": len(fn())}
+            for k, (label, fn) in BROADCAST_AUDIENCES.items()]
+
+
+def _render_broadcast(request, values, errors, result=None):
+    return templates.TemplateResponse(
+        request, "broadcast.html",
+        _ctx(request, audiences=_audience_options(),
+             values=values, errors=errors, result=result),
+    )
+
+
+@app.get("/broadcast", response_class=HTMLResponse)
+def broadcast_form(request: Request):
+    user = current_user(request)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+    if not user.is_admin():
+        return _redirect(request, "/app")
+    return _render_broadcast(request, {"audience": "players", "text": ""}, {})
+
+
+@app.post("/broadcast", response_class=HTMLResponse)
+def broadcast_send(request: Request, audience: str = Form("players"),
+                   text: str = Form("")):
+    admin = current_user(request)
+    if admin is None:
+        return RedirectResponse(url="/", status_code=303)
+    if not admin.is_admin():
+        return _redirect(request, "/app")
+
+    values = {"audience": audience, "text": text}
+    errors = {}
+    body = text.strip()
+    if not body:
+        errors["text"] = "Введите текст сообщения."
+    if audience not in BROADCAST_AUDIENCES:
+        errors["audience"] = "Выберите группу получателей."
+    if errors:
+        return _render_broadcast(request, values, errors)
+
+    label, fetch = BROADCAST_AUDIENCES[audience]
+    recipients = fetch()
+    message = f"📢 Объявление от организаторов:\n{body}"
+    delivered = 0
+    for u in recipients:
+        u.notify(message)
+        delivered += 1
+
+    admin_log.log(f"📢 {admin.get_name()} разослал(а) сообщение группе "
+                  f"«{label}» ({delivered} чел.):\n{body}")
+    result = {"label": label, "count": delivered}
+    # После отправки очищаем текст, аудиторию оставляем.
+    return _render_broadcast(request, {"audience": audience, "text": ""}, {}, result)
 
 
 # ---------------------------------------------------------------------------
