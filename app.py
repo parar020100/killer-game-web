@@ -1,19 +1,23 @@
-"""Веб-версия игры «Убийца / Папарацци» — стартовый каркас (FastAPI + Jinja2).
+"""Веб-версия игры «Киллер / Папарацци» — каркас (FastAPI + Jinja2).
 
-Пока это динамический макет главного экрана: Python формирует текст статуса и набор
-кнопок (как в исходном боте) и отдаёт их в шаблон. Данные захардкожены — БД и реальная
-логика подключатся на следующих шагах (см. план в web_version/README.md).
+Шаг: состояние игры и регистрация игроков хранятся в **SQLite** (см. db.py, core/).
+Входа по аккаунту пока нет — вместо него DEV-режим: текущий пользователь выбирается
+параметром `?as=<N>` в адресе (по умолчанию 1). Каждое N — отдельный тестовый игрок,
+поэтому в разных вкладках можно открыть разных пользователей (`?as=1`, `?as=2`, ...).
 
-Запуск:
-    cd web_version
-    uvicorn app:app --reload
-    # затем открыть http://127.0.0.1:8000
+Кнопки — обычные HTML-формы (POST → изменение состояния → редирект), без JavaScript.
+
+Запуск:  ./start.sh   (см. README.md)
 """
 from pathlib import Path
 
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Request, Form, Query
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+
+import db  # noqa: F401 — импорт инициализирует БД
+from core.game import Game
+from core.user import User
 
 BASE_DIR = Path(__file__).parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -23,82 +27,132 @@ app = FastAPI(title="Killer / Paparazzi — web")
 SUPPORT_CONTACT = "@parar020100"
 
 
-def _btn(label, kind="", full=False):
-    """Кнопка нейтрального вида: kind ∈ {'', 'primary', 'danger'}, full — во всю ширину."""
-    return {"label": label, "kind": kind, "full": full}
+# ---------------------------------------------------------------------------
+# DEV: текущий пользователь по ?as=<N> (заменится входом по ссылке)
+# ---------------------------------------------------------------------------
+
+def dev_current_user(as_id: str) -> User:
+    """Берёт/создаёт тестового пользователя с tg_id = N (N из ?as=)."""
+    try:
+        tg = int(as_id)
+    except (TypeError, ValueError):
+        tg = 1
+    return User.get_or_create_by_tg(tg, username=f"test{tg}", name=f"Тест {tg}")
 
 
-def player_view():
-    """Экран игрока: игра идёт, игрок жив (как в user_commands_inline_keyboard исходника)."""
-    message = "\n".join([
-        '<span class="hi">Привет, Артём!</span>',
+# ---------------------------------------------------------------------------
+# Кнопки и экраны
+# ---------------------------------------------------------------------------
+
+def _btn(label, action=None, kind="", full=False):
+    return {"label": label, "action": action, "kind": kind, "full": full}
+
+
+def player_view(user: User):
+    game = Game()
+    lines = [
+        f'<span class="hi">Привет, {user.get_name()}!</span>',
         "📷 Добро пожаловать в игру Папарацци!",
         "",
         '<span class="divider">══ 📋 Статус игры ══</span>',
-        "🟢 Игра <strong><em>запущена</em></strong>",
-        "💚 <em>Вы участвуете в игре</em>",
-        "🧮 <em>Вы поймали <strong>3</strong> человек</em>",
-        "👥 Игроков: <strong>12</strong> (живы: <strong>7</strong>)",
-    ])
-    buttons = [
-        _btn("🎯 Узнать цель", "primary"),
-        _btn("📸 Сообщить о поимке", "primary"),
-        _btn("📜 Правила"),
-        _btn("👤 Изменить профиль"),
-        _btn("🔴 Выйти из игры", "danger"),
-        _btn("🤫 Секрет бота"),
-        _btn("⛔ Отключить бота", "danger", full=True),
-        _btn("🔄 Обновить", full=True),
+        game.status_html(),
     ]
-    return message, buttons
+    if user.is_player():
+        lines.append("✅ <em>Вы зарегистрированы в игре</em>")
+    else:
+        lines.append("❌ <em>Вы пока не участвуете в игре</em>")
+    lines.append(f"👥 Игроков: <strong>{game.count_players()}</strong>")
+
+    buttons = []
+    if user.is_player():
+        buttons.append(_btn("🔴 Выйти из игры", "leave", "danger", full=True))
+    elif game.is_registration_open():
+        buttons.append(_btn("🟢 Зарегистрироваться", "join", "primary", full=True))
+
+    buttons.append(_btn("🔄 Обновить", "noop", full=True))
+    return "\n".join(lines), buttons
 
 
-def admin_view():
-    """Экран админа: игра на паузе (как в admin_commands_inline_keyboard исходника)."""
+def admin_view(user: User):
+    game = Game()
     message = "\n".join([
-        '<span class="hi">Привет, Артём!</span>',
-        "📷 Ты — администратор игры. Добро пожаловать!",
+        f'<span class="hi">Привет, {user.get_name()}!</span>',
+        "📷 Ты — администратор игры.",
         "",
         '<span class="divider">══ 📋 Статус игры ══</span>',
-        "⏸️ Игра <strong><em>приостановлена</em></strong>",
-        "🟡 <strong><em>Разрешена регистрация</em></strong> на игру",
-        "👥 Игроков: <strong>12</strong> (живы: <strong>7</strong>)",
+        game.status_html(),
+        f"👥 Игроков: <strong>{game.count_players()}</strong> "
+        f"(живы: <strong>{game.count_alive()}</strong>)",
     ])
-    buttons = [
-        _btn("👤 Открыть меню игрока", full=True),
-        _btn("▶️ Возобновить", "primary"),
-        _btn("✅ Открыть регистрацию"),
-        _btn("↩️ Сброс игры", "danger"),
-        _btn("⏹️ Закончить игру"),
-        _btn("👥 Пользователи"),
-        _btn("🪪 Профиль игрока"),
-        _btn("🏆 Результаты"),
-        _btn("🚫 Выкл-ть ADMIN LOG"),
-        _btn("🔑 Настроить пароль"),
-        _btn("📄 Лог"),
-        _btn("🔁 Перезагрузить бота"),
-        _btn("🛑 Остановить бота", "danger"),
-        _btn("💣 Полный сброс бота", "danger", full=True),
-        _btn("🔄 Обновить", full=True),
-    ]
+
+    buttons = []
+    if game.is_started():
+        buttons.append(_btn("⏹️ Остановить игру", "stop_game", "danger"))
+    else:
+        buttons.append(_btn("▶️ Запустить игру", "start_game", "primary"))
+    if game.is_registration_open():
+        buttons.append(_btn("🚫 Закрыть регистрацию", "close_reg"))
+    else:
+        buttons.append(_btn("✅ Открыть регистрацию", "open_reg"))
+
+    buttons.append(_btn("🔄 Обновить", "noop", full=True))
     return message, buttons
 
 
+# ---------------------------------------------------------------------------
+# Действия кнопок
+# ---------------------------------------------------------------------------
+
+def apply_action(action: str, user: User):
+    game = Game()
+    if action == "open_reg":
+        game.open_registration()
+    elif action == "close_reg":
+        game.close_registration()
+    elif action == "start_game":
+        game.start()
+    elif action == "stop_game":
+        game.stop()
+    elif action == "join":
+        if game.is_registration_open() and not user.is_player():
+            user.join(alive=not game.is_started())
+    elif action == "leave":
+        if user.is_player():
+            user.leave()
+    # "noop" / незнакомое — просто перерисовать
+
+
+# ---------------------------------------------------------------------------
+# Маршруты
+# ---------------------------------------------------------------------------
+
 @app.get("/", response_class=HTMLResponse)
-def index(request: Request, role: str = "player"):
+def index(request: Request, role: str = "player", as_id: str = Query("1", alias="as")):
+    user = dev_current_user(as_id)
     if role == "admin":
-        message, buttons = admin_view()
+        message, buttons = admin_view(user)
     else:
         role = "player"
-        message, buttons = player_view()
+        message, buttons = player_view(user)
 
     return templates.TemplateResponse(
         request,
         "index.html",
         {
             "role": role,
+            "as_id": as_id,
+            "user_id": user.id,
             "message_html": message,
             "buttons": buttons,
             "support_contact": SUPPORT_CONTACT,
         },
     )
+
+
+@app.post("/act")
+def act(action: str = Form(...), role: str = Form("player"), as_id: str = Form("1", alias="as")):
+    """Применить действие текущего пользователя и вернуться (Post/Redirect/Get)."""
+    user = dev_current_user(as_id)
+    apply_action(action, user)
+    role = "admin" if role == "admin" else "player"
+    return RedirectResponse(url=f"/?role={role}&as={as_id}", status_code=303)
