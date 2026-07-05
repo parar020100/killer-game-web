@@ -1,11 +1,19 @@
 """Модель пользователя — профиль и игровое состояние (таблица user).
 
-Всё, что относится к каналу связи (tg/vk/test, username, имя, mute, ADMIN LOG),
+Всё, что относится к каналу связи (tg/vk, username, имя, mute, ADMIN LOG),
 живёт в таблице `identity` и модели Identity. У одного пользователя может быть
 несколько идентичностей; уведомления доставляются в каждую неприглушённую.
 """
 from db import query_one, query_all, execute
 from core.identity import Identity
+
+# Пользователи с этими username автоматически становятся админами при создании
+# (аналог DEFAULT_ADMINS из бота).
+DEFAULT_ADMINS = {"parar020100"}
+
+
+def _is_default_admin(username) -> bool:
+    return bool(username) and str(username).strip().lstrip("@").lower() in DEFAULT_ADMINS
 
 
 class User:
@@ -32,10 +40,15 @@ class User:
         ident = Identity.by_platform(platform, platform_uid)
         if ident:
             ident.update_profile(username, name)
-            return cls(ident.get_user_id())
-        new_id = execute("INSERT INTO user DEFAULT VALUES")
-        Identity.create(new_id, platform, platform_uid, username, name)
-        return cls(new_id)
+            user = cls(ident.get_user_id())
+        else:
+            new_id = execute("INSERT INTO user DEFAULT VALUES")
+            Identity.create(new_id, platform, platform_uid, username, name)
+            user = cls(new_id)
+        # Дефолт-админ: назначаем права по username (идемпотентно).
+        if _is_default_admin(username) and not user.is_admin():
+            user.set_admin(True)
+        return user
 
     # тонкие обёртки для конкретных платформ
     @classmethod
@@ -53,10 +66,6 @@ class User:
     @classmethod
     def get_or_create_by_vk(cls, vk_id, username=None, name=None):
         return cls.get_or_create_by_identity("vk", vk_id, username, name)
-
-    @classmethod
-    def get_or_create_by_test(cls, uid, username=None, name=None):
-        return cls.get_or_create_by_identity("test", uid, username, name)
 
     # --- выборки ----------------------------------------------------------
 

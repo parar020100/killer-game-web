@@ -1,20 +1,16 @@
 """Модель идентичности — привязка профиля (user) к каналу связи.
 
-Одна строка таблицы `identity` = один канал: Telegram, VK или тестовый.
+Одна строка таблицы `identity` = один канал: Telegram или VK.
 Идентичность знает, как **доставить** себе сообщение (deliver):
-  * tg / vk — пока заглушка (реальные боты подключим позже);
-  * test    — пишет во «входящие» в текстовый файл (см. core/inbox.py),
-              которые показываются на веб-странице /inbox/<uid>.
-
-Именно тестовая платформа позволяет проверять рассылки и уведомления, не заводя
-десяток реальных аккаунтов Telegram/VK.
+  * tg — пока эмулируется страницей чата (пишет в core/chat.py);
+  * vk — заглушка (реальные боты подключим позже).
 """
 from db import query_one, query_all, execute
 
-PLATFORMS = ("tg", "vk", "test")
+PLATFORMS = ("tg", "vk")
 
-PLATFORM_LABEL = {"tg": "Telegram", "vk": "VK", "test": "Тест"}
-PLATFORM_ICON = {"tg": "✈️", "vk": "🅥", "test": "🧪"}
+PLATFORM_LABEL = {"tg": "Telegram", "vk": "VK"}
+PLATFORM_ICON = {"tg": "✈️", "vk": "🅥"}
 
 
 class Identity:
@@ -103,9 +99,6 @@ class Identity:
             # Пока Telegram эмулируется страницей чата (core/chat.py).
             from core.chat import add_bot_message
             add_bot_message(self.get_platform_uid(), text)
-        elif platform == "test":
-            from core.inbox import deliver_test
-            deliver_test(self.get_platform_uid(), text)
         else:
             # Реальные боты (vk и т.п.) подключим на шаге уведомлений.
             print(f"[notify:{platform}] -> {self.get_platform_uid()}: {text}")

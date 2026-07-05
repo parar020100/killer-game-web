@@ -6,12 +6,10 @@
 **каналу связи** (идентификатор в платформе, username, имя, mute, доставка
 ADMIN LOG), вынесено из таблицы `user` в отдельную таблицу `identity`. Один
 профиль (`user`) может иметь несколько идентичностей — например Telegram и VK
-одновременно, — а также специальную тестовую идентичность (platform='test'),
-которая не требует реального аккаунта: её «входящие» пишутся в текстовый файл
-(см. core/inbox.py) и показываются на отдельной веб-странице.
+одновременно.
 
   user      — профиль и игровое состояние (общее для человека)
-  identity  — привязка к каналу связи: tg / vk / test  (0..N на пользователя)
+  identity  — привязка к каналу связи: tg / vk  (0..N на пользователя)
 
 Соответствие полей боту:
   tg_user_id (PK)   → user.id  +  identity(platform='tg', platform_uid=tg_id)
@@ -107,8 +105,8 @@ def init_db():
     """)
 
     # Идентичности — привязки профиля к каналам связи.
-    #   platform     : 'tg' | 'vk' | 'test'
-    #   platform_uid : id пользователя в платформе (для test — произвольная метка)
+    #   platform     : 'tg' | 'vk'
+    #   platform_uid : id/username пользователя в платформе
     #   muted             : не слать игровые уведомления в этот канал
     #   admin_log_enabled : слать ADMIN LOG в этот канал (если пользователь админ)
     cur.execute("""
@@ -193,11 +191,10 @@ def drop_db():
         p = Path(str(DB_PATH) + suffix)
         if p.exists():
             p.unlink()
-    for sub in ("inboxes", "chats"):
-        d = DATA_DIR / sub
-        if d.exists():
-            for f in d.glob("*.txt"):
-                f.unlink()
+    chats_dir = DATA_DIR / "chats"
+    if chats_dir.exists():
+        for f in chats_dir.glob("*.txt"):
+            f.unlink()
     admin_log = DATA_DIR / "admin_log.txt"
     if admin_log.exists():
         admin_log.unlink()
