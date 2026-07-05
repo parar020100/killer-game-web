@@ -134,22 +134,10 @@ def init_db():
     );
     """)
 
-    # Одноразовые токены для входа по «магической ссылке» из бота.
-    # (таблица готова заранее; сам вход подключим на шаге авторизации)
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS login_token (
-        token      TEXT PRIMARY KEY,
-        user_id    INTEGER NOT NULL REFERENCES user(id) ON DELETE CASCADE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        expires_at TIMESTAMP NOT NULL,
-        used_at    TIMESTAMP
-    );
-    """)
-
     # Постоянная (переиспользуемая) ссылка входа — по одной на КАНАЛ (identity),
     # т.к. у пользователя может быть и Telegram, и VK, каждый со своей ссылкой.
-    # Хранится только SHA-256-хеш токена; перевыпуск заменяет строку (старая ссылка
-    # перестаёт работать). В отличие от login_token, не имеет срока и не «сгорает».
+    # Работает всегда, без срока; хранится только SHA-256-хеш токена; перевыпуск
+    # заменяет строку (старая ссылка перестаёт работать).
     cur.execute("""
     CREATE TABLE IF NOT EXISTS persistent_login (
         identity_id INTEGER PRIMARY KEY REFERENCES identity(id) ON DELETE CASCADE,
