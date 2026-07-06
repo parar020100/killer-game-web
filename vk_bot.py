@@ -92,13 +92,37 @@ def _get_long_poll_server(group_id):
     return r["server"], r["key"], r["ts"]
 
 
+def _resolve_group_id(configured: str) -> str:
+    """Числовой id сообщества. Если задано короткое имя (screen_name) или пусто —
+    берём id из самого токена сообщества (groups.getById)."""
+    configured = (configured or "").strip()
+    if configured.isdigit():
+        return configured
+    grp = _api("groups.getById")["groups"][0]
+    gid = str(grp["id"])
+    log.info("VK_GROUP_ID=%r → числовой id сообщества %s (%s)",
+             configured, gid, grp.get("screen_name"))
+    return gid
+
+
 def main():
     token = (config.VK_GROUP_TOKEN or "").strip()
-    group_id = (str(config.VK_GROUP_ID) or "").strip()
-    if not token or not group_id:
-        raise SystemExit("VK_GROUP_TOKEN / VK_GROUP_ID не заданы в config.py — VK-бот не запущен.")
+    if not token:
+        raise SystemExit("VK_GROUP_TOKEN не задан в config.py — VK-бот не запущен.")
+    group_id = _resolve_group_id(str(config.VK_GROUP_ID))
 
-    server, key, ts = _get_long_poll_server(group_id)
+    try:
+        server, key, ts = _get_long_poll_server(group_id)
+    except RuntimeError as exc:
+        if "longpoll" in str(exc).lower():
+            raise SystemExit(
+                "❌ В сообществе не включён Bots Long Poll API.\n"
+                "Включите его: Управление сообществом → Работа с API → Long Poll API →\n"
+                "  • включить Long Poll API, версия " + config.VK_API_VERSION + ";\n"
+                "  • вкладка «Типы событий» → включить «Входящее сообщение» (message_new).\n"
+                "Также: Управление → Сообщения → включить «Сообщения сообщества».\n"
+                "Подробно — в SETUP.md, раздел 5.") from exc
+        raise
     log.info("VK-бот запущен (long poll). Ctrl+C для остановки.")
     while True:
         try:
