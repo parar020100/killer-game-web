@@ -596,10 +596,10 @@ def admin_management_buttons(user: User):
                   disabled=not paused, note=end_note,
                   confirm="Сбросить игру? Все игроки будут сняты с игры."))
 
-    # Инструменты.
+    # Инструменты. (Кнопка «Журнал» убрана — тот же журнал (admin_log) доступен
+    # переключателем «Показать лог игры» и на странице /admin-log из настроек.)
     b.append(_btn("📢 Рассылка", href="/broadcast"))
     b.append(_btn("⚙️ Настройки игры", href="/app/settings"))
-    b.append(_btn("📋 Журнал", href="/admin-log"))
     b.append(_btn("🧪 Тестовые пользователи", popover="testusers"))
     return b
 
