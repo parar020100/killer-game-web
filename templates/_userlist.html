@@ -127,6 +127,7 @@
           </form>
         </div>
       </details>
+      {% if u.is_local and u.username %}<a class="btn chip" href="/chat/{{ u.username }}" target="_blank" rel="noopener" title="эмуляция чата с этим пользователем (только для админа)">🐛 Дебаг-чат</a>{% endif %}
       {% if allow_dev %}<a class="btn chip" href="/app?user={{ u.id }}" target="_blank" rel="noopener">🕶 Меню от имени игрока</a>{% endif %}
     </div>
   </details>

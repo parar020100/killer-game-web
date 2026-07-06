@@ -519,6 +519,8 @@ def admin_management_buttons(user: User):
     b.append(_btn("📢 Рассылка", href="/broadcast"))
     b.append(_btn("⚙️ Настройки игры", href="/app/settings"))
     b.append(_btn("📋 Журнал", href="/admin-log"))
+    b.append(_btn("🧪 Тестовые игроки", "make_test_users",
+                  confirm="Создать 5 тестовых игроков (веб-чат)?"))
     return b
 
 
@@ -597,6 +599,8 @@ def user_row(user: User, game: Game) -> dict:
         "tg_name": _tg_name(user),
         "accounts": _account_list(user),  # привязанные профили (tg/vk)
         "is_player": user.is_player(),
+        # есть ли веб-чат ('local') — тогда доступен дебаг-чат (эмуляция) для админа
+        "is_local": any(i.get_platform() == "local" for i in user.identities()),
     }
 
 
@@ -608,6 +612,30 @@ def _broadcast(text, players_only=True):
     users = User.all_players() if players_only else User.all()
     for u in users:
         u.notify(text)
+
+
+# Тестовые игроки: создаются админом одной кнопкой (канал 'local' = веб-чат).
+_TEST_FIRST = ["Тест", "Гость", "Демо", "Проба", "Игрок", "Бот", "Робот", "Аноним"]
+_TEST_LAST = ["Тестов", "Пробин", "Демидов", "Гостев", "Ботов", "Мокин", "Фейков"]
+
+
+def _create_test_users(n: int = 5) -> int:
+    """Создать n тестовых игроков (веб-чат) со случайными именами. Возвращает число."""
+    import random
+    existing = {u.get_username() for u in User.all()}
+    created, i = 0, 1
+    while created < n and i < 10000:
+        un = f"test{i:03d}"
+        i += 1
+        if un in existing:
+            continue
+        name = f"{random.choice(_TEST_FIRST)} {random.choice(_TEST_LAST)}"
+        u = User.get_or_create_by_local(un, username=un, name=name)
+        u.set_real_name(name)
+        if not u.is_player():
+            u.join()
+        created += 1
+    return created
 
 
 # Аудитории адресной рассылки (админ → выбранная группа).
@@ -734,6 +762,10 @@ def apply_action(action: str, user: User):
                 game.reassign_targets()
                 if game.check_finished():
                     game.announce_winner()
+    elif action == "make_test_users":
+        if user.is_admin():
+            n = _create_test_users(5)
+            admin_log.log(f"🧪 {who} создал(а) {n} тестовых игроков (веб-чат)")
     elif action == "report_capture":
         user.attempt_capture()
     elif action == "cancel_capture":
@@ -1120,31 +1152,35 @@ async def settings_save(request: Request):
 
 
 def _profile_accounts(user: User):
-    """Привязанные каналы пользователя для страницы профиля (с id для отвязки)."""
-    idents = user.identities()
+    """Привязанные каналы пользователя для страницы профиля (id, платформа, mute)."""
     from core.identity import PLATFORM_ICON, PLATFORM_LABEL
     out = []
-    for i in idents:
+    for i in user.identities():
         pl = i.get_platform()
         handle = i.get_username() or i.get_name() or i.get_platform_uid()
-        out.append({"id": i.id, "icon": PLATFORM_ICON.get(pl, "•"),
-                    "platform": PLATFORM_LABEL.get(pl, pl), "handle": handle})
+        out.append({"id": i.id, "key": pl, "icon": PLATFORM_ICON.get(pl, "•"),
+                    "platform": PLATFORM_LABEL.get(pl, pl), "handle": handle,
+                    "muted": i.is_muted()})
     return out
 
 
-def _render_profile(request, user, values, errors, saved, answers, link_code=""):
+def _render_profile(request, user, values, errors, saved, answers,
+                    link_code="", link_platform=""):
     """Отрисовать страницу профиля. answers — dict {метка: значение} для полей."""
-    muted = bool(user.identities()) and all(i.is_muted() for i in user.identities())
     # Доп. вопросы показываем только участникам игры (как в боте, d_edit.py).
     fields = _extra_fields(answers, errors) if user.is_player() else []
     accounts = _profile_accounts(user)
+    present = {a["key"] for a in accounts}
     return templates.TemplateResponse(
         request, "profile.html",
         _ctx(request, values=values, errors=errors, saved=saved,
-             extra_fields=fields, muted=muted,
+             extra_fields=fields,
              is_admin=user.is_admin(), admin_log_on=_admin_log_enabled(user),
              is_root=user.is_root(),
-             accounts=accounts, can_unlink=len(accounts) >= 2, link_code=link_code),
+             accounts=accounts, can_unlink=len(accounts) >= 2,
+             has_tg="tg" in present, has_vk="vk" in present,
+             tg_url=tg_bot_url(), vk_url=vk_bot_url(),
+             link_code=link_code, link_platform=link_platform),
     )
 
 
@@ -1186,16 +1222,20 @@ async def profile_save(request: Request):
         request.session.clear()
         return RedirectResponse(url="/", status_code=303)
 
-    # Привязка второго канала (tg↔vk): выдать одноразовый код для команды /link.
+    # Привязка ещё одного канала: выдать одноразовый код для команды /link боту.
+    # platform (tg/vk) — чтобы показать ссылку именно на нужного бота.
     if action == "link_code":
         from core import linking
         code = linking.create_code(user.id)
+        platform = (form.get("platform") or "").strip()
         values = {"real_name": user.get_real_name() or ""}
         return _render_profile(request, user, values, {},
                                "Код привязки создан — отправьте его боту.",
-                               get_extra_answers(user), link_code=code)
+                               get_extra_answers(user), link_code=code,
+                               link_platform=platform)
 
-    # Отвязать канал в отдельный аккаунт (разъединение). Только если каналов ≥2.
+    # Отвязать канал в отдельный аккаунт (разъединение). Только если каналов ≥2
+    # (хотя бы один канал всегда должен остаться привязан).
     if action == "unlink":
         from core import linking
         from core.identity import Identity
@@ -1205,22 +1245,30 @@ async def profile_save(request: Request):
             iid = 0
         ident = Identity.by_id(iid)
         saved = "Не удалось отвязать канал."
-        if (ident and ident.get_user_id() == user.id
-                and len(user.identities()) >= 2):
+        if ident is None or ident.get_user_id() != user.id:
+            saved = "Такого канала у вас нет."
+        elif len(user.identities()) < 2:
+            saved = "Нельзя отвязать единственный канал — хотя бы один должен остаться."
+        else:
             linking.unlink_identity(ident)
             admin_log.log(f"🔗 {user.get_name()} отвязал(а) канал в отдельный аккаунт")
             saved = "Канал отвязан в отдельный аккаунт."
         values = {"real_name": user.get_real_name() or ""}
         return _render_profile(request, user, values, {}, saved, get_extra_answers(user))
 
-    # Переключатель уведомлений («Отключить бота» из меню игрока в боте).
-    if action in ("mute", "unmute"):
-        for ident in user.identities():
-            ident.set_muted(action == "mute")
-        admin_log.log(f"🔕 {user.get_name()} "
-                      + ("отключил(а)" if action == "mute" else "включил(а)")
-                      + " уведомления")
-        saved = "Уведомления отключены." if action == "mute" else "Уведомления включены."
+    # Уведомления по КОНКРЕТНОМУ каналу (вкл/выкл mute у одной identity).
+    if action in ("mute_ident", "unmute_ident"):
+        from core.identity import Identity
+        try:
+            iid = int(form.get("identity_id") or 0)
+        except (ValueError, TypeError):
+            iid = 0
+        ident = Identity.by_id(iid)
+        saved = "Канал не найден."
+        if ident and ident.get_user_id() == user.id:
+            ident.set_muted(action == "mute_ident")
+            saved = ("Уведомления для канала отключены." if action == "mute_ident"
+                     else "Уведомления для канала включены.")
         values = {"real_name": user.get_real_name() or ""}
         return _render_profile(request, user, values, {}, saved, get_extra_answers(user))
 

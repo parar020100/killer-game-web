@@ -66,9 +66,13 @@
   code { background: var(--btn-bg); border: 1px solid var(--border); border-radius: 5px; padding: 0 5px; font-size: 12.5px; }
   .btn.tiny { font-size: 12px; padding: 5px 10px; align-self: center; }
   .accounts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
-  .accounts li { display: flex; align-items: center; gap: 10px; font-size: 13.5px; }
+  .accounts li { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; font-size: 13.5px; }
   .accounts .acc { flex: 1 1 auto; min-width: 0; word-break: break-word; }
   .accounts form { margin: 0; }
+  .linkbox { display: flex; flex-direction: column; gap: 8px; }
+  .linkbox .btn { align-self: flex-start; }
+  .linkrow { display: flex; gap: 8px; flex-wrap: wrap; }
+  .linkrow form { margin: 0; }
   .code-box {
     font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     font-size: 22px; font-weight: 700; letter-spacing: 3px; text-align: center;
@@ -112,15 +116,6 @@
       <button type="submit" class="btn">💾 Сохранить</button>
     </form>
 
-    <form class="card" method="post" action="{{ link('/app/profile') }}">
-      <input type="hidden" name="action" value="{{ 'unmute' if muted else 'mute' }}">
-      <h2>🔔 Уведомления</h2>
-      <p class="hint">Игровые уведомления (цель, поимки, объявления организаторов)
-         приходят в ваш чат. Можно временно отключить.</p>
-      <p class="state">Сейчас: {{ '🔕 отключены' if muted else '🔔 включены' }}</p>
-      <button type="submit" class="btn ghost">{{ '🔔 Включить уведомления' if muted else '🔕 Отключить уведомления' }}</button>
-    </form>
-
     {% if is_admin %}
     <form class="card" method="post" action="{{ link('/app/profile') }}">
       <input type="hidden" name="action" value="{{ 'log_off' if admin_log_on else 'log_on' }}">
@@ -133,14 +128,21 @@
     {% endif %}
 
     <div class="card">
-      <h2>🔗 Привязка аккаунтов (Telegram / VK)</h2>
-      <p class="hint">Можно объединить Telegram и VK под одним аккаунтом (уведомления
-         придут в оба канала, вход — с любого) или держать их раздельно.</p>
+      <h2>🔗 Каналы связи (Telegram / VK)</h2>
+      <p class="hint">Уведомления приходят в привязанные каналы; вход возможен с любого.
+         Для каждого канала можно включить/выключить уведомления. Отвязать можно любой
+         (кроме единственного — хотя бы один должен остаться).</p>
+
       {% if accounts %}
       <ul class="accounts">
         {% for a in accounts %}
         <li>
           <span class="acc">{{ a.icon }} {{ a.platform }}: <strong>{{ a.handle }}</strong></span>
+          <form method="post" action="{{ link('/app/profile') }}">
+            <input type="hidden" name="action" value="{{ 'unmute_ident' if a.muted else 'mute_ident' }}">
+            <input type="hidden" name="identity_id" value="{{ a.id }}">
+            <button type="submit" class="btn ghost tiny" title="уведомления в этот канал">{{ '🔕 выкл' if a.muted else '🔔 вкл' }}</button>
+          </form>
           {% if can_unlink %}
           <form method="post" action="{{ link('/app/profile') }}"
                 onsubmit="return confirm('Отвязать этот канал в отдельный аккаунт? Он перестанет быть связан с остальными.')">
@@ -153,15 +155,37 @@
         {% endfor %}
       </ul>
       {% endif %}
+
       {% if link_code %}
-      <p class="hint">Ваш код привязки — отправьте его боту <strong>другой</strong>
-         платформы командой <code>/link {{ link_code }}</code>:</p>
-      <p class="code-box">{{ link_code }}</p>
+      <div class="linkbox">
+        <p class="hint">Отправьте этот код боту
+          {% if link_platform == 'tg' %}<b>Telegram</b>{% elif link_platform == 'vk' %}<b>VK</b>{% else %}<b>нужной платформы</b>{% endif %}
+          командой <code>/link {{ link_code }}</code>:</p>
+        <p class="code-box">{{ link_code }}</p>
+        {% if link_platform == 'tg' and tg_url %}
+        <a class="btn ghost" href="{{ tg_url }}" target="_blank" rel="noopener">✈️ Открыть Telegram-бота</a>
+        {% elif link_platform == 'vk' and vk_url %}
+        <a class="btn ghost" href="{{ vk_url }}" target="_blank" rel="noopener">🅥 Открыть VK-бота</a>
+        {% endif %}
+      </div>
       {% endif %}
-      <form method="post" action="{{ link('/app/profile') }}">
-        <input type="hidden" name="action" value="link_code">
-        <button type="submit" class="btn ghost">🔗 Получить код привязки</button>
-      </form>
+
+      <div class="linkrow">
+        {% if not has_tg %}
+        <form method="post" action="{{ link('/app/profile') }}">
+          <input type="hidden" name="action" value="link_code">
+          <input type="hidden" name="platform" value="tg">
+          <button type="submit" class="btn ghost">✈️ Привязать Telegram</button>
+        </form>
+        {% endif %}
+        {% if not has_vk %}
+        <form method="post" action="{{ link('/app/profile') }}">
+          <input type="hidden" name="action" value="link_code">
+          <input type="hidden" name="platform" value="vk">
+          <button type="submit" class="btn ghost">🅥 Привязать VK</button>
+        </form>
+        {% endif %}
+      </div>
     </div>
 
     <form class="card danger" method="post" action="{{ link('/app/profile') }}"
