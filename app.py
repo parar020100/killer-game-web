@@ -598,9 +598,10 @@ def admin_management_buttons(user: User):
 
     # Инструменты. (Кнопка «Журнал» убрана — тот же журнал (admin_log) доступен
     # переключателем «Показать лог игры» и на странице /admin-log из настроек.)
+    # «Тестовые пользователи» — компактная кнопка слева от «Настройки игры» (п.64).
     b.append(_btn("📢 Рассылка", href="/broadcast"))
-    b.append(_btn("⚙️ Настройки игры", href="/app/settings"))
     b.append(_btn("🧪 Тестовые пользователи", popover="testusers"))
+    b.append(_btn("⚙️ Настройки игры", href="/app/settings"))
     return b
 
 

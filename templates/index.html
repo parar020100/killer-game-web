@@ -430,9 +430,10 @@
   }
   .mini-body.msg textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-  /* «окошко» тестовых пользователей в меню админа (кнопка на всю ширину строки) */
-  .keyboard .mini.pop-full { grid-column: 1 / -1; position: relative; }
-  .keyboard .mini.pop-full > summary { width: 100%; }
+  /* «окошко» тестовых пользователей — компактная кнопка в пол-строки (п.64):
+     занимает одну ячейку сетки; тело-форма всплывает поверх (position:absolute). */
+  .keyboard .mini.testpop { grid-column: auto; position: relative; }
+  .keyboard .mini.testpop > summary { width: 100%; }
   .mini-body.testmenu { width: 320px; max-width: calc(100vw - 28px); }
   .mini-body.testmenu form { flex-direction: column; align-items: stretch; gap: 6px; }
   .mini-body.testmenu form + form { border-top: 1px dashed var(--border); padding-top: 8px; }
@@ -503,7 +504,7 @@
           <button type="button" class="btn gl-toggle{% if b.full %} full{% endif %}" data-toggle="gamelog"
                   data-on="🙈 Скрыть лог игры" data-off="📋 Показать лог игры">{{ '🙈 Скрыть лог игры' if show_gamelog else '📋 Показать лог игры' }}</button>
           {% elif b.popover == 'testusers' %}
-          <details class="mini pop-full" data-keep="testusers">
+          <details class="mini testpop" data-keep="testusers">
             <summary class="btn">{{ b.label }}</summary>
             <div class="mini-body testmenu">
               <form method="post" action="{{ link('/act') }}">
