@@ -1153,6 +1153,24 @@ def open_as_user(request: Request, uid: int):
     return RedirectResponse(url=f"/login?token={token}", status_code=303)
 
 
+@app.get("/app/users/{uid}/photo")
+def capture_photo(request: Request, uid: int):
+    """Показать фото-пруф поимки, снятое этим игроком (охотником). Только админу.
+
+    Отдаёт самый свежий файл из data/photos/ для указанного пользователя. Кнопка
+    ведёт сюда из строки-заявки и из карточки устранённого игрока (по его «убийце»).
+    """
+    user = current_user(request)
+    if user is None or not user.is_admin():
+        return RedirectResponse(url="/app", status_code=303)
+    target = User.by_id(uid)
+    path = _latest_capture_photo(target) if target else None
+    if path is None or not path.exists():
+        return HTMLResponse("<h3>Фото поимки не найдено.</h3>", status_code=404)
+    from starlette.responses import FileResponse
+    return FileResponse(str(path))
+
+
 @app.get("/app/results", response_class=HTMLResponse)
 def results_page(request: Request):
     user = current_user(request)
@@ -1511,19 +1529,38 @@ _PHOTO_EXTS = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp",
                "image/gif": ".gif", "image/heic": ".heic"}
 
 
+def _photo_prefix(user: User) -> str:
+    """Безопасный префикс имени файла фото-пруфа для пользователя (охотника)."""
+    un = user.get_username() or f"id{user.id}"
+    return re.sub(r"[^A-Za-z0-9_.-]", "_", un)
+
+
+def _photos_dir():
+    return db.DATA_DIR / "photos"
+
+
+def _latest_capture_photo(user: User):
+    """Путь к самому свежему фото-пруфу этого игрока (охотника) или None."""
+    if user is None:
+        return None
+    d = _photos_dir()
+    if not d.is_dir():
+        return None
+    files = sorted(d.glob(f"{_photo_prefix(user)}_*"),
+                   key=lambda p: p.stat().st_mtime, reverse=True)
+    return files[0] if files else None
+
+
 def _save_capture_photo(user: User, upload) -> bool:
     """Сохранить фото-пруф поимки в data/photos/ (как файлы бота). True при успехе."""
     if upload is None or not getattr(upload, "filename", ""):
         return False
-    import mimetypes
     ct = getattr(upload, "content_type", "") or ""
     ext = _PHOTO_EXTS.get(ct) or (Path(upload.filename).suffix.lower() or ".jpg")
-    photos_dir = db.DATA_DIR / "photos"
+    photos_dir = _photos_dir()
     photos_dir.mkdir(parents=True, exist_ok=True)
     import time
-    un = user.get_username() or f"id{user.id}"
-    safe = re.sub(r"[^A-Za-z0-9_.-]", "_", un)
-    dest = photos_dir / f"{safe}_{int(time.time())}{ext}"
+    dest = photos_dir / f"{_photo_prefix(user)}_{int(time.time())}{ext}"
     data = upload.file.read()
     if not data:
         return False
@@ -1831,6 +1868,14 @@ def _user_list_data():
         r["can_set_order"] = can_set_order(u, game)
         r["can_reassign_kill"] = u.is_player() and not u.is_alive() and bool(u.get_murderer())
         r["score"] = u.get_score()
+        # Фото-пруф поимки (item 37): показываем кнопку только когда фото-пруф
+        # включён и у «убийцы» этого игрока есть сохранённое фото. Ведёт на снимок
+        # охотника (u.get_murderer()) — и в строке-заявке, и в карточке выбывшего.
+        r["capture_photo_uid"] = None
+        if app_settings.photo_proof():
+            murderer = u.get_murderer()
+            if murderer and _latest_capture_photo(murderer):
+                r["capture_photo_uid"] = murderer.id
         return r
 
     # Неподтверждённые поимки показываются inline — красной строкой-заявкой прямо
