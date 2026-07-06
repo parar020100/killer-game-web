@@ -15,6 +15,7 @@
 """
 import os
 import sys
+import signal
 import subprocess
 import threading
 import time
@@ -59,11 +60,10 @@ def main():
     print(f"[run] Запущено: веб http://{HOST}:{PORT} + боты. Ctrl+C — остановить всё.")
     try:
         while True:
-            for name, proc in _procs:
+            for name, proc in list(_procs):
                 if proc.poll() is not None:
                     print(f"[run] ⚠️  процесс [{name}] завершился (код {proc.returncode}).")
                     _procs.remove((name, proc))
-                    break
             if not _procs:
                 print("[run] Все процессы завершились.")
                 return
@@ -71,10 +71,32 @@ def main():
     except KeyboardInterrupt:
         print("\n[run] Останавливаю все процессы…")
     finally:
-        for _name, proc in _procs:
-            if proc.poll() is None:
-                proc.terminate()
+        _shutdown()
+
+
+def _shutdown():
+    """Мягко остановить все дочерние процессы, затем добить не откликнувшиеся."""
+    for _name, proc in _procs:
+        if proc.poll() is None:
+            proc.terminate()
+    deadline = time.time() + 6
+    for name, proc in _procs:
+        try:
+            proc.wait(timeout=max(0.0, deadline - time.time()))
+        except subprocess.TimeoutExpired:
+            print(f"[run] [{name}] не остановился — снимаю принудительно.")
+            proc.kill()
+    print("[run] Остановлено.")
+
+
+def _on_term(signum, frame):
+    # SIGTERM (kill / systemd stop) → выходим через ту же ветку, что и Ctrl+C.
+    raise KeyboardInterrupt
 
 
 if __name__ == "__main__":
+    try:
+        signal.signal(signal.SIGTERM, _on_term)
+    except (ValueError, AttributeError, OSError):
+        pass  # SIGTERM может быть недоступен (напр. не в главном потоке / Windows)
     main()
