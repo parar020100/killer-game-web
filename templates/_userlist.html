@@ -2,7 +2,7 @@
    дашборде админа (отдельных страниц пользователей больше нет).
    Импортировать: {% import "_userlist.html" as ul with context %}
    `back` — путь, куда вернуться после действия (всегда /app).
-   Требует в контексте: allow_dev, link. #}
+   Требует в контексте: link. #}
 
 {% macro card(u, back) -%}
   {# data-search — строка для живого поиска (номер, ник, имена) в нижнем регистре #}
@@ -128,7 +128,7 @@
         </div>
       </details>
       {% if u.is_local and u.username %}<a class="btn chip" href="/chat/{{ u.username }}" target="_blank" rel="noopener" title="эмуляция чата с этим пользователем (только для админа)">🐛 Дебаг-чат</a>{% endif %}
-      {% if allow_dev %}<a class="btn chip" href="/app?user={{ u.id }}" target="_blank" rel="noopener">🕶 Меню от имени игрока</a>{% endif %}
+      {% if u.is_local %}<a class="btn chip" href="{{ link('/app/users/' ~ u.id ~ '/open') }}" target="_blank" rel="noopener" title="сгенерировать токен и открыть меню от имени этого пользователя (только для админа)">🚪 Открыть меню</a>{% endif %}
     </div>
   </details>
 {%- endmacro %}

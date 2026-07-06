@@ -111,17 +111,6 @@
       </ol>
     </div>
 
-    {% if allow_dev %}
-    <details class="demo">
-      <summary>🧪 Демо-вход (для тестирования, без бота)</summary>
-      <form action="/chat" method="get">
-        <input type="text" name="id" placeholder="ник, напр. parar020100"
-               autocomplete="off" autocapitalize="off" spellcheck="false">
-        <button type="submit">Открыть</button>
-      </form>
-    </details>
-    {% endif %}
-
     <p class="foot">Вопросы — в поддержку: {{ support_contact }}</p>
     {% include "_footer.html" %}
   </main>

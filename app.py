@@ -155,56 +155,14 @@ def validate_real_name(raw: str):
 
 
 # ---------------------------------------------------------------------------
-# Текущий пользователь (по сессии или отладочному ?user=<id|username>)
+# Текущий пользователь — по сессии; переключение вкладки — ?user=<uid> из набора
 # ---------------------------------------------------------------------------
-
-def _resolve_user_param(raw, source=None):
-    """Пользователь по ?user= (id ИЛИ username), опц. с уточнением платформы ?source=.
-
-    Ники на разных платформах (tg/vk/local) могут совпадать, поэтому только username
-    неоднозначен. Если задан source — ищем именно на этой платформе; иначе — id, затем
-    первый попавшийся по нику (обратная совместимость).
-    """
-    raw = (raw or "").strip()
-    if not raw:
-        return None
-    source = (source or "").strip()
-    if source:
-        u = User.by_platform_username(source, raw)
-        if u is not None:
-            return u
-    if raw.isdigit():
-        return User.by_id(int(raw))
-    return User.by_username(raw)
-
-
-def _dev_user_param(request: Request):
-    """Сырое значение ?user= (id или username), если dev-режим включён и оно валидно.
-
-    Это ключ к «разным вкладкам»: identity живёт в URL, а не в общей на браузер
-    cookie, поэтому каждая вкладка независима. Значение НЕ пишется в cookie.
-    Возвращаем именно исходную строку, чтобы ссылки сохраняли удобный username.
-    """
-    if not config.ALLOW_DEV_LOGIN:
-        return None
-    raw = (request.query_params.get("user") or "").strip()
-    source = request.query_params.get("source")
-    return raw if raw and _resolve_user_param(raw, source) else None
-
-
-def _dev_source(request: Request):
-    """Уточнение платформы ?source= (tg/vk/local) в dev-режиме, если задано."""
-    if not config.ALLOW_DEV_LOGIN:
-        return None
-    return (request.query_params.get("source") or "").strip() or None
-
-
-# --- мульти-аккаунт: набор подтверждённых uid в сессии ----------------------
 # Сессия хранит НАБОР uid, для которых этот браузер реально прошёл вход по ссылке
-# (/login?token=). Переключаться между ними можно per-tab через ?user=<uid>, но
-# ТОЛЬКО если uid входит в набор — иначе доступа нет (см. current_user). Так на
-# проде разные ссылки из бота открывают разных игроков в разных вкладках, но войти
-# можно лишь в те аккаунты, чью ссылку-токен браузер предъявил.
+# (/login?token=). Активный аккаунт вкладки — ?user=<uid>, но ТОЛЬКО если uid входит
+# в набор — иначе доступа нет. Так разные ссылки из бота (или админская кнопка
+# «Открыть меню», которая генерирует токен) открывают разных игроков в разных
+# вкладках, но войти можно лишь в аккаунты, чью ссылку-токен браузер предъявил.
+# Отдельного «dev-входа как кто угодно» больше нет — вход всегда только по токену.
 
 def _authed_uids(request: Request):
     """Список uid, подтверждённых входом по ссылке в этой сессии (в порядке добавления)."""
@@ -232,28 +190,13 @@ def _active_uid(request: Request, authed=None):
     raw = (request.query_params.get("user") or "").strip()
     if raw.isdigit() and int(raw) in authed:
         return int(raw)
-    if config.ALLOW_DEV_LOGIN:
-        u = _resolve_user_param(raw, request.query_params.get("source"))
-        if u is not None and u.id in authed:
-            return u.id
     return authed[0]
 
 
 def current_user(request: Request):
-    # Dev-режим: отладочный ?user= (+ опц. ?source=) имеет приоритет и не трогает сессию.
-    # ВАЖНО: если ?user= задан ЯВНО, но не разрешается в существующего пользователя —
-    # возвращаем None (НЕ откатываемся на cookie), чтобы открывались только
-    # действительные адреса, а не «чужое» меню из cookie при опечатке в нике.
-    if config.ALLOW_DEV_LOGIN:
-        raw = request.query_params.get("user")
-        if raw is not None and raw.strip() != "":
-            return _resolve_user_param(raw, request.query_params.get("source"))
-        authed = _authed_uids(request)
-        return User.by_id(authed[0]) if authed else None
-
-    # Прод: мульти-аккаунт по набору сессии. ?user=<uid> переключает вкладку, но
-    # только на аккаунт из набора; явный, но не входящий в набор uid — отказ (None),
-    # чтобы нельзя было «подсмотреть» чужой/дефолтный аккаунт подбором id.
+    # Активный аккаунт — из набора сессии. ?user=<uid> переключает вкладку, но только
+    # на аккаунт из набора; явный, но не входящий в набор uid — отказ (None), чтобы
+    # нельзя было «подсмотреть» чужой аккаунт подбором id.
     authed = _authed_uids(request)
     raw = request.query_params.get("user")
     if raw is not None and raw.strip() != "":
@@ -265,13 +208,7 @@ def current_user(request: Request):
 
 
 def _tab_user_param(request: Request):
-    """Значение ?user=, которое надо переносить по ссылкам этой вкладки (оба режима).
-
-    Dev: исходная строка (ник/id). Прод: uid активного аккаунта — только если он из
-    набора сессии (чтобы вкладка держалась своего аккаунта при мультиаккаунте).
-    """
-    if config.ALLOW_DEV_LOGIN:
-        return _dev_user_param(request)
+    """uid активного аккаунта для переноса по ссылкам вкладки — только если он из набора."""
     authed = _authed_uids(request)
     raw = (request.query_params.get("user") or "").strip()
     if raw.isdigit() and int(raw) in authed:
@@ -300,36 +237,29 @@ def _accounts_ctx(request: Request):
     return out
 
 
-def _link_fn(user_param, source=None):
-    """Функция, дописывающая ?user=<id|username>(&source=<платформа>) к ссылкам/формам."""
+def _link_fn(user_param):
+    """Функция, дописывающая ?user=<uid> к ссылкам/формам (закрепляет вкладку за аккаунтом)."""
     def link(path: str) -> str:
         if not user_param:
             return path
         sep = "&" if "?" in path else "?"
-        q = f"user={quote(str(user_param))}"
-        if source:
-            q += f"&source={quote(str(source))}"
-        return f"{path}{sep}{q}"
+        return f"{path}{sep}user={quote(str(user_param))}"
     return link
 
 
 def _ctx(request: Request, **extra):
-    """Контекст шаблона + прокидывание ?user=/?source= во все ссылки + мульти-аккаунт."""
-    source = _dev_source(request)
+    """Контекст шаблона + прокидывание ?user=<uid> во все ссылки + мульти-аккаунт."""
     return {
-        "dev_user": _dev_user_param(request),   # 🕶-бейдж (только dev-режим)
-        "dev_source": source,
-        "allow_dev": config.ALLOW_DEV_LOGIN,
-        "link": _link_fn(_tab_user_param(request), source),
+        "link": _link_fn(_tab_user_param(request)),
         "accounts": _accounts_ctx(request),
         **extra,
     }
 
 
 def _redirect(request: Request, url: str, status_code: int = 303):
-    """RedirectResponse, сохраняющий ?user=/?source= вкладки (вкладка не «слетает»)."""
+    """RedirectResponse, сохраняющий ?user=<uid> вкладки (вкладка не «слетает»)."""
     return RedirectResponse(
-        url=_link_fn(_tab_user_param(request), _dev_source(request))(url),
+        url=_link_fn(_tab_user_param(request))(url),
         status_code=status_code)
 
 
@@ -973,15 +903,8 @@ def login(request: Request, token: str = ""):
         uids.append(uid)
     request.session["uids"] = uids
     request.session.pop("uid", None)   # уходим со старой одиночной схемы
-    # В dev-режиме закрепляем вход за КОНКРЕТНОЙ вкладкой через ?user=<ник>&source=<платформа>,
-    # чтобы разные ссылки в разных вкладках одного браузера не мешали друг другу
-    # (cookie одна на браузер). source нужен, т.к. ники на tg/vk/local могут совпадать.
-    if config.ALLOW_DEV_LOGIN:
-        ident = row["username"] or uid
-        params = f"user={quote(str(ident))}&source={quote(str(row['platform']))}"
-        return RedirectResponse(url=f"/app?{params}", status_code=303)
-    # В проде вкладка привязывается к этому аккаунту через ?user=<uid> (uid уже в наборе)
-    # — так разные ссылки из бота открывают разных игроков в разных вкладках.
+    # Вкладка привязывается к этому аккаунту через ?user=<uid> (uid уже в наборе) —
+    # так разные ссылки в разных вкладках одного браузера не мешают друг другу.
     return RedirectResponse(url=f"/app?user={uid}", status_code=303)
 
 
@@ -1078,6 +1001,26 @@ def dashboard(request: Request):
             flash=request.session.pop("flash", ""),
         ),
     )
+
+
+@app.get("/app/users/{uid}/open")
+def open_as_user(request: Request, uid: int):
+    """Админ: войти под дебаг-пользователем (веб-чат) в этой вкладке.
+
+    Генерирует пользователю токен (как дебаг-чат) и проходит обычный вход по нему:
+    аккаунт добавляется в набор сессии, вкладка привязывается к нему (?user=<uid>).
+    Открывать в новой вкладке (target=_blank). Только для админа и только для
+    пользователей с веб-каналом ('local') — реальные tg/vk-ссылки не трогаем.
+    """
+    actor = current_user(request)
+    if actor is None or not actor.is_admin():
+        return RedirectResponse(url="/app", status_code=303)
+    target = User.by_id(uid)
+    ident = target.identity("local") if target else None
+    if ident is None:
+        return RedirectResponse(url="/app", status_code=303)
+    token = auth.set_permanent_token(ident.id)
+    return RedirectResponse(url=f"/login?token={token}", status_code=303)
 
 
 @app.get("/app/results", response_class=HTMLResponse)

@@ -383,8 +383,8 @@
       <span>{% if accounts and accounts|length > 1 %}Аккаунт:
         <select onchange="if(this.value)location.href=this.value" title="Выбрать активный аккаунт">
           {% for a in accounts %}<option value="{{ a.url }}"{% if a.active %} selected{% endif %}>{{ a.name }}{% if a.is_admin %} 👑{% endif %}</option>{% endfor %}
-        </select>{% else %}Вы вошли как <b>{{ user_name }}</b>{% endif %}{% if dev_user %} <span title="Вкладка привязана к {{ dev_user }} через ?user= — своя на каждую вкладку, независимо от cookie">🕶 {{ dev_user }}</span>{% endif %}</span>
-      <span class="as-links">{% if not dev_user %}<a href="/logout">выйти</a>{% endif %}</span>
+        </select>{% else %}Вы вошли как <b>{{ user_name }}</b>{% endif %}</span>
+      <span class="as-links"><a href="{{ link('/logout') }}">выйти</a></span>
     </div>
 
     {% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
