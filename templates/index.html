@@ -259,6 +259,16 @@
     html.show-userlist.show-adminmenu .upanel-body { flex: 1 1 auto; min-height: 0; }
     .upanel-body .ulist-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
   }
+  /* Баг-фикс (п.59): если открыты и список, и лог, но экран ещё узок для трёх
+     столбцов (980–1399px) — лог уходит полосой снизу во всю ширину. Закреплённый
+     (sticky) список при прокрутке «наезжал» на этот лог. На такой ширине делаем
+     список не-липким и снимаем ограничение высоты — оба блока прокручиваются
+     страницей и не перекрываются. */
+  @media (min-width: 980px) and (max-width: 1399.98px) {
+    html.show-userlist.show-gamelog.show-adminmenu .userpanel {
+      position: static; max-height: none;
+    }
+  }
   .upanel-body { display: flex; flex-direction: column; gap: 8px; }
   /* прокручиваемая середина списка (поиск и подсказка — вне неё) */
   .ulist-scroll { display: flex; flex-direction: column; gap: 8px; }
