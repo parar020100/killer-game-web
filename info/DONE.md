@@ -133,6 +133,7 @@
   nginx + sudoers из шаблонов `killer.service` / `nginx.conf` / `killer.sudoers`),
   `deploy/README.md` с пошаговым порядком. DEPLOY.md обновлён (быстрый путь; убрана
   устаревшая ссылка на ALLOW_DEV_LOGIN).
+- (50) root всегда носит имя «Админище» (задаётся в `bootstrap_root` при старте).
 - (42) Два журнала: игровой (`data/admin_log.txt` — события игры + все действия) и
   лог бота (`data/bot_log.txt`, `core/bot_log.py`); ошибки ботов (`tg_send`/`vk_send`)
   пишутся в оба (`bot_log.error`). В настройках — кнопки открыть оба лога сырым

@@ -67,6 +67,10 @@ def bootstrap_root():
         app_settings.set_root_user_id(user.id)
     if not user.is_admin():
         user.set_admin(True)
+    # root всегда носит имя «Админище» (item 50): задаём при старте, если оно ещё
+    # не такое — так организатора видно в списках под узнаваемым именем.
+    if user.get_real_name() != "Админище":
+        user.set_real_name("Админище")
     idents = user.identities()
     if not idents:
         return
