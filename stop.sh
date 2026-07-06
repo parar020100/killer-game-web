@@ -9,6 +9,15 @@
 # останавливайте сервисом:  sudo systemctl stop killer
 cd "$(dirname "$0")"
 
+# Вехи скрипта — в лог бота (data/bot_log.txt), тем же построчным форматом.
+blog() {
+    mkdir -p data 2>/dev/null || true
+    printf '[%s] [stop.sh] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> data/bot_log.txt 2>/dev/null || true
+    echo "$*"
+}
+
+blog "остановка приложения запрошена (stop.sh)"
+
 # Ищем ТОЛЬКО процессы python с этими командными строками (чтобы случайно не снять
 # сам bash/терминал, из которого запускали — у него в cmdline тоже есть эти имена).
 PAT='run_all\.py|uvicorn app:app|tg_bot\.py|vk_bot\.py'
@@ -27,4 +36,4 @@ case "$(uname -s)" in
     ;;
 esac
 
-echo "Приложение остановлено."
+blog "приложение остановлено"

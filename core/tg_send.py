@@ -38,6 +38,7 @@ def send(chat_id, text: str, with_menu: bool = True, silent: bool = False) -> bo
     try:
         r = httpx.post(_API.format(token=token), json=payload, timeout=10)
         if r.status_code == 200 and r.json().get("ok", False):
+            _log_ok(f"уведомление → chat {chat_id} доставлено")
             return True
         _log_error(f"Telegram sendMessage → chat {chat_id}: HTTP {r.status_code} {r.text[:200]}")
         return False
@@ -56,9 +57,17 @@ def _reply_markup() -> dict:
     ]}
 
 
+def _log_ok(text: str):
+    try:
+        from core import bot_log
+        bot_log.log(text, "tg")
+    except Exception:
+        pass
+
+
 def _log_error(text: str):
     try:
         from core import bot_log
-        bot_log.error(text)
+        bot_log.error(text, "tg")
     except Exception:
         pass

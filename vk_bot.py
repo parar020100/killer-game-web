@@ -90,6 +90,7 @@ def handle_message(from_id, text: str):
     if low.startswith("/link"):
         code = text.split(maxsplit=1)[1] if len(text.split()) > 1 else ""
         _send(from_id, botcommon.do_link(ident, code))
+        log.info("link: user id=%s vk=%s code=%r", user.id, from_id, code)
         return
 
     # прочее — пересылаем администраторам

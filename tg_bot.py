@@ -77,6 +77,7 @@ async def link_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     code = context.args[0] if context.args else ""
     reply = botcommon.do_link(user.identity("tg"), code)
     await update.effective_message.reply_text(reply, reply_markup=_KB)
+    log.info("link: user id=%s tg=%s code=%r", user.id, tg.id, code)
 
 
 async def forward_to_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):

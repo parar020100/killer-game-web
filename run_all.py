@@ -21,7 +21,7 @@ import threading
 import time
 
 import config
-from core import control
+from core import control, bot_log
 
 PY = sys.executable
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -31,19 +31,30 @@ PORT = os.getenv("PORT", "8000")
 _procs = []
 
 
-def _pump(name, proc):
+def _log(msg):
+    """Событие супервизора: и в консоль (с префиксом [run]), и в лог бота."""
+    print(f"[run] {msg}")
+    sys.stdout.flush()
+    bot_log.log(msg, "run")
+
+
+def _pump(name, proc, to_botlog):
     for line in iter(proc.stdout.readline, ""):
         sys.stdout.write(f"[{name}] {line}")
         sys.stdout.flush()
+        # stdout/stderr ботов целиком уводим в лог бота (веб — только его lifecycle).
+        if to_botlog:
+            bot_log.log(line.rstrip("\n"), name)
 
 
-def _start(name, args):
+def _start(name, args, to_botlog=False):
     env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1"}
     proc = subprocess.Popen(
         args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         text=True, encoding="utf-8", errors="replace", env=env)
     _procs.append((name, proc))
-    threading.Thread(target=_pump, args=(name, proc), daemon=True).start()
+    threading.Thread(target=_pump, args=(name, proc, to_botlog), daemon=True).start()
+    _log(f"процесс [{name}] запущен (pid {proc.pid})")
 
 
 def _tg_on():
@@ -58,53 +69,56 @@ def _vk_on():
 
 def main():
     control.take()   # сбросить возможную «залежавшуюся» команду управления
+    _log(f"супервизор run_all запущен (режим: {getattr(config, 'START_MODE', 'manual')})")
 
+    # web — не бот: в лог бота уводим только его старт/стоп, не весь поток uvicorn.
     _start("web", [PY, "-m", "uvicorn", "app:app", "--host", HOST, "--port", PORT])
 
     if _tg_on():
-        _start("tg", [PY, "tg_bot.py"])
+        _start("tg", [PY, "tg_bot.py"], to_botlog=True)
     else:
-        print("[run] Telegram-бот выключен/без токена — пропущен (эмуляция чата).")
+        _log("Telegram-бот выключен/без токена — пропущен (эмуляция чата).")
 
     if _vk_on():
-        _start("vk", [PY, "vk_bot.py"])
+        _start("vk", [PY, "vk_bot.py"], to_botlog=True)
     else:
-        print("[run] VK-бот выключен/без токена — пропущен (эмуляция чата).")
+        _log("VK-бот выключен/без токена — пропущен (эмуляция чата).")
 
-    print(f"[run] Запущено: веб http://{HOST}:{PORT} + боты. Ctrl+C — остановить всё.")
+    _log(f"Запущено: веб http://{HOST}:{PORT} + боты. Ctrl+C — остановить всё.")
     try:
         while True:
             cmd = control.take()
             if cmd:
-                print(f"[run] команда управления: {cmd}")
+                _log(f"команда управления: {cmd}")
                 _handle_control(cmd)
             for name, proc in list(_procs):
                 if proc.poll() is not None:
-                    print(f"[run] ⚠️  процесс [{name}] завершился (код {proc.returncode}).")
+                    _log(f"⚠️  процесс [{name}] завершился (код {proc.returncode}).")
                     _procs.remove((name, proc))
             if not _procs:
-                print("[run] Все процессы завершились.")
+                _log("Все процессы завершились.")
                 return
             time.sleep(1)
     except KeyboardInterrupt:
-        print("\n[run] Останавливаю все процессы…")
+        _log("Останавливаю все процессы…")
     finally:
         _shutdown()
 
 
 def _shutdown():
     """Мягко остановить все дочерние процессы, затем добить не откликнувшиеся."""
-    for _name, proc in _procs:
+    for name, proc in _procs:
         if proc.poll() is None:
+            _log(f"останавливаю процесс [{name}] (pid {proc.pid})…")
             proc.terminate()
     deadline = time.time() + 6
     for name, proc in _procs:
         try:
             proc.wait(timeout=max(0.0, deadline - time.time()))
         except subprocess.TimeoutExpired:
-            print(f"[run] [{name}] не остановился — снимаю принудительно.")
+            _log(f"[{name}] не остановился — снимаю принудительно.")
             proc.kill()
-    print("[run] Остановлено.")
+    _log("Остановлено.")
 
 
 def _code_dir():
@@ -114,23 +128,23 @@ def _code_dir():
 
 def _git_pull() -> bool:
     d = _code_dir()
-    print(f"[run] git pull в {d} …")
+    _log(f"git pull в {d} …")
     try:
         r = subprocess.run(["git", "-C", d, "pull", "--ff-only"],
                            capture_output=True, text=True, timeout=120)
     except (OSError, subprocess.SubprocessError) as exc:
-        print(f"[run] git pull не выполнен: {exc}")
+        _log(f"git pull не выполнен: {exc}")
         return False
     if r.stdout:
-        print("[run] " + r.stdout.strip())
+        _log(r.stdout.strip())
     if r.returncode != 0:
-        print("[run] git pull ошибка: " + (r.stderr or "").strip())
+        _log("git pull ошибка: " + (r.stderr or "").strip())
     return r.returncode == 0
 
 
 def _systemctl(action: str):
     svc = getattr(config, "SYSTEMD_SERVICE", "killer")
-    print(f"[run] sudo systemctl {action} {svc} …")
+    _log(f"sudo systemctl {action} {svc} …")
     subprocess.Popen(["sudo", "systemctl", action, svc])
 
 
@@ -139,7 +153,7 @@ def _do_restart():
         _systemctl("restart")     # systemd перезапустит unit (нас снимет SIGTERM)
     else:
         _shutdown()
-        print("[run] перезапуск…")
+        _log("перезапуск…")
         os.execv(PY, [PY, os.path.join(HERE, "run_all.py")])
 
 

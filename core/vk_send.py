@@ -58,6 +58,7 @@ def send(user_id, text: str, with_menu: bool = True, silent: bool = False) -> bo
     try:
         r = httpx.get(_API, params=params, timeout=10).json()
         if "response" in r:
+            _log_ok(f"уведомление → user {user_id} доставлено")
             return True
         _log_error(f"VK messages.send → user {user_id}: {str(r)[:200]}")
         return False
@@ -66,9 +67,17 @@ def send(user_id, text: str, with_menu: bool = True, silent: bool = False) -> bo
         return False
 
 
+def _log_ok(text: str):
+    try:
+        from core import bot_log
+        bot_log.log(text, "vk")
+    except Exception:
+        pass
+
+
 def _log_error(text: str):
     try:
         from core import bot_log
-        bot_log.error(text)
+        bot_log.error(text, "vk")
     except Exception:
         pass

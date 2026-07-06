@@ -25,9 +25,19 @@ set -euo pipefail
 # Перейти в папку скрипта, чтобы запускать откуда угодно.
 cd "$(dirname "$0")"
 
+# Вехи скрипта дублируем в лог бота (data/bot_log.txt) — построчный формат,
+# как у процессов/ботов: [время] [start.sh] сообщение. Пишем без падений.
+blog() {
+    mkdir -p data 2>/dev/null || true
+    printf '[%s] [start.sh] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> data/bot_log.txt 2>/dev/null || true
+    echo "$*"
+}
+
+blog "запуск приложения (start.sh)"
+
 # Локальный config.py в .gitignore — создаём из шаблона при первом запуске.
 if [ ! -f "config.py" ]; then
-    echo "⚙️  Создаю config.py из config.template.py (отредактируйте под себя) ..."
+    blog "создаю config.py из config.template.py (отредактируйте под себя)"
     cp config.template.py config.py
 fi
 
@@ -48,7 +58,7 @@ fi
 
 # Создать виртуальное окружение при первом запуске.
 if [ ! -d ".venv" ]; then
-    echo "📦 Создаю виртуальное окружение .venv ..."
+    blog "создаю виртуальное окружение .venv"
     $PY -m venv .venv
 fi
 
@@ -59,10 +69,10 @@ else
     VENV_PY=".venv/bin/python"
 fi
 
-echo "📥 Проверяю зависимости ..."
+blog "проверяю зависимости (pip install)"
 "$VENV_PY" -m pip install --upgrade pip >/dev/null
 "$VENV_PY" -m pip install -r setup/requirements.txt
 
-echo "🚀 Запускаю веб + боты:  http://${HOST}:${PORT}   (Ctrl+C — остановить всё)"
+blog "запускаю веб + боты (run_all.py) на http://${HOST}:${PORT}"
 export HOST PORT
 exec "$VENV_PY" run_all.py
