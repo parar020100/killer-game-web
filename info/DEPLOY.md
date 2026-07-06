@@ -149,7 +149,7 @@ sudo ufw status                            # локальный фаервол (
 
 ## 8. Автозапуск через systemd
 ```bash
-sudo nano /etc/systemd/system/killer.service
+sudo vim /etc/systemd/system/killer.service
 ```
 ```ini
 [Unit]
