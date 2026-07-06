@@ -491,7 +491,7 @@
                   data-on="🙈 Скрыть игроков" data-off="👥 Показать игроков">{{ '🙈 Скрыть игроков' if show_userlist else '👥 Показать игроков' }}</button>
           {% elif b.toggle == 'gamelog' %}
           <button type="button" class="btn gl-toggle{% if b.full %} full{% endif %}" data-toggle="gamelog"
-                  data-on="🙈 Скрыть лог игры" data-off="📋 Лог игры">{{ '🙈 Скрыть лог игры' if show_gamelog else '📋 Лог игры' }}</button>
+                  data-on="🙈 Скрыть лог игры" data-off="📋 Показать лог игры">{{ '🙈 Скрыть лог игры' if show_gamelog else '📋 Показать лог игры' }}</button>
           {% elif b.popover == 'testusers' %}
           <details class="mini pop-full" data-keep="testusers">
             <summary class="btn">{{ b.label }}</summary>
