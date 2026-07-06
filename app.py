@@ -252,10 +252,15 @@ def _link_fn(user_param):
 
 
 def _ctx(request: Request, **extra):
-    """Контекст шаблона + прокидывание ?user=<uid> во все ссылки + мульти-аккаунт."""
+    """Контекст шаблона + прокидывание ?user=<uid> во все ссылки + мульти-аккаунт.
+
+    game_icon — эмодзи текущего оформления (🔪 Киллер / 📸 Папарацци), доступен во
+    всех шаблонах, чтобы «ножи/фотоаппараты» зависели от стиля игры (item 51).
+    """
     return {
         "link": _link_fn(_tab_user_param(request)),
         "accounts": _accounts_ctx(request),
+        "game_icon": mode.term("icon"),
         **extra,
     }
 
@@ -1693,7 +1698,8 @@ def user_menu_buttons(target: User):
         kill_note = "Игрок уже выбыл из игры."
     else:
         kill_note = "Устранять игрока можно только во время паузы."
-    add("🔪 Устранить", "kill", "danger", disabled=not (is_player and alive and paused),
+    add(f"{mode.term('icon')} Устранить", "kill", "danger",
+        disabled=not (is_player and alive and paused),
         note=kill_note, confirm=f"Устранить игрока {tname} из игры?")
 
     # 4) Оживить (выбывшего игрока, на паузе).

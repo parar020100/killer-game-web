@@ -95,7 +95,7 @@
         <div class="row">
           <span class="medal">{{ r.medal }}</span>
           <span><span class="nm">{{ r.name }}</span>{% if r.nick %} <span class="nick">@{{ r.nick }}</span>{% endif %}</span>
-          <span class="sc">🔪 {{ r.score }}</span>
+          <span class="sc">{{ game_icon }} {{ r.score }}</span>
         </div>
         {% endfor %}
       {% else %}<div class="empty">Пока нет данных.</div>{% endif %}
@@ -108,7 +108,7 @@
         <div class="row">
           <span class="medal">{{ r.medal }}</span>
           <span><span class="nm">{{ r.name }}</span>{% if r.nick %} <span class="nick">@{{ r.nick }}</span>{% endif %}</span>
-          <span class="sc">🔪 {{ r.score }}</span>
+          <span class="sc">{{ game_icon }} {{ r.score }}</span>
         </div>
         {% endfor %}
       {% else %}<div class="empty">Никто ещё не выбыл.</div>{% endif %}
