@@ -31,10 +31,12 @@ def _menu_keyboard() -> str:
                     "label": botcommon.MENU_BUTTON}}]]}, ensure_ascii=False)
 
 
-def send(user_id, text: str, with_menu: bool = True) -> bool:
+def send(user_id, text: str, with_menu: bool = True, silent: bool = False) -> bool:
     """Отправить текст пользователю ВК. True при успехе, False при любой ошибке.
 
     with_menu=True добавляет к сообщению inline-кнопку «Открыть меню игры».
+    silent принимается для единообразия с другими каналами; VK Bots API не
+    поддерживает беззвучную доставку — флаг игнорируется.
     """
     if not enabled():
         return False

@@ -660,11 +660,14 @@ class User:
 
     # --- уведомления ------------------------------------------------------
 
-    def notify(self, text: str):
-        """Доставить сообщение во все неприглушённые каналы пользователя."""
+    def notify(self, text: str, silent: bool = False):
+        """Доставить сообщение во все неприглушённые каналы пользователя.
+
+        silent=True — тихое уведомление без звука (для платформ, что это умеют).
+        """
         for ident in self.identities():
             if not ident.is_muted():
-                ident.deliver(text)
+                ident.deliver(text, silent=silent)
 
     # --- регистрация в игре (упрощённо) -----------------------------------
 

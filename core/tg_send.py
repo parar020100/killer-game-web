@@ -20,16 +20,19 @@ def enabled() -> bool:
             and bool((getattr(config, "TELEGRAM_BOT_TOKEN", "") or "").strip()))
 
 
-def send(chat_id, text: str, with_menu: bool = True) -> bool:
+def send(chat_id, text: str, with_menu: bool = True, silent: bool = False) -> bool:
     """Отправить текст в чат Telegram. True при успехе, False при любой ошибке.
 
     with_menu=True добавляет к сообщению inline-кнопку «Открыть меню игры».
+    silent=True — тихое уведомление без звука (Telegram disable_notification).
     """
     if not enabled():
         return False
     token = (getattr(config, "TELEGRAM_BOT_TOKEN", "") or "").strip()
     payload = {"chat_id": int(chat_id), "text": text,
                "disable_web_page_preview": True}
+    if silent:
+        payload["disable_notification"] = True
     if with_menu:
         from core import botcommon
         payload["reply_markup"] = {"inline_keyboard": [[

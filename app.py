@@ -688,10 +688,10 @@ def user_row(user: User, game: Game) -> dict:
 # Действия кнопок дашборда
 # ---------------------------------------------------------------------------
 
-def _broadcast(text, players_only=True):
+def _broadcast(text, players_only=True, silent=False):
     users = User.all_players() if players_only else User.all()
     for u in users:
-        u.notify(text)
+        u.notify(text, silent=silent)
 
 
 # Тестовые пользователи: создаются админом (канал 'local' = веб-чат). Их ники —
@@ -874,7 +874,7 @@ def apply_action(action: str, user: User, count: int = 5) -> str:
             return "ℹ️ Игра уже на паузе."
         game.pause()
         admin_log.log(f"⏸️ {who} поставил(а) игру на паузу")
-        _broadcast("⏸️ Игра поставлена на паузу администратором.")
+        _broadcast("⏸️ Игра поставлена на паузу администратором.", silent=True)
         return "⏸️ Игра на паузе."
     elif action == "resume":
         if not game.is_started():
@@ -883,7 +883,7 @@ def apply_action(action: str, user: User, count: int = 5) -> str:
             return "ℹ️ Игра уже идёт."
         game.resume()
         admin_log.log(f"▶️ {who} возобновил(а) игру")
-        _broadcast("▶️ Игра продолжается!")
+        _broadcast("▶️ Игра продолжается!", silent=True)
         return "▶️ Игра продолжается."
     elif action == "reset_game":
         if not game.is_paused():

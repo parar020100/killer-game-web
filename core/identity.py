@@ -96,17 +96,18 @@ class Identity:
 
     # --- доставка сообщения в канал ---------------------------------------
 
-    def deliver(self, text: str):
+    def deliver(self, text: str, silent: bool = False):
         platform = self.get_platform()
         uid = self.get_platform_uid()
         # Реальные платформы с числовым id и заданным ключом — в свой API.
+        # silent=True — тихое уведомление без звука (там, где платформа поддерживает).
         if platform == "tg" and str(uid).isdigit():
             from core import tg_send
-            if tg_send.send(uid, text):
+            if tg_send.send(uid, text, silent=silent):
                 return
         elif platform == "vk" and str(uid).isdigit():
             from core import vk_send
-            if vk_send.send(uid, text):
+            if vk_send.send(uid, text, silent=silent):
                 return
         # 'local' (самостоятельный веб-чат) и любые прочие каналы, а также откат при
         # неудачной отправке — в файл эмуляции чата (читается страницей /chat).
