@@ -742,7 +742,9 @@ def chat_view(request: Request, username: str):
     if not username:
         return RedirectResponse(url="/", status_code=303)
     # Открытие чата создаёт профиль при необходимости (как первый контакт с ботом).
-    User.get_or_create_by_tg(username, username=username, name=username)
+    # Эмуляция — самостоятельный канал 'local' со своим никнеймом, НЕ связанный с
+    # Telegram/VK (у тех — числовые id и отдельные аккаунты).
+    User.get_or_create_by_local(username, username=username, name=username)
     messages = [
         {"tag": m["tag"] or "bot", "ts": m["ts"], "html": linkify(m["body"])}
         for m in chat.read(username)
@@ -756,10 +758,11 @@ def chat_view(request: Request, username: str):
 @app.post("/chat/{username}/start")
 def chat_start(request: Request, username: str):
     username = chat.normalize(username)
-    user = User.get_or_create_by_tg(username, username=username, name=username)
-    # Постоянная ссылка привязана к каналу (tg-идентичности), а не к пользователю:
-    # у него может быть отдельная постоянная ссылка и для VK.
-    ident = user.identity("tg")
+    user = User.get_or_create_by_local(username, username=username, name=username)
+    # Постоянная ссылка привязана к каналу (веб-чат 'local'), а не к пользователю:
+    # у него могут быть отдельные ссылки и для Telegram/VK — это разные аккаунты,
+    # пока их явно не объединят кодом привязки («Настройки профиля»).
+    ident = user.identity("local")
     reissued = auth.has_permanent_token(ident.id)
     chat.add_user_message(username, "/start")
     token = auth.set_permanent_token(ident.id)

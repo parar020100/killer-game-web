@@ -223,6 +223,7 @@ def init_db():
     """)
 
     _migrate_flat_to_identity(cur)
+    _migrate_emulation_to_local(cur)
 
     if cur.execute("SELECT COUNT(*) FROM game").fetchone()[0] == 0:
         cur.execute("INSERT INTO game (id) VALUES (1)")
@@ -259,6 +260,22 @@ def _migrate_flat_to_identity(cur):
         )
         if cur.rowcount:
             print(f"[db] миграция: перенесено {cur.rowcount} '{platform}'-идентичностей")
+
+
+def _migrate_emulation_to_local(cur):
+    """Перевести старые эмуляционные каналы на платформу 'local'.
+
+    Раньше эмуляция чата создавала identity с platform='tg' и platform_uid = username
+    (нечисловой). Теперь эмуляция — самостоятельная платформа 'local', не связанная с
+    настоящим Telegram (там platform_uid — числовой id). Переносим только нечисловые
+    tg-uid (это и есть эмуляционные никнеймы); реальные (числовые) не трогаем.
+    UPDATE OR IGNORE — на случай коллизии с уже существующим ('local', username).
+    """
+    cur.execute(
+        "UPDATE OR IGNORE identity SET platform = 'local' "
+        "WHERE platform = 'tg' AND platform_uid GLOB '*[^0-9]*'")
+    if cur.rowcount:
+        print(f"[db] миграция: {cur.rowcount} эмуляционных tg-каналов → 'local'")
 
 
 def drop_db():

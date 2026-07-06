@@ -7,10 +7,12 @@
 """
 from db import query_one, query_all, execute
 
-PLATFORMS = ("tg", "vk")
+# 'local' — самостоятельный веб-канал (эмуляция чата на сайте): свой отдельный
+# никнейм, не связанный с Telegram/VK. Полноценный способ входа сам по себе.
+PLATFORMS = ("tg", "vk", "local")
 
-PLATFORM_LABEL = {"tg": "Telegram", "vk": "VK"}
-PLATFORM_ICON = {"tg": "✈️", "vk": "🅥"}
+PLATFORM_LABEL = {"tg": "Telegram", "vk": "VK", "local": "Веб-чат"}
+PLATFORM_ICON = {"tg": "✈️", "vk": "🅥", "local": "💬"}
 
 
 class Identity:
@@ -97,22 +99,16 @@ class Identity:
     def deliver(self, text: str):
         platform = self.get_platform()
         uid = self.get_platform_uid()
-        if platform == "tg":
-            # Реальный Telegram: если platform_uid — числовой chat_id и задан токен,
-            # шлём через Bot API. Иначе (эмуляция: uid = username) — в файл чата.
-            if str(uid).isdigit():
-                from core import tg_send
-                if tg_send.send(uid, text):
-                    return
-            from core.chat import add_bot_message
-            add_bot_message(uid, text)
-        elif platform == "vk":
-            # Реальный ВК: числовой uid + заданный ключ сообщества → messages.send.
-            if str(uid).isdigit():
-                from core import vk_send
-                if vk_send.send(uid, text):
-                    return
-            from core.chat import add_bot_message
-            add_bot_message(uid, text)
-        else:
-            print(f"[notify:{platform}] -> {uid}: {text}")
+        # Реальные платформы с числовым id и заданным ключом — в свой API.
+        if platform == "tg" and str(uid).isdigit():
+            from core import tg_send
+            if tg_send.send(uid, text):
+                return
+        elif platform == "vk" and str(uid).isdigit():
+            from core import vk_send
+            if vk_send.send(uid, text):
+                return
+        # 'local' (самостоятельный веб-чат) и любые прочие каналы, а также откат при
+        # неудачной отправке — в файл эмуляции чата (читается страницей /chat).
+        from core.chat import add_bot_message
+        add_bot_message(uid, text)

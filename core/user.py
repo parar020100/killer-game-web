@@ -79,6 +79,15 @@ class User:
     def get_or_create_by_vk(cls, vk_id, username=None, name=None):
         return cls.get_or_create_by_identity("vk", vk_id, username, name)
 
+    # 'local' — самостоятельный веб-чат (эмуляция): свой никнейм, не связан с tg/vk.
+    @classmethod
+    def by_local(cls, name_id):
+        return cls.by_identity("local", name_id)
+
+    @classmethod
+    def get_or_create_by_local(cls, name_id, username=None, name=None):
+        return cls.get_or_create_by_identity("local", name_id, username, name)
+
     # --- выборки ----------------------------------------------------------
 
     @classmethod
