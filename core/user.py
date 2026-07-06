@@ -10,6 +10,36 @@ from db import query_one, query_all, execute
 from core.identity import Identity
 
 
+# --- админы по умолчанию (config.py, отдельно для Telegram и VK) -------------
+# Списки DEFAULT_ADMINS_TG / DEFAULT_ADMINS_VK в config.py содержат id или
+# username/screen_name каналов. Кто входит через такой канал — получает права
+# администратора автоматически. Списки РАЗДЕЛЬНЫЕ: один человек может быть админом
+# при входе через VK и не быть при входе через TG (пока это разные аккаунты — до
+# объединения каналов кодом привязки). Только выдаёт права, никогда не снимает.
+
+def _default_admin_handles(platform: str) -> set:
+    try:
+        import config
+    except ImportError:
+        return set()
+    key = {"tg": "DEFAULT_ADMINS_TG", "vk": "DEFAULT_ADMINS_VK"}.get(platform)
+    if not key:
+        return set()
+    raw = getattr(config, key, None) or []
+    return {str(x).strip().lstrip("@").lower() for x in raw if str(x).strip()}
+
+
+def is_default_admin_identity(platform, platform_uid, username=None) -> bool:
+    """Входит ли этот канал (по id ИЛИ username) в список админов своей платформы."""
+    handles = _default_admin_handles(platform)
+    if not handles:
+        return False
+    cand = {str(platform_uid).strip().lstrip("@").lower()}
+    if username:
+        cand.add(str(username).strip().lstrip("@").lower())
+    return bool(cand & handles)
+
+
 class User:
     def __init__(self, id: int):
         self.id = id
@@ -76,6 +106,10 @@ class User:
             new_id = execute("INSERT INTO user DEFAULT VALUES")
             Identity.create(new_id, platform, platform_uid, username, name)
             user = cls(new_id)
+        # Админ по умолчанию (config.py, отдельно для tg/vk): если этот канал в
+        # списке — выдаём права (идемпотентно, при каждом входе; не снимает).
+        if not user.is_admin() and is_default_admin_identity(platform, platform_uid, username):
+            user.set_admin(True)
         return user
 
     # тонкие обёртки для конкретных платформ
