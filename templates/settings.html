@@ -36,6 +36,10 @@
   .head { display: flex; align-items: center; gap: 10px; }
   .head h1 { margin: 0; font-size: 17px; }
   .head .back { margin-left: auto; text-decoration: none; color: var(--accent); font-weight: 600; font-size: 13px; }
+  /* заголовки разделов: настройки этой игры / настройки бота и процесса */
+  .section-title { margin: 16px 0 0; font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 7px; }
+  .section-title:first-of-type { margin-top: 2px; }
+  .section-desc { margin: -4px 0 2px; font-size: 12px; color: var(--text-dim); }
   .grid { display: flex; flex-direction: column; gap: 12px; }
   @media (min-width: 760px) {
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
@@ -86,6 +90,9 @@
 
     {% if saved %}<div class="note">✅ {{ saved }}</div>{% endif %}
 
+    <h2 class="section-title">🎯 Настройки этой игры</h2>
+    <p class="section-desc">Параметры конкретного мероприятия: оформление, регистрация,
+       правила, подтверждение и фото поимок, доп. вопросы.</p>
     <div class="grid">
     <form class="card" method="post" action="{{ link('/app/settings') }}">
       <input type="hidden" name="action" value="game_mode">
@@ -164,6 +171,27 @@
       <button type="submit" class="btn ghost">{{ '➖ Не требовать фото' if photo_proof else '📸 Требовать фото' }}</button>
     </form>
 
+    <form class="card" method="post" action="{{ link('/app/settings') }}" autocomplete="off">
+      <input type="hidden" name="action" value="extra_questions">
+      <h2>❓ Доп. вопросы при регистрации</h2>
+      <p class="hint">Игрок отвечает на эти вопросы при регистрации (комната, телефон и т.п.).
+         «Метка» — короткое название поля (для списка игроков), «Вопрос» — что видит игрок.
+         Чтобы удалить вопрос — очистите его поля. Пустые строки внизу — для новых вопросов.</p>
+      {% set rows = extra_questions + [['', ''], ['', '']] %}
+      {% for pair in rows %}
+      <div class="qrow">
+        <input type="text" name="label_{{ loop.index0 }}" value="{{ pair[0] }}" placeholder="Метка" maxlength="40">
+        <input type="text" name="q_{{ loop.index0 }}" value="{{ pair[1] }}" placeholder="Текст вопроса" maxlength="200">
+      </div>
+      {% endfor %}
+      <button type="submit" class="btn">💾 Сохранить вопросы</button>
+    </form>
+    </div>
+
+    <h2 class="section-title">🤖 Настройки бота и процесса</h2>
+    <p class="section-desc">Инфраструктура: активная база (файл игры), журналы,
+       управление приложением и полный сброс данных. Действуют на весь сервис.</p>
+    <div class="grid">
     <form class="card" method="post" action="{{ link('/app/settings') }}" autocomplete="off"
           onsubmit="return confirm('Переключить активную игру (файл БД)? Приложение перезапустится, текущий вход может завершиться.')">
       <input type="hidden" name="action" value="active_db">
@@ -184,22 +212,6 @@
         <input type="text" name="new_db" placeholder="например game2.db" maxlength="100">
       </label>
       <button type="submit" class="btn ghost">🗄️ Переключить и перезапустить</button>
-    </form>
-
-    <form class="card" method="post" action="{{ link('/app/settings') }}" autocomplete="off">
-      <input type="hidden" name="action" value="extra_questions">
-      <h2>❓ Доп. вопросы при регистрации</h2>
-      <p class="hint">Игрок отвечает на эти вопросы при регистрации (комната, телефон и т.п.).
-         «Метка» — короткое название поля (для списка игроков), «Вопрос» — что видит игрок.
-         Чтобы удалить вопрос — очистите его поля. Пустые строки внизу — для новых вопросов.</p>
-      {% set rows = extra_questions + [['', ''], ['', '']] %}
-      {% for pair in rows %}
-      <div class="qrow">
-        <input type="text" name="label_{{ loop.index0 }}" value="{{ pair[0] }}" placeholder="Метка" maxlength="40">
-        <input type="text" name="q_{{ loop.index0 }}" value="{{ pair[1] }}" placeholder="Текст вопроса" maxlength="200">
-      </div>
-      {% endfor %}
-      <button type="submit" class="btn">💾 Сохранить вопросы</button>
     </form>
 
     <div class="card">
