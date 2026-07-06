@@ -83,7 +83,7 @@ DATA_DIR = DB_PATH.parent
 
 
 def get_connection() -> sqlite3.Connection:
-    """Соединение с включёнными FK и WAL (как договорено в CONCEPT.md)."""
+    """Соединение с включёнными FK и WAL (как договорено в info/CONCEPT.md)."""
     DATA_DIR.mkdir(exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row

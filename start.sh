@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
-# Запуск веб-версии игры «Киллер / Папарацци».
+# Запуск веб-версии игры «Киллер / Папарацци» — ВСЁ СРАЗУ.
 #
 # Делает всё сам, чтобы не запоминать команды:
 #   1. создаёт venv (.venv) при первом запуске;
-#   2. ставит/обновляет зависимости из requirements.txt;
-#   3. поднимает сервер uvicorn с автоперезагрузкой.
+#   2. ставит/обновляет зависимости из setup/requirements.txt;
+#   3. запускает веб-сервер + Telegram-бот + VK-бот в одном окне (run_all.py).
+#      Боты стартуют, только если в config.py заданы их токены (иначе пропускаются,
+#      остаётся эмуляция чата). У каждого свой префикс в выводе: [web]/[tg]/[vk].
 #
 # Использование:
-#   ./start.sh              # запуск на http://127.0.0.1:8000
+#   ./start.sh              # запуск на http://127.0.0.1:8000 + боты
 #   ./start.sh 9000         # свой порт
 #   HOST=0.0.0.0 ./start.sh # слушать все интерфейсы (доступ по сети)
+#
+# Только веб с автоперезагрузкой (для разработки): python -m uvicorn app:app --reload
 #
 # Работает в Git Bash (Windows), Linux и macOS. Всё вызывается через `python -m …`,
 # поэтому PATH к uvicorn.exe/pip.exe не нужен (см. заметку в README.md).
@@ -55,7 +59,8 @@ fi
 
 echo "📥 Проверяю зависимости ..."
 "$VENV_PY" -m pip install --upgrade pip >/dev/null
-"$VENV_PY" -m pip install -r requirements.txt
+"$VENV_PY" -m pip install -r setup/requirements.txt
 
-echo "🚀 Запускаю сервер:  http://${HOST}:${PORT}   (Ctrl+C — остановить)"
-exec "$VENV_PY" -m uvicorn app:app --reload --host "$HOST" --port "$PORT"
+echo "🚀 Запускаю веб + боты:  http://${HOST}:${PORT}   (Ctrl+C — остановить всё)"
+export HOST PORT
+exec "$VENV_PY" run_all.py

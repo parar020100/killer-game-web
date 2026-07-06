@@ -27,7 +27,7 @@ NAME_MAX_LEN = 50
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 
 # VK-бот сообщества (Long Poll API): ключ доступа сообщества и его числовой id.
-# Пусто = VK-бот отключён. Пошаговая настройка — в SETUP.md.
+# Пусто = VK-бот отключён. Пошаговая настройка — в info/SETUP.md.
 VK_GROUP_TOKEN = os.getenv("VK_GROUP_TOKEN", "")
 VK_GROUP_ID = os.getenv("VK_GROUP_ID", "")   # число, id сообщества (без минуса)
 VK_API_VERSION = "5.199"

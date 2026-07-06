@@ -10,7 +10,7 @@ Poll API сообщества, без внешних библиотек (тол�
   • исходящие уведомления шлёт сам веб-процесс через messages.send
     (см. core/vk_send.py и Identity.deliver).
 
-Настройка сообщества (Long Poll, права, токен) — в SETUP.md.
+Настройка сообщества (Long Poll, права, токен) — в info/SETUP.md.
 
 Запуск:  .venv/Scripts/python.exe vk_bot.py
 """
@@ -123,7 +123,7 @@ def main():
                 "  • включить Long Poll API, версия " + config.VK_API_VERSION + ";\n"
                 "  • вкладка «Типы событий» → включить «Входящее сообщение» (message_new).\n"
                 "Также: Управление → Сообщения → включить «Сообщения сообщества».\n"
-                "Подробно — в SETUP.md, раздел 5.") from exc
+                "Подробно — в info/SETUP.md, раздел 5.") from exc
         raise
 
     try:

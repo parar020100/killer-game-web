@@ -25,8 +25,9 @@ HOST=0.0.0.0 ./start.sh # слушать всю сеть (доступ с дру
 <summary>Запуск вручную (без скрипта)</summary>
 
 ```bash
-python -m pip install -r requirements.txt
-python -m uvicorn app:app --reload
+python -m pip install -r setup/requirements.txt
+python -m uvicorn app:app --reload          # только веб (для разработки)
+python run_all.py                           # веб + Telegram/VK-боты в одном окне
 ```
 
 > Запускайте именно `python -m uvicorn ...`, а не голый `uvicorn`: скрипт `uvicorn.exe`
@@ -100,9 +101,18 @@ killer_game_web/
 │   ├── settings.html    # «⚙️ Настройки игры» (пароль регистрации + заготовки)
 │   ├── _live.html       # скрипт живого обновления блоков [data-live] (include)
 │   └── admin_log.html   # страница общего журнала администраторов
-├── requirements.txt
-├── CONCEPT.md           # концепция и целевая архитектура
-└── FEATURES.md          # инвентаризация всех фич бота — спецификация для порта
+├── run_all.py           # запуск всего сразу: веб + Telegram/VK-боты (одно окно)
+├── tg_bot.py            # Telegram-бот (python-telegram-bot)
+├── vk_bot.py            # VK-бот (Bots Long Poll)
+├── start.sh             # установка зависимостей и запуск (веб + боты)
+├── setup/
+│   └── requirements.txt # зависимости
+└── info/                # документация
+    ├── CONCEPT.md       # концепция и целевая архитектура
+    ├── FEATURES.md      # инвентаризация всех фич бота — спецификация для порта
+    ├── SETUP.md         # настройка и запуск, подключение Telegram/VK-ботов
+    ├── MODE_MESSAGES.txt # сводка сообщений режимов «Киллер»/«Папарацци»
+    └── TODO.md          # план работ
 ```
 
 Состояние игры, игроки и их каналы хранятся в `data/killer_game.db` и переживают
