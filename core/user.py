@@ -50,6 +50,22 @@ class User:
         return cls(row["user_id"]) if row else None
 
     @classmethod
+    def by_platform_username(cls, platform, value):
+        """Пользователь по (платформа, username|platform_uid) — точное сопоставление.
+
+        Нужно, чтобы отличать одинаковые ники на разных платформах (tg/vk/local):
+        например ?source=vk&user=nick найдёт именно VK-канал, а не первый попавшийся.
+        """
+        if not value:
+            return None
+        v = str(value).strip().lstrip("@")
+        row = query_one(
+            "SELECT user_id FROM identity WHERE platform = ? "
+            "AND (lower(username) = lower(?) OR lower(platform_uid) = lower(?)) "
+            "ORDER BY id LIMIT 1", (platform, v, v))
+        return cls(row["user_id"]) if row else None
+
+    @classmethod
     def get_or_create_by_identity(cls, platform, platform_uid, username=None, name=None):
         """Найти пользователя по идентичности или создать новый профиль с ней."""
         ident = Identity.by_platform(platform, platform_uid)

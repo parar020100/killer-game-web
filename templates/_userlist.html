@@ -127,7 +127,7 @@
           </form>
         </div>
       </details>
-      {% if allow_dev %}<a class="btn chip" href="/app?user={{ u.username or u.id }}" target="_blank" rel="noopener">🕶 Меню от имени игрока</a>{% endif %}
+      {% if allow_dev %}<a class="btn chip" href="/app?user={{ u.id }}" target="_blank" rel="noopener">🕶 Меню от имени игрока</a>{% endif %}
     </div>
   </details>
 {%- endmacro %}

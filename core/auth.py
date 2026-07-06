@@ -42,14 +42,24 @@ def set_permanent_token(identity_id: int) -> str:
 
 def resolve_permanent_token(token: str):
     """Вернуть user_id по постоянному токену канала (без «сжигания») или None."""
+    row = resolve_permanent_token_row(token)
+    return row["user_id"] if row else None
+
+
+def resolve_permanent_token_row(token: str):
+    """Вернуть строку (user_id, platform, username) по токену или None.
+
+    Платформа нужна, чтобы вход по ссылке из VK/TG «привязывал» вкладку в dev-режиме
+    к каналу именно этой платформы (ники на разных платформах могут совпадать).
+    """
     if not token:
         return None
-    row = query_one(
-        "SELECT i.user_id AS user_id FROM persistent_login p "
-        "JOIN identity i ON i.id = p.identity_id WHERE p.token_hash = ?",
+    return query_one(
+        "SELECT i.user_id AS user_id, i.platform AS platform, i.username AS username "
+        "FROM persistent_login p JOIN identity i ON i.id = p.identity_id "
+        "WHERE p.token_hash = ?",
         (_hash(token),),
     )
-    return row["user_id"] if row else None
 
 
 def has_permanent_token(identity_id: int) -> bool:

@@ -61,8 +61,8 @@ def bootstrap_root():
     if not idents:
         return
     token = auth.set_permanent_token(idents[0].id)
-    base = (os.getenv("APP_BASE_URL")
-            or f"http://{os.getenv('HOST', '127.0.0.1')}:{os.getenv('PORT', '8000')}")
+    # Тот же базовый адрес, что и у ботов (config.APP_BASE_URL) — по умолчанию http.
+    base = (getattr(config, "APP_BASE_URL", "") or "http://127.0.0.1:8000").rstrip("/")
     print("=" * 72)
     print("[root] Вход root-администратора (создайте через него обычного админа):")
     print(f"[root] {base}/login?token={token}")
@@ -148,11 +148,21 @@ def validate_real_name(raw: str):
 # Текущий пользователь (по сессии или отладочному ?user=<id|username>)
 # ---------------------------------------------------------------------------
 
-def _resolve_user_param(raw):
-    """Пользователь по значению ?user= — это может быть внутренний id ИЛИ username."""
+def _resolve_user_param(raw, source=None):
+    """Пользователь по ?user= (id ИЛИ username), опц. с уточнением платформы ?source=.
+
+    Ники на разных платформах (tg/vk/local) могут совпадать, поэтому только username
+    неоднозначен. Если задан source — ищем именно на этой платформе; иначе — id, затем
+    первый попавшийся по нику (обратная совместимость).
+    """
     raw = (raw or "").strip()
     if not raw:
         return None
+    source = (source or "").strip()
+    if source:
+        u = User.by_platform_username(source, raw)
+        if u is not None:
+            return u
     if raw.isdigit():
         return User.by_id(int(raw))
     return User.by_username(raw)
@@ -168,44 +178,59 @@ def _dev_user_param(request: Request):
     if not config.ALLOW_DEV_LOGIN:
         return None
     raw = (request.query_params.get("user") or "").strip()
-    return raw if raw and _resolve_user_param(raw) else None
+    source = request.query_params.get("source")
+    return raw if raw and _resolve_user_param(raw, source) else None
+
+
+def _dev_source(request: Request):
+    """Уточнение платформы ?source= (tg/vk/local) в dev-режиме, если задано."""
+    if not config.ALLOW_DEV_LOGIN:
+        return None
+    return (request.query_params.get("source") or "").strip() or None
 
 
 def current_user(request: Request):
-    # Отладочный ?user= имеет приоритет над cookie и не трогает сессию.
+    # Отладочный ?user= (+ опц. ?source=) имеет приоритет над cookie и не трогает сессию.
     if config.ALLOW_DEV_LOGIN:
-        user = _resolve_user_param(request.query_params.get("user"))
+        user = _resolve_user_param(request.query_params.get("user"),
+                                   request.query_params.get("source"))
         if user is not None:
             return user
     uid = request.session.get("uid")
     return User.by_id(uid) if uid else None
 
 
-def _link_fn(user_param):
-    """Вернуть функцию, дописывающую ?user=<id|username> к внутренним ссылкам/формам."""
+def _link_fn(user_param, source=None):
+    """Функция, дописывающая ?user=<id|username>(&source=<платформа>) к ссылкам/формам."""
     def link(path: str) -> str:
         if not user_param:
             return path
         sep = "&" if "?" in path else "?"
-        return f"{path}{sep}user={quote(str(user_param))}"
+        q = f"user={quote(str(user_param))}"
+        if source:
+            q += f"&source={quote(str(source))}"
+        return f"{path}{sep}{q}"
     return link
 
 
 def _ctx(request: Request, **extra):
-    """Контекст шаблона + прокидывание отладочного ?user= во все ссылки страницы."""
+    """Контекст шаблона + прокидывание отладочного ?user=/?source= во все ссылки."""
     user_param = _dev_user_param(request)
+    source = _dev_source(request)
     return {
         "dev_user": user_param,
+        "dev_source": source,
         "allow_dev": config.ALLOW_DEV_LOGIN,
-        "link": _link_fn(user_param),
+        "link": _link_fn(user_param, source),
         **extra,
     }
 
 
 def _redirect(request: Request, url: str, status_code: int = 303):
-    """RedirectResponse, сохраняющий отладочный ?user= (чтобы вкладка не «слетала»)."""
-    return RedirectResponse(url=_link_fn(_dev_user_param(request))(url),
-                            status_code=status_code)
+    """RedirectResponse, сохраняющий отладочные ?user=/?source= (вкладка не «слетает»)."""
+    return RedirectResponse(
+        url=_link_fn(_dev_user_param(request), _dev_source(request))(url),
+        status_code=status_code)
 
 
 _URL_RE = re.compile(r"(https?://[^\s]+)")
@@ -782,22 +807,23 @@ def chat_start(request: Request, username: str):
 
 @app.get("/login")
 def login(request: Request, token: str = ""):
-    uid = auth.resolve_permanent_token(token)
-    if uid is None:
+    row = auth.resolve_permanent_token_row(token)
+    if row is None:
         return HTMLResponse(
             "<h3>Ссылка недействительна или устарела.</h3>"
             "<p>Вернитесь в чат и нажмите <b>/start</b> ещё раз.</p>",
             status_code=400,
         )
+    uid = row["user_id"]
     request.session["uid"] = uid
-    # В dev-режиме закрепляем вход за КОНКРЕТНОЙ вкладкой через ?user=<username>,
-    # чтобы разные ссылки, открытые в разных вкладках одного браузера, не мешали
-    # друг другу (cookie одна на браузер). В проде (dev выключен) — обычная cookie.
+    # В dev-режиме закрепляем вход за КОНКРЕТНОЙ вкладкой через ?user=<ник>&source=<платформа>,
+    # чтобы разные ссылки в разных вкладках одного браузера не мешали друг другу
+    # (cookie одна на браузер). source нужен, т.к. ники на tg/vk/local могут совпадать.
+    # В проде (dev выключен) — обычная cookie.
     if config.ALLOW_DEV_LOGIN:
-        u = User.by_id(uid)
-        ident = u.get_username() if u else None
-        return RedirectResponse(url=f"/app?user={quote(str(ident or uid))}",
-                                status_code=303)
+        ident = row["username"] or uid
+        params = f"user={quote(str(ident))}&source={quote(str(row['platform']))}"
+        return RedirectResponse(url=f"/app?{params}", status_code=303)
     return RedirectResponse(url="/app", status_code=303)
 
 
