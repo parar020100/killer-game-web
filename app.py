@@ -1379,8 +1379,15 @@ async def settings_save(request: Request):
                   "update": "обновление (git pull) и перезапуск"}
         if control.request(action):
             admin_log.log(f"🔁 {user.get_name()} инициировал(а) {labels[action]} приложения")
-            saved = (f"Команда на {labels[action]} отправлена. "
-                     "Применится в течение пары секунд.")
+            msg = (f"🔁 Команда на {labels[action]} отправлена. "
+                   "Применится в течение пары секунд.")
+            # «Обновить»/«Перезагрузить» — уводим на домашнюю страницу (дашборд),
+            # а сообщение показываем всплывающим тостом сайта (п.63). «Выключить»
+            # оставляем на странице настроек — после него приложение недоступно.
+            if action in ("update", "restart"):
+                request.session["flash"] = msg
+                return _redirect(request, "/app")
+            saved = msg
         else:
             saved = "Неизвестная команда управления."
     elif action == "full_reset":
