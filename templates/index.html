@@ -203,12 +203,28 @@
 
   .section-hint { text-align: center; font-size: 12px; color: var(--text-dim); margin: 2px 0 -2px; }
 
-  /* одноразовое уведомление о результате действия */
+  /* одноразовое уведомление о результате действия — всплывающий тост.
+     Фиксирован снизу по центру: всегда в поле зрения, не «вшит» далеко от кнопки.
+     Авто-скрывается и закрывается крестиком/кликом (см. скрипт внизу). */
+  .toast-wrap {
+    position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom));
+    transform: translateX(-50%); z-index: 1000;
+    width: min(440px, calc(100vw - 24px)); pointer-events: none;
+  }
   .flash {
+    pointer-events: auto; position: relative;
     background: var(--surface); border: 1px solid var(--accent-border);
     border-left: 3px solid var(--accent); border-radius: 12px;
-    padding: 10px 14px; font-size: 13.5px; box-shadow: var(--shadow-sm);
+    padding: 12px 40px 12px 14px; font-size: 13.5px; box-shadow: var(--shadow);
+    cursor: pointer; animation: toast-in .22s ease-out;
   }
+  .flash.hide { animation: toast-out .3s ease-in forwards; }
+  .flash .toast-x {
+    position: absolute; top: 5px; right: 8px; border: none; background: none;
+    color: var(--text-dim); font-size: 18px; line-height: 1; cursor: pointer; padding: 2px 4px;
+  }
+  @keyframes toast-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes toast-out { to { opacity: 0; transform: translateY(14px); } }
 
   /* кнопка-переключатель списка (в меню, рядом с «Пауза»); её текст меняется, а
      состояние живёт в классе html.show-userlist (и в куке — переживает перезагрузку).
@@ -437,7 +453,7 @@
       <span class="as-links"><a href="{{ link('/logout') }}">выйти</a></span>
     </div>
 
-    {% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
+    {% if flash %}<div class="toast-wrap"><div class="flash" data-toast><button type="button" class="toast-x" aria-label="Закрыть">×</button>{{ flash }}</div></div>{% endif %}
 
     <div data-live="4000" style="display:contents">
     <div class="bubble">
@@ -565,6 +581,20 @@
     if (b.dataset.on) b.textContent = open ? b.dataset.on : b.dataset.off;
     document.cookie = name + '=' + (open ? '1' : '0') + ';path=/;max-age=31536000;samesite=lax';
   });
+
+  // Тост о результате действия: авто-скрытие через 6 с, закрытие крестиком или кликом.
+  (function () {
+    var t = document.querySelector('[data-toast]');
+    if (!t) return;
+    var done = false;
+    function close() {
+      if (done) return; done = true;
+      t.classList.add('hide');
+      setTimeout(function () { var w = t.closest('.toast-wrap'); if (w) w.remove(); }, 300);
+    }
+    t.addEventListener('click', close);
+    setTimeout(close, 6000);
+  })();
   </script>
 </body>
 </html>
