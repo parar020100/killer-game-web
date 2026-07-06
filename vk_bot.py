@@ -14,6 +14,7 @@ Poll API сообщества, без внешних библиотек (тол�
 
 Запуск:  .venv/Scripts/python.exe vk_bot.py
 """
+import json
 import logging
 import random
 import time
@@ -41,10 +42,19 @@ def _api(method: str, **params):
     return r["response"]
 
 
-def _send(user_id, text: str):
+# Постоянная клавиатура сообщества с кнопкой-«/start» (не одноразовая).
+_PERSISTENT_KB = json.dumps({"one_time": False, "buttons": [[
+    {"action": {"type": "text", "label": botcommon.LOGIN_BUTTON}}]]},
+    ensure_ascii=False)
+
+
+def _send(user_id, text: str, keyboard: str = _PERSISTENT_KB):
     try:
-        _api("messages.send", user_id=user_id, message=text,
-             random_id=random.randint(1, 2_000_000_000))
+        params = dict(user_id=user_id, message=text,
+                      random_id=random.randint(1, 2_000_000_000))
+        if keyboard:
+            params["keyboard"] = keyboard
+        _api("messages.send", **params)
         log.info("→ ответ отправлен пользователю %s", user_id)
     except Exception as exc:  # noqa: BLE001
         log.warning("НЕ удалось отправить пользователю %s: %s", user_id, exc)
@@ -72,7 +82,7 @@ def handle_message(from_id, text: str):
     user = _ensure_user(from_id)
     ident = user.identity("vk")
 
-    if low in _START_WORDS:
+    if low in _START_WORDS or text == botcommon.LOGIN_BUTTON:
         link, reissued = botcommon.issue_login_link(ident)
         _send(from_id, botcommon.welcome_text(link, reissued))
         log.info("start: user id=%s vk=%s", user.id, from_id)

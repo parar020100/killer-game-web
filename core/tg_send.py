@@ -19,18 +19,22 @@ def enabled() -> bool:
     return bool((getattr(config, "TELEGRAM_BOT_TOKEN", "") or "").strip())
 
 
-def send(chat_id, text: str) -> bool:
-    """Отправить текст в чат Telegram. True при успехе, False при любой ошибке."""
+def send(chat_id, text: str, with_menu: bool = True) -> bool:
+    """Отправить текст в чат Telegram. True при успехе, False при любой ошибке.
+
+    with_menu=True добавляет к сообщению inline-кнопку «Открыть меню игры».
+    """
     token = (getattr(config, "TELEGRAM_BOT_TOKEN", "") or "").strip()
     if not token:
         return False
+    payload = {"chat_id": int(chat_id), "text": text,
+               "disable_web_page_preview": True}
+    if with_menu:
+        from core import botcommon
+        payload["reply_markup"] = {"inline_keyboard": [[
+            {"text": botcommon.MENU_BUTTON, "url": botcommon.menu_url()}]]}
     try:
-        r = httpx.post(
-            _API.format(token=token),
-            json={"chat_id": int(chat_id), "text": text,
-                  "disable_web_page_preview": True},
-            timeout=10,
-        )
+        r = httpx.post(_API.format(token=token), json=payload, timeout=10)
         return r.status_code == 200 and r.json().get("ok", False)
     except (httpx.HTTPError, ValueError, TypeError):
         return False

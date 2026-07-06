@@ -9,6 +9,7 @@
 Если ключ не задан или отправка не удалась, вызывающий код откатывается на
 эмуляцию чата (core/chat.py).
 """
+import json
 import random
 
 import httpx
@@ -22,19 +23,32 @@ def enabled() -> bool:
     return bool((getattr(config, "VK_GROUP_TOKEN", "") or "").strip())
 
 
-def send(user_id, text: str) -> bool:
-    """Отправить текст пользователю ВК. True при успехе, False при любой ошибке."""
+def _menu_keyboard() -> str:
+    from core import botcommon
+    return json.dumps({"inline": True, "buttons": [[
+        {"action": {"type": "open_link", "link": botcommon.menu_url(),
+                    "label": botcommon.MENU_BUTTON}}]]}, ensure_ascii=False)
+
+
+def send(user_id, text: str, with_menu: bool = True) -> bool:
+    """Отправить текст пользователю ВК. True при успехе, False при любой ошибке.
+
+    with_menu=True добавляет к сообщению inline-кнопку «Открыть меню игры».
+    """
     token = (getattr(config, "VK_GROUP_TOKEN", "") or "").strip()
     if not token:
         return False
+    params = {
+        "access_token": token,
+        "v": getattr(config, "VK_API_VERSION", "5.199"),
+        "user_id": int(user_id),
+        "message": text,
+        "random_id": random.randint(1, 2_000_000_000),
+    }
+    if with_menu:
+        params["keyboard"] = _menu_keyboard()
     try:
-        r = httpx.get(_API, params={
-            "access_token": token,
-            "v": getattr(config, "VK_API_VERSION", "5.199"),
-            "user_id": int(user_id),
-            "message": text,
-            "random_id": random.randint(1, 2_000_000_000),
-        }, timeout=10).json()
+        r = httpx.get(_API, params=params, timeout=10).json()
         return "response" in r
     except (httpx.HTTPError, ValueError, TypeError):
         return False

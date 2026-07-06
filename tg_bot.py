@@ -18,7 +18,7 @@ Telegram-сторону:
 """
 import logging
 
-from telegram import Update
+from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, ContextTypes, filters,
 )
@@ -27,6 +27,10 @@ import config
 import db  # noqa: F401 — импорт инициализирует БД (таблицы)
 from core import botcommon
 from core.user import User
+
+# Постоянная кнопка под полем ввода — её нажатие равносильно команде /start.
+_KB = ReplyKeyboardMarkup([[botcommon.LOGIN_BUTTON]],
+                          resize_keyboard=True, is_persistent=True)
 
 logging.basicConfig(
     format="%(asctime)s [tg_bot] %(levelname)s: %(message)s", level=logging.INFO)
@@ -48,7 +52,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tg = update.effective_user
     user = _ensure_user(tg)
     link, reissued = botcommon.issue_login_link(user.identity("tg"))
-    await update.effective_message.reply_text(botcommon.welcome_text(link, reissued))
+    await update.effective_message.reply_text(
+        botcommon.welcome_text(link, reissued), reply_markup=_KB)
     log.info("start: user id=%s tg=%s (@%s)", user.id, tg.id, tg.username)
 
 
@@ -58,19 +63,22 @@ async def link_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = _ensure_user(tg)
     code = context.args[0] if context.args else ""
     reply = botcommon.do_link(user.identity("tg"), code)
-    await update.effective_message.reply_text(reply)
+    await update.effective_message.reply_text(reply, reply_markup=_KB)
 
 
 async def forward_to_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Любое сообщение игрока пересылаем администраторам (как в исходном боте)."""
+    """Текстовые сообщения игрока: нажатие кнопки-«/start» → /start, иначе — админам."""
+    text = (update.effective_message.text or "").strip()
+    if text == botcommon.LOGIN_BUTTON:
+        await start(update, context)
+        return
     tg = update.effective_user
     user = User.by_tg(str(tg.id))
-    text = update.effective_message.text or ""
     has_admins = botcommon.forward_to_admins(user, "Telegram", text)
     if not has_admins:
         await update.effective_message.reply_text(
             "Сообщение получено, но пока некому его переслать "
-            "(нет администраторов).")
+            "(нет администраторов).", reply_markup=_KB)
 
 
 async def _announce_connected(application):
