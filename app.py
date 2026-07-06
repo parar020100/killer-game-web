@@ -280,19 +280,21 @@ def linkify(text: str) -> Markup:
 # ---------------------------------------------------------------------------
 
 def _btn(label, action=None, kind="", full=False, href=None, todo=False,
-         toggle=None, confirm="", disabled=False, note=""):
+         toggle=None, confirm="", disabled=False, note="", popover=""):
     """Кнопка дашборда.
 
     confirm — текст диалога подтверждения перед «опасным» действием (пусто = без);
     для kind="danger" подставляем общий текст автоматически.
     disabled — показать бледно-серой (действие недоступно по состоянию игры),
     note — подсказка (title) почему недоступно.
+    popover — id встроенного «окошка» (напр. "testusers"), которое раскрывает эта
+    кнопка вместо отправки формы (разметка — в шаблоне index.html).
     """
     if kind == "danger" and action and not confirm:
         confirm = "Вы уверены, что хотите продолжить?"
     return {"label": label, "action": action, "kind": kind, "full": full,
             "href": href, "todo": todo, "toggle": toggle, "confirm": confirm,
-            "disabled": disabled, "note": note}
+            "disabled": disabled, "note": note, "popover": popover}
 
 
 # «Секрет бота» — пасхалка-рикролл (как в боте, h_user.py). Две площадки на выбор.
@@ -331,11 +333,16 @@ def read_rules_html():
         return None
 
 
-def notify_target(user: User):
-    """Сообщить игроку его текущую цель (в эмулированный чат)."""
+def notify_target(user: User, changed: bool = False):
+    """Уведомить игрока, что цель назначена/изменилась (БЕЗ раскрытия имени).
+
+    Имя цели показывается только в интерфейсе игры (под спойлером на дашборде),
+    поэтому в уведомление оно не попадает — лишь факт и приглашение открыть сайт.
+    ``changed=True`` — цель сменилась (переназначение), иначе — первично назначена.
+    """
     target = user.get_target_user()
     if target:
-        user.notify(mode.t("target_hint", target=target.get_name()))
+        user.notify(mode.t("target_changed" if changed else "target_assigned"))
 
 
 def player_section(user: User):
@@ -393,6 +400,10 @@ def _player_action_buttons(user: User, game: Game):
     elif not started:
         b.append(_btn(mode.t("report_btn"), disabled=True, full=True,
                       note="Сообщить о поимке можно будет после старта игры."))
+    elif game.is_paused():
+        # На паузе игровые действия недоступны (как в боте) — заявку не подать.
+        b.append(_btn(mode.t("report_btn"), disabled=True, full=True,
+                      note="Игра на паузе — сообщить о поимке сейчас нельзя."))
     elif not user.is_alive():
         b.append(_btn(mode.t("report_btn"), disabled=True, full=True,
                       note="Вы выбыли из игры — ловить цель больше нельзя."))
@@ -429,6 +440,12 @@ def _player_game_split(user: User):
         lines.append("")
         lines.append("☠️ <em>Вы выбыли из игры.</em> Спасибо за участие!")
         return lines, ""
+    # На паузе цель не показывается (как в боте): игровые действия заморожены.
+    if game.is_paused():
+        right = ('<span class="divider">══ 🎯 Ваша цель ══</span>\n'
+                 '⏸️ <em>Игра на паузе — цель временно скрыта. '
+                 'Дождитесь возобновления.</em>')
+        return lines, right
     # Событие «вас поймали» больше НЕ показывается здесь — для него отдельная
     # секция (capture_prompt), чтобы не прятать цель и кнопку «сообщить о поимке».
     target = user.get_target_user()
@@ -482,15 +499,25 @@ def capture_prompt(user: User):
         return None
     # ВАЖНО: имя «охотника» раскрывать нельзя — анонимность преследователя
     # ключевая механика игры (как в боте: «Другой игрок сообщил…»).
+    # На паузе подтверждать/опровергать нельзя (как в боте) — кнопки серые.
+    if Game().is_paused():
+        buttons = [
+            _btn("✅ Подтвердить", disabled=True,
+                 note="Игра на паузе — подтвердить можно после возобновления."),
+            _btn("🚫 Это не так", disabled=True,
+                 note="Игра на паузе — ответить можно после возобновления."),
+        ]
+    else:
+        buttons = [
+            _btn("✅ Подтвердить", "confirm_capture", "primary"),
+            _btn("🚫 Это не так", "deny_capture", "danger"),
+        ]
     return {
         "hint": mode.t("caught_hint"),
         "message": mode.t("caught_msg"),
         "kind": "alert",
         # Половинные кнопки в одну строку (сетка .keyboard — 2 колонки).
-        "buttons": [
-            _btn("✅ Подтвердить", "confirm_capture", "primary"),
-            _btn("🚫 Это не так", "deny_capture", "danger"),
-        ],
+        "buttons": buttons,
     }
 
 
@@ -549,8 +576,7 @@ def admin_management_buttons(user: User):
     b.append(_btn("📢 Рассылка", href="/broadcast"))
     b.append(_btn("⚙️ Настройки игры", href="/app/settings"))
     b.append(_btn("📋 Журнал", href="/admin-log"))
-    b.append(_btn("🧪 Тестовые игроки", "make_test_users",
-                  confirm="Создать 5 тестовых игроков (веб-чат)?"))
+    b.append(_btn("🧪 Тестовые пользователи", popover="testusers"))
     return b
 
 
@@ -644,14 +670,23 @@ def _broadcast(text, players_only=True):
         u.notify(text)
 
 
-# Тестовые игроки: создаются админом одной кнопкой (канал 'local' = веб-чат).
+# Тестовые пользователи: создаются админом (канал 'local' = веб-чат). Их ники —
+# строго вида ``test<цифры>`` (напр. test001), чтобы массовое удаление затрагивало
+# ТОЛЬКО их (root/обычные пользователи с другими никами не пострадают).
 _TEST_FIRST = ["Тест", "Гость", "Демо", "Проба", "Игрок", "Бот", "Робот", "Аноним"]
 _TEST_LAST = ["Тестов", "Пробин", "Демидов", "Гостев", "Ботов", "Мокин", "Фейков"]
+_TEST_USER_RE = re.compile(r"^test\d+$")
 
 
-def _create_test_users(n: int = 5) -> int:
-    """Создать n тестовых игроков (веб-чат) со случайными именами. Возвращает число."""
+def _is_test_user(u: User) -> bool:
+    un = (u.get_username() or "")
+    return bool(_TEST_USER_RE.match(un)) and not u.is_root()
+
+
+def _create_test_users(n: int = 5, join: bool = True) -> int:
+    """Создать n тестовых пользователей (веб-чат). join=True — сразу в игру. → число."""
     import random
+    n = max(1, min(int(n), 100))
     existing = {u.get_username() for u in User.all()}
     created, i = 0, 1
     while created < n and i < 10000:
@@ -662,10 +697,34 @@ def _create_test_users(n: int = 5) -> int:
         name = f"{random.choice(_TEST_FIRST)} {random.choice(_TEST_LAST)}"
         u = User.get_or_create_by_local(un, username=un, name=name)
         u.set_real_name(name)
-        if not u.is_player():
-            u.join()
+        if join and not u.is_player():
+            u.join(alive=not Game().is_started())
         created += 1
     return created
+
+
+def _delete_test_from_game() -> int:
+    """Снять всех тестовых пользователей (test<цифры>) с игры. → сколько снято."""
+    n = 0
+    for u in User.all():
+        if _is_test_user(u) and u.is_player():
+            u.leave()
+            n += 1
+    return n
+
+
+def _delete_test_users(admin: User) -> int:
+    """Удалить из системы всех тестовых пользователей (test<цифры>). → сколько.
+
+    Строго по маске ``test<цифры>`` и c пропуском root — случайно снести обычные
+    учётки или организатора нельзя.
+    """
+    n = 0
+    for u in list(User.all()):
+        if _is_test_user(u) and u.id != admin.id and not u.is_default_admin():
+            u.delete_from_system(admin)
+            n += 1
+    return n
 
 
 # Аудитории адресной рассылки (админ → выбранная группа).
@@ -736,7 +795,7 @@ def results_text() -> str:
     return "\n".join(lines)
 
 
-def apply_action(action: str, user: User) -> str:
+def apply_action(action: str, user: User, count: int = 5) -> str:
     """Применить действие кнопки и вернуть текст-фидбек для показа игроку (flash).
 
     Каждая кнопка обязана давать результат: успех — подтверждение, неуспех —
@@ -748,7 +807,8 @@ def apply_action(action: str, user: User) -> str:
 
     # --- админские действия управления игрой ---
     if action in ("open_reg", "close_reg", "start_game", "stop_game", "pause",
-                  "resume", "reset_game", "end_game", "make_test_users"):
+                  "resume", "reset_game", "end_game", "add_test_users",
+                  "add_test_players", "del_test_players", "del_test_users"):
         if not user.is_admin():
             return "⛔ Это действие доступно только организаторам."
 
@@ -764,7 +824,8 @@ def apply_action(action: str, user: User) -> str:
             return "ℹ️ Регистрация и так закрыта."
         game.close_registration()
         admin_log.log(f"🚫 {who} закрыл(а) регистрацию")
-        return "🚫 Регистрация закрыта."
+        _broadcast("🚫 Регистрация на игру закрыта.", players_only=False)
+        return "🚫 Регистрация закрыта, игроки уведомлены."
     elif action == "start_game":
         ok, msg = game.start()
         if ok:
@@ -831,21 +892,32 @@ def apply_action(action: str, user: User) -> str:
             if game.check_finished():
                 game.announce_winner()
         return "🚪 Вы вышли из игры."
-    elif action == "make_test_users":
-        n = _create_test_users(5)
-        admin_log.log(f"🧪 {who} создал(а) {n} тестовых игроков (веб-чат)")
-        return f"🧪 Создано тестовых игроков: {n}."
-    elif action == "report_capture":
-        ok, msg = user.attempt_capture()
-        return ("✅ " if ok else "⚠️ ") + msg
-    elif action == "cancel_capture":
-        ok, msg = user.cancel_capture()
-        return ("✅ " if ok else "⚠️ ") + msg
-    elif action == "confirm_capture":
-        ok, msg = user.confirm_capture()
-        return ("✅ " if ok else "⚠️ ") + msg
-    elif action == "deny_capture":
-        ok, msg = user.deny_capture()
+    elif action in ("add_test_users", "add_test_players"):
+        n = _create_test_users(count, join=(action == "add_test_players"))
+        kind_word = "игроков" if action == "add_test_players" else "пользователей"
+        admin_log.log(f"🧪 {who} создал(а) {n} тестовых {kind_word} (веб-чат)")
+        return f"🧪 Создано тестовых {kind_word}: {n}."
+    elif action == "del_test_players":
+        n = _delete_test_from_game()
+        admin_log.log(f"🧪 {who} снял(а) с игры {n} тестовых игроков")
+        return f"🧪 Снято с игры тестовых игроков: {n}."
+    elif action == "del_test_users":
+        n = _delete_test_users(user)
+        admin_log.log(f"🧪 {who} удалил(а) {n} тестовых пользователей из системы")
+        return f"🧪 Удалено тестовых пользователей: {n}."
+    elif action in ("report_capture", "cancel_capture", "confirm_capture",
+                    "deny_capture"):
+        # Игровые действия игрока заблокированы на паузе (как в боте).
+        if game.is_paused():
+            return "⏸️ Игра на паузе — действие сейчас недоступно."
+        if action == "report_capture":
+            ok, msg = user.attempt_capture()
+        elif action == "cancel_capture":
+            ok, msg = user.cancel_capture()
+        elif action == "confirm_capture":
+            ok, msg = user.confirm_capture()
+        else:
+            ok, msg = user.deny_capture()
         return ("✅ " if ok else "⚠️ ") + msg
     # "noop" / незнакомое — просто перерисовать без плашки
     return ""
@@ -900,6 +972,17 @@ def chat_view(request: Request, username: str):
         {"tag": m["tag"] or "bot", "ts": m["ts"], "html": linkify(m["body"])}
         for m in chat.read(username)
     ]
+    # Разовый показ настоящей ссылки входа (в историю на диск токен не пишется —
+    # там он замаскирован). Ссылка живёт в сессии одну загрузку после /start.
+    fresh = request.session.pop("fresh_link", None)
+    if fresh and fresh.get("u") == username and fresh.get("link"):
+        messages.append({
+            "tag": "bot", "ts": "",
+            "html": Markup(
+                "🔗 <strong>Ваша ссылка для входа</strong> "
+                "(показывается один раз, в истории не сохраняется):<br>"
+                + str(linkify(fresh["link"]))),
+        })
     return templates.TemplateResponse(
         request, "chat.html",
         {"username": username, "messages": messages},
@@ -919,15 +1002,18 @@ def chat_start(request: Request, username: str):
     token = auth.set_permanent_token(ident.id)
     link = f"{request.base_url}login?token={token}"
     note = "Прежняя ссылка больше не работает.\n" if reissued else ""
+    # В историю (файл) пишем текст без самой ссылки — токен туда попадать не должен
+    # (add_bot_message замаскирует любой token=..., а мы и вовсе не даём ссылку).
+    # Настоящую ссылку показываем один раз через сессию (см. chat_view).
     chat.add_bot_message(
         username,
-        "Ваша постоянная ссылка для входа в игру «Папарацци» "
-        "(сохраните её в закладки):\n"
-        f"{link}\n"
-        f"{note}Она работает всегда и не имеет срока. Никому её не пересылайте — "
-        "по ней входят в вашу учётку. Нажмёте /start ещё раз — будет выдана новая, "
+        "Ваша постоянная ссылка для входа в игру «Папарацци» отправлена ниже.\n"
+        f"{note}Она работает всегда и не имеет срока, но в истории переписки "
+        "не сохраняется (в целях безопасности). Никому её не пересылайте — по ней "
+        "входят в вашу учётку. Нажмёте /start ещё раз — будет выдана новая, "
         "а старая перестанет работать.",
     )
+    request.session["fresh_link"] = {"u": username, "link": link}
     return RedirectResponse(url=f"/chat/{username}", status_code=303)
 
 
@@ -1454,7 +1540,8 @@ def capture_form(request: Request):
     game = Game()
     target = user.get_target_user()
     if not (app_settings.photo_proof() and user.is_player() and user.is_alive()
-            and game.is_started() and target and not user.is_awaiting_confirmation()):
+            and game.is_started() and not game.is_paused()
+            and target and not user.is_awaiting_confirmation()):
         return _redirect(request, "/app")
     return templates.TemplateResponse(
         request, "capture.html",
@@ -1471,7 +1558,8 @@ async def capture_submit(request: Request):
     game = Game()
     target = user.get_target_user()
     if not (app_settings.photo_proof() and user.is_player() and user.is_alive()
-            and game.is_started() and target and not user.is_awaiting_confirmation()):
+            and game.is_started() and not game.is_paused()
+            and target and not user.is_awaiting_confirmation()):
         return _redirect(request, "/app")
 
     form = await request.form()
@@ -1608,11 +1696,11 @@ def _snapshot_targets():
 
 
 def _notify_retargets(before):
-    """Сообщить новую цель тем живым игрокам, у кого она изменилась."""
+    """Уведомить о смене цели тех живых игроков, у кого она изменилась (без имени)."""
     for u in User.alive_players():
         new = u.get_target_id()
         if new and before.get(u.id) != new:
-            notify_target(u)
+            notify_target(u, changed=True)
 
 
 # Отдельные страницы «Пользователи» (/app/users) и «Профиль пользователя»
@@ -1816,12 +1904,19 @@ async def join_submit(request: Request):
 
 
 @app.post("/act")
-def act(request: Request, action: str = Form(...)):
-    """Применить действие текущего пользователя и вернуться (Post/Redirect/Get)."""
+def act(request: Request, action: str = Form(...), count: str = Form("5")):
+    """Применить действие текущего пользователя и вернуться (Post/Redirect/Get).
+
+    ``count`` используют действия с тестовыми пользователями (сколько создать).
+    """
     user = current_user(request)
     if user is None:
         return RedirectResponse(url="/", status_code=303)
-    flash = apply_action(action, user)
+    try:
+        n = int(count)
+    except (TypeError, ValueError):
+        n = 5
+    flash = apply_action(action, user, count=n)
     if flash:
         request.session["flash"] = flash
     return _redirect(request, "/app")

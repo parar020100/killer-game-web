@@ -364,6 +364,16 @@
   }
   .mini-body.msg textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
+  /* «окошко» тестовых пользователей в меню админа (кнопка на всю ширину строки) */
+  .keyboard .mini.pop-full { grid-column: 1 / -1; position: relative; }
+  .keyboard .mini.pop-full > summary { width: 100%; }
+  .mini-body.testmenu { width: 320px; max-width: calc(100vw - 28px); }
+  .mini-body.testmenu form { flex-direction: column; align-items: stretch; gap: 6px; }
+  .mini-body.testmenu form + form { border-top: 1px dashed var(--border); padding-top: 8px; }
+  .mini-body.testmenu .tm-label { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-dim); }
+  .mini-body.testmenu .tm-label input { flex: 0 0 84px; }
+  .mini-body.testmenu .btn.wide { width: 100%; flex: 1 1 100%; min-height: 34px; }
+
   @media (min-width: 500px) { .bubble { font-size: 15.5px; } }
 </style>
 </head>
@@ -422,6 +432,25 @@
           {% if b.toggle == 'userlist' %}
           <button type="button" class="btn ul-toggle{% if b.full %} full{% endif %}" data-toggle="userlist"
                   data-on="🙈 Скрыть игроков" data-off="👥 Показать игроков">{{ '🙈 Скрыть игроков' if show_userlist else '👥 Показать игроков' }}</button>
+          {% elif b.popover == 'testusers' %}
+          <details class="mini pop-full" data-keep="testusers">
+            <summary class="btn">{{ b.label }}</summary>
+            <div class="mini-body testmenu">
+              <form method="post" action="{{ link('/act') }}">
+                <label class="tm-label">Сколько создать:
+                  <input type="number" name="count" min="1" max="100" value="5" aria-label="Количество">
+                </label>
+                <button type="submit" name="action" value="add_test_users" class="btn wide">👤 Добавить пользователей</button>
+                <button type="submit" name="action" value="add_test_players" class="btn wide primary">🎮 Добавить игроков</button>
+              </form>
+              <form method="post" action="{{ link('/act') }}" onsubmit="return confirm('Снять всех тестовых игроков (test…) с игры?')">
+                <button type="submit" name="action" value="del_test_players" class="btn wide">🚪 Убрать тестовых из игры</button>
+              </form>
+              <form method="post" action="{{ link('/act') }}" onsubmit="return confirm('Удалить всех тестовых пользователей (test…) из системы? Это необратимо.')">
+                <button type="submit" name="action" value="del_test_users" class="btn wide danger">🗑️ Удалить тестовых пользователей</button>
+              </form>
+            </div>
+          </details>
           {% elif b.todo %}
           <button type="button" class="btn todo{% if b.full %} full{% endif %}" data-note="Эта функция ещё не реализована." title="ещё не реализовано"><s>{{ b.label }}</s></button>
           {% elif b.disabled %}

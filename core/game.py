@@ -141,9 +141,8 @@ class Game:
             p.randomize_game_order()
         self.reassign_targets()
         admin_log.log(f"🧟 Игрок {p.get_name()} автоматически возрождён из очереди.")
-        target = p.get_target_user()
-        p.notify(f"🧟 Вы снова в игре! Ваша цель: "
-                 f"{target.get_name() if target else '—'}")
+        p.notify("🧟 Вы снова в игре! 🎯 Вам назначена цель — "
+                 "откройте приложение, чтобы увидеть её.")
         return p
 
     def check_finished(self) -> bool:

@@ -480,9 +480,8 @@ class User:
         game = Game()
         if game.is_started():
             game.reassign_targets()
-        target = self.get_target_user()
-        self.notify("🧟 Администратор вернул вас в игру! Ваша цель: "
-                    f"{target.get_name() if target else '—'}")
+        self.notify("🧟 Администратор вернул вас в игру! 🎯 Вам назначена цель — "
+                    "откройте приложение, чтобы увидеть её.")
         return f"Игрок {self.get_name()} снова в игре."
 
     def admin_kick(self, admin: "User") -> str:

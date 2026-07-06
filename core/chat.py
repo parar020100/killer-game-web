@@ -27,12 +27,22 @@ def chat_path(username) -> Path:
     return CHAT_DIR / f"{normalize(username)}.txt"
 
 
+# Токен входа (?token=... / login?token=...) — это учётные данные. В историю
+# переписки на диск он попадать НЕ должен: маскируем перед сохранением. Реальную
+# ссылку показываем пользователю один раз (см. app.chat_start), в файл не пишем.
+_TOKEN_RE = re.compile(r"(token=)[A-Za-z0-9_\-]+", re.IGNORECASE)
+
+
+def redact_tokens(text: str) -> str:
+    return _TOKEN_RE.sub(r"\1<скрыто>", str(text))
+
+
 def add_bot_message(username, text: str):
-    msgfile.append(chat_path(username), text, tag="bot")
+    msgfile.append(chat_path(username), redact_tokens(text), tag="bot")
 
 
 def add_user_message(username, text: str):
-    msgfile.append(chat_path(username), text, tag="user")
+    msgfile.append(chat_path(username), redact_tokens(text), tag="user")
 
 
 def read(username):
