@@ -1352,7 +1352,7 @@ async def settings_save(request: Request):
                   "update": "обновление (git pull) и перезапуск"}
         if control.request(action):
             admin_log.log(f"🔁 {user.get_name()} инициировал(а) {labels[action]} приложения")
-            saved = (f"Команда «{labels[action]}» отправлена. "
+            saved = (f"Команда на {labels[action]} отправлена. "
                      "Применится в течение пары секунд.")
         else:
             saved = "Неизвестная команда управления."
