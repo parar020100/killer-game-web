@@ -26,17 +26,27 @@ import os
 
 import config
 import db  # noqa: F401 — импорт инициализирует БД
-from core import chat, auth, admin_log, mode, settings as app_settings
+from core import chat, auth, admin_log, mode, settings as app_settings, version
 from core.game import Game
 from core.user import User
 
 BASE_DIR = Path(__file__).parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
+# Подпись внизу страниц (см. templates/_footer.html) — доступна во всех шаблонах.
+templates.env.globals["developed_by"] = version.DEVELOPED_BY
+templates.env.globals["build_sha"] = version.BUILD_SHA
+
 app = FastAPI(title="Killer / Paparazzi — web")
 
-# Подписанная cookie-сессия (секрет — в config, из переменной окружения).
-app.add_middleware(SessionMiddleware, secret_key=config.SECRET_KEY)
+# Подписанная cookie-сессия. В проде (адрес https) помечаем cookie Secure, чтобы
+# она не утекала по http; SameSite=Lax — базовая защита от CSRF на переходах.
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=config.SECRET_KEY,
+    same_site="lax",
+    https_only=str(getattr(config, "APP_BASE_URL", "")).startswith("https"),
+)
 
 # Контакт поддержки, файл правил и доп. вопросы теперь редактируются из UI и
 # живут в БД (core/settings.py).
@@ -189,8 +199,48 @@ def _dev_source(request: Request):
     return (request.query_params.get("source") or "").strip() or None
 
 
+# --- мульти-аккаунт: набор подтверждённых uid в сессии ----------------------
+# Сессия хранит НАБОР uid, для которых этот браузер реально прошёл вход по ссылке
+# (/login?token=). Переключаться между ними можно per-tab через ?user=<uid>, но
+# ТОЛЬКО если uid входит в набор — иначе доступа нет (см. current_user). Так на
+# проде разные ссылки из бота открывают разных игроков в разных вкладках, но войти
+# можно лишь в те аккаунты, чью ссылку-токен браузер предъявил.
+
+def _authed_uids(request: Request):
+    """Список uid, подтверждённых входом по ссылке в этой сессии (в порядке добавления)."""
+    uids = request.session.get("uids")
+    if not uids:
+        legacy = request.session.get("uid")   # совместимость со старой одиночной сессией
+        uids = [legacy] if legacy else []
+    seen = []
+    for u in uids:
+        try:
+            u = int(u)
+        except (TypeError, ValueError):
+            continue
+        if u not in seen:
+            seen.append(u)
+    return seen
+
+
+def _active_uid(request: Request, authed=None):
+    """Активный uid для этой вкладки: ?user=<uid> из набора, иначе первый в наборе."""
+    if authed is None:
+        authed = _authed_uids(request)
+    if not authed:
+        return None
+    raw = (request.query_params.get("user") or "").strip()
+    if raw.isdigit() and int(raw) in authed:
+        return int(raw)
+    if config.ALLOW_DEV_LOGIN:
+        u = _resolve_user_param(raw, request.query_params.get("source"))
+        if u is not None and u.id in authed:
+            return u.id
+    return authed[0]
+
+
 def current_user(request: Request):
-    # Отладочный ?user= (+ опц. ?source=) имеет приоритет над cookie и не трогает сессию.
+    # Dev-режим: отладочный ?user= (+ опц. ?source=) имеет приоритет и не трогает сессию.
     # ВАЖНО: если ?user= задан ЯВНО, но не разрешается в существующего пользователя —
     # возвращаем None (НЕ откатываемся на cookie), чтобы открывались только
     # действительные адреса, а не «чужое» меню из cookie при опечатке в нике.
@@ -198,8 +248,56 @@ def current_user(request: Request):
         raw = request.query_params.get("user")
         if raw is not None and raw.strip() != "":
             return _resolve_user_param(raw, request.query_params.get("source"))
-    uid = request.session.get("uid")
-    return User.by_id(uid) if uid else None
+        authed = _authed_uids(request)
+        return User.by_id(authed[0]) if authed else None
+
+    # Прод: мульти-аккаунт по набору сессии. ?user=<uid> переключает вкладку, но
+    # только на аккаунт из набора; явный, но не входящий в набор uid — отказ (None),
+    # чтобы нельзя было «подсмотреть» чужой/дефолтный аккаунт подбором id.
+    authed = _authed_uids(request)
+    raw = request.query_params.get("user")
+    if raw is not None and raw.strip() != "":
+        raw = raw.strip()
+        if raw.isdigit() and int(raw) in authed:
+            return User.by_id(int(raw))
+        return None
+    return User.by_id(authed[0]) if authed else None
+
+
+def _tab_user_param(request: Request):
+    """Значение ?user=, которое надо переносить по ссылкам этой вкладки (оба режима).
+
+    Dev: исходная строка (ник/id). Прод: uid активного аккаунта — только если он из
+    набора сессии (чтобы вкладка держалась своего аккаунта при мультиаккаунте).
+    """
+    if config.ALLOW_DEV_LOGIN:
+        return _dev_user_param(request)
+    authed = _authed_uids(request)
+    raw = (request.query_params.get("user") or "").strip()
+    if raw.isdigit() and int(raw) in authed:
+        return raw
+    return None
+
+
+def _accounts_ctx(request: Request):
+    """Аккаунты набора сессии для селектора «выбрать активного» (слева сверху)."""
+    authed = _authed_uids(request)
+    if not authed:
+        return []
+    active = _active_uid(request, authed)
+    out = []
+    for uid in authed:
+        u = User.by_id(uid)
+        if u is None:
+            continue
+        out.append({
+            "id": uid,
+            "name": u.get_name(),
+            "is_admin": u.is_admin(),
+            "active": uid == active,
+            "url": f"/app?user={uid}",
+        })
+    return out
 
 
 def _link_fn(user_param, source=None):
@@ -216,22 +314,22 @@ def _link_fn(user_param, source=None):
 
 
 def _ctx(request: Request, **extra):
-    """Контекст шаблона + прокидывание отладочного ?user=/?source= во все ссылки."""
-    user_param = _dev_user_param(request)
+    """Контекст шаблона + прокидывание ?user=/?source= во все ссылки + мульти-аккаунт."""
     source = _dev_source(request)
     return {
-        "dev_user": user_param,
+        "dev_user": _dev_user_param(request),   # 🕶-бейдж (только dev-режим)
         "dev_source": source,
         "allow_dev": config.ALLOW_DEV_LOGIN,
-        "link": _link_fn(user_param, source),
+        "link": _link_fn(_tab_user_param(request), source),
+        "accounts": _accounts_ctx(request),
         **extra,
     }
 
 
 def _redirect(request: Request, url: str, status_code: int = 303):
-    """RedirectResponse, сохраняющий отладочные ?user=/?source= (вкладка не «слетает»)."""
+    """RedirectResponse, сохраняющий ?user=/?source= вкладки (вкладка не «слетает»)."""
     return RedirectResponse(
-        url=_link_fn(_dev_user_param(request), _dev_source(request))(url),
+        url=_link_fn(_tab_user_param(request), _dev_source(request))(url),
         status_code=status_code)
 
 
@@ -867,20 +965,39 @@ def login(request: Request, token: str = ""):
             status_code=400,
         )
     uid = row["user_id"]
-    request.session["uid"] = uid
+    # Добавляем uid в НАБОР подтверждённых аккаунтов этой сессии (мульти-аккаунт).
+    uids = _authed_uids(request)
+    if uid not in uids:
+        uids.append(uid)
+    request.session["uids"] = uids
+    request.session.pop("uid", None)   # уходим со старой одиночной схемы
     # В dev-режиме закрепляем вход за КОНКРЕТНОЙ вкладкой через ?user=<ник>&source=<платформа>,
     # чтобы разные ссылки в разных вкладках одного браузера не мешали друг другу
     # (cookie одна на браузер). source нужен, т.к. ники на tg/vk/local могут совпадать.
-    # В проде (dev выключен) — обычная cookie.
     if config.ALLOW_DEV_LOGIN:
         ident = row["username"] or uid
         params = f"user={quote(str(ident))}&source={quote(str(row['platform']))}"
         return RedirectResponse(url=f"/app?{params}", status_code=303)
-    return RedirectResponse(url="/app", status_code=303)
+    # В проде вкладка привязывается к этому аккаунту через ?user=<uid> (uid уже в наборе)
+    # — так разные ссылки из бота открывают разных игроков в разных вкладках.
+    return RedirectResponse(url=f"/app?user={uid}", status_code=303)
 
 
 @app.get("/logout")
 def logout(request: Request):
+    # Мульти-аккаунт: выходим из АКТИВНОГО аккаунта (убираем его из набора). Если он
+    # был последним — очищаем сессию полностью. ?all=1 — выйти из всех сразу.
+    if request.query_params.get("all") == "1":
+        request.session.clear()
+        return RedirectResponse(url="/", status_code=303)
+    authed = _authed_uids(request)
+    active = _active_uid(request, authed)
+    if active in authed:
+        authed.remove(active)
+    if authed:
+        request.session["uids"] = authed
+        request.session.pop("uid", None)
+        return RedirectResponse(url=f"/app?user={authed[0]}", status_code=303)
     request.session.clear()
     return RedirectResponse(url="/", status_code=303)
 

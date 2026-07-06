@@ -184,6 +184,12 @@
   }
   .devbar b { color: var(--text); }
   .devbar a { color: var(--accent); text-decoration: none; padding: 0 3px; font-weight: 700; }
+  /* селектор активного аккаунта (мульти-аккаунт) — слева сверху */
+  .devbar select {
+    font: inherit; font-size: 12px; color: var(--text); max-width: 220px;
+    background: var(--btn-bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 3px 6px; cursor: pointer;
+  }
 
   .section-hint { text-align: center; font-size: 12px; color: var(--text-dim); margin: 2px 0 -2px; }
 
@@ -368,7 +374,10 @@
     </div>
 
     <div class="devbar">
-      <span>Вы вошли как <b>{{ user_name }}</b>{% if dev_user %} <span title="Вкладка привязана к {{ dev_user }} через ?user= — своя на каждую вкладку, независимо от cookie">🕶 {{ dev_user }}</span>{% endif %}</span>
+      <span>{% if accounts and accounts|length > 1 %}Аккаунт:
+        <select onchange="if(this.value)location.href=this.value" title="Выбрать активный аккаунт">
+          {% for a in accounts %}<option value="{{ a.url }}"{% if a.active %} selected{% endif %}>{{ a.name }}{% if a.is_admin %} 👑{% endif %}</option>{% endfor %}
+        </select>{% else %}Вы вошли как <b>{{ user_name }}</b>{% endif %}{% if dev_user %} <span title="Вкладка привязана к {{ dev_user }} через ?user= — своя на каждую вкладку, независимо от cookie">🕶 {{ dev_user }}</span>{% endif %}</span>
       <span class="as-links">{% if not dev_user %}<a href="/logout">выйти</a>{% endif %}</span>
     </div>
 
@@ -426,6 +435,7 @@
       {% endif %}
     {% endfor %}
     </div>
+    {% include "_footer.html" %}
   </main>
 
   {# Панель списка всегда в DOM (пусть даже пустая) — иначе при снятии админки

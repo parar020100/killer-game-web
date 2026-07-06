@@ -1,0 +1,7 @@
+{# Подпись внизу страницы: разработчик + версия сборки (первые 10 символов SHA).
+   Стиль — инлайном, чтобы одинаково выглядеть на всех страницах без общего CSS. #}
+<footer style="margin:22px auto 6px;padding-top:10px;text-align:center;font-size:12px;
+               line-height:1.6;color:#8a93a3;opacity:.9;">
+  Разработано <b style="color:inherit">{{ developed_by }}</b>{% if build_sha %}
+  <br><span title="git commit">Сборка: {{ build_sha }}</span>{% endif %}
+</footer>

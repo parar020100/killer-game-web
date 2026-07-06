@@ -92,6 +92,19 @@ CODE_DIR = "/opt/killer/app"    # для кнопки «Обновить» (git 
 .venv/bin/python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
+**PostgreSQL (опционально).** По умолчанию используется SQLite (файл `DB_NAME`).
+Для перехода на PostgreSQL в `config.py`:
+```python
+DB_BACKEND = "postgres"
+POSTGRES_DSN = "postgresql://killer:пароль@localhost:5432/killer"
+```
+и поставьте драйвер (в `setup/requirements.txt` строка закомментирована):
+```bash
+.venv/bin/pip install "psycopg[binary]>=3.1"
+```
+Схема создаётся автоматически при старте. Выбор «игры по файлу БД» в PostgreSQL
+не применяется (одна база); фото и истории чата по-прежнему хранятся в `data/`.
+
 ## 6. nginx: обратный прокси
 ```bash
 sudo nano /etc/nginx/sites-available/killer.parar.ru

@@ -5,3 +5,6 @@ python-multipart>=0.0.9
 itsdangerous>=2.1
 httpx>=0.27                 # доставка сообщений в Telegram/VK (core/tg_send, vk_send)
 python-telegram-bot>=22     # Telegram-бот (tg_bot.py); VK-бот работает на httpx
+
+# Только для DB_BACKEND = "postgres" (по умолчанию используется sqlite, пакет не нужен):
+# psycopg[binary]>=3.1      # драйвер PostgreSQL — раскомментируйте при переходе на postgres

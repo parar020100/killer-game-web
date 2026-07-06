@@ -33,8 +33,10 @@ def set_permanent_token(identity_id: int) -> str:
     Возвращает сырое значение — показать его нужно один раз, в БД хранится лишь хеш.
     """
     token = secrets.token_urlsafe(LOGIN_TOKEN_BYTES)
+    # ON CONFLICT работает и в sqlite (3.24+), и в postgres — перевыпуск токена канала.
     execute(
-        "INSERT OR REPLACE INTO persistent_login (identity_id, token_hash) VALUES (?, ?)",
+        "INSERT INTO persistent_login (identity_id, token_hash) VALUES (?, ?) "
+        "ON CONFLICT(identity_id) DO UPDATE SET token_hash = excluded.token_hash",
         (identity_id, _hash(token)),
     )
     return token
