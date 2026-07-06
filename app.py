@@ -191,11 +191,13 @@ def _dev_source(request: Request):
 
 def current_user(request: Request):
     # Отладочный ?user= (+ опц. ?source=) имеет приоритет над cookie и не трогает сессию.
+    # ВАЖНО: если ?user= задан ЯВНО, но не разрешается в существующего пользователя —
+    # возвращаем None (НЕ откатываемся на cookie), чтобы открывались только
+    # действительные адреса, а не «чужое» меню из cookie при опечатке в нике.
     if config.ALLOW_DEV_LOGIN:
-        user = _resolve_user_param(request.query_params.get("user"),
-                                   request.query_params.get("source"))
-        if user is not None:
-            return user
+        raw = request.query_params.get("user")
+        if raw is not None and raw.strip() != "":
+            return _resolve_user_param(raw, request.query_params.get("source"))
     uid = request.session.get("uid")
     return User.by_id(uid) if uid else None
 
@@ -747,10 +749,28 @@ def apply_action(action: str, user: User):
 # Чат с ботом (эмуляция) + вход по ссылке
 # ---------------------------------------------------------------------------
 
+def tg_bot_url() -> str:
+    """Ссылка, открывающая диалог с Telegram-ботом (с кнопкой Start → /start)."""
+    u = (getattr(config, "TELEGRAM_BOT_USERNAME", "") or "").strip().lstrip("@")
+    return f"https://t.me/{u}?start=login" if u else ""
+
+
+def vk_bot_url() -> str:
+    """Ссылка, открывающая диалог с VK-сообществом (с кнопкой «Начать»)."""
+    url = (getattr(config, "VK_BOT_URL", "") or "").strip()
+    if not url:
+        return ""
+    screen = url.rstrip("/").split("/")[-1]
+    return f"https://vk.me/{screen}" if screen else url
+
+
 @app.get("/", response_class=HTMLResponse)
 def chat_entry(request: Request):
-    return templates.TemplateResponse(request, "chat_entry.html",
-                                      {"support_contact": app_settings.support_contact()})
+    return templates.TemplateResponse(
+        request, "chat_entry.html",
+        _ctx(request, support_contact=app_settings.support_contact(),
+             tg_url=tg_bot_url(), vk_url=vk_bot_url()),
+    )
 
 
 @app.get("/chat")

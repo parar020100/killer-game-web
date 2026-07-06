@@ -3,12 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Киллер / Папарацци — бот</title>
+<title>Киллер / Папарацци — вход</title>
 <style>
   :root {
     --bg: #eaeef4; --surface: #ffffff; --btn-bg: #f4f6fa; --btn-bg-hover: #eaeef4;
     --text: #171a21; --text-dim: #6a7280; --border: #e2e7ef;
     --accent: #e23b4e; --accent-soft: rgba(226,59,78,.10); --accent-border: rgba(226,59,78,.28);
+    --tg: #2aabee; --vk: #0077ff;
     --shadow: 0 6px 24px rgba(23,26,40,.10); --shadow-sm: 0 2px 6px rgba(23,26,40,.06);
   }
   @media (prefers-color-scheme: dark) {
@@ -16,6 +17,7 @@
       --bg: #0e1116; --surface: #191d24; --btn-bg: #222831; --btn-bg-hover: #2a313b;
       --text: #e9ecf1; --text-dim: #9aa4b2; --border: #2a313b;
       --accent: #ff5069; --accent-soft: rgba(255,80,105,.14); --accent-border: rgba(255,80,105,.35);
+      --tg: #3db4f2; --vk: #4d94ff;
       --shadow: 0 8px 30px rgba(0,0,0,.45); --shadow-sm: 0 2px 8px rgba(0,0,0,.35);
     }
   }
@@ -41,20 +43,37 @@
   }
   .head .name { font-weight: 700; font-size: 17px; }
   .head .sub { font-size: 13px; color: var(--text-dim); }
-  p.lead { margin: 0; font-size: 14.5px; color: var(--text-dim); }
-  form { display: flex; gap: 8px; }
-  input[type=text] {
-    flex: 1; min-width: 0; font: inherit; font-size: 15px; padding: 12px 14px;
-    border: 1px solid var(--border); border-radius: 12px; background: var(--btn-bg); color: var(--text);
+  p.lead { margin: 0; font-size: 14.5px; }
+  .auth { display: flex; flex-direction: column; gap: 10px; }
+  .auth a {
+    display: flex; align-items: center; justify-content: center; gap: 9px;
+    font: inherit; font-weight: 650; font-size: 15.5px; padding: 14px 16px;
+    border-radius: 13px; text-decoration: none; color: #fff; box-shadow: var(--shadow-sm);
   }
-  input[type=text]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-  button {
-    appearance: none; border: 1px solid var(--accent-border); background: var(--accent-soft);
-    color: var(--accent); font: inherit; font-weight: 650; font-size: 15px;
-    padding: 12px 18px; border-radius: 12px; cursor: pointer;
+  .auth a.tg { background: var(--tg); }
+  .auth a.vk { background: var(--vk); }
+  .auth a:hover { filter: brightness(1.05); }
+  .auth a.disabled { background: var(--btn-bg); color: var(--text-dim);
+    border: 1px dashed var(--border); pointer-events: none; box-shadow: none; }
+  .how {
+    background: var(--btn-bg); border: 1px solid var(--border); border-radius: 13px;
+    padding: 12px 14px; font-size: 13px; color: var(--text-dim);
   }
-  button:hover { filter: brightness(1.05); }
+  .how b { color: var(--text); }
+  .how ol { margin: 6px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
   .foot { font-size: 12px; color: var(--text-dim); text-align: center; }
+  details.demo { border-top: 1px dashed var(--border); padding-top: 12px; }
+  details.demo summary { cursor: pointer; font-size: 13px; color: var(--text-dim); }
+  details.demo form { display: flex; gap: 8px; margin-top: 10px; }
+  details.demo input {
+    flex: 1; min-width: 0; font: inherit; font-size: 14px; padding: 10px 12px;
+    border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text);
+  }
+  details.demo button {
+    appearance: none; border: 1px solid var(--accent-border); background: var(--accent-soft);
+    color: var(--accent); font: inherit; font-weight: 650; padding: 10px 16px;
+    border-radius: 10px; cursor: pointer;
+  }
 </style>
 </head>
 <body>
@@ -63,17 +82,47 @@
       <div class="logo">🕵️</div>
       <div>
         <div class="name">Киллер · Папарацци</div>
-        <div class="sub">бот игры (эмуляция)</div>
+        <div class="sub">вход в игру</div>
       </div>
     </div>
-    <p class="lead">Введите ваш <b>id</b> (имя пользователя), чтобы открыть чат с ботом.
-      Если такого пользователя нет — он будет создан.</p>
-    <form action="/chat" method="get">
-      <input type="text" name="id" placeholder="например, parar020100" autofocus
-             autocomplete="off" autocapitalize="off" spellcheck="false">
-      <button type="submit">ОК</button>
-    </form>
-    <p class="foot">В настоящей версии этот чат заменят боты Telegram и VK.</p>
+
+    <p class="lead">Войдите через мессенджер — бот пришлёт персональную ссылку:</p>
+
+    <div class="auth">
+      {% if tg_url %}
+      <a class="tg" href="{{ tg_url }}" target="_blank" rel="noopener">✈️ Авторизоваться через Telegram</a>
+      {% else %}
+      <a class="tg disabled">✈️ Telegram-бот не настроен</a>
+      {% endif %}
+      {% if vk_url %}
+      <a class="vk" href="{{ vk_url }}" target="_blank" rel="noopener">🅥 Авторизоваться через VK</a>
+      {% else %}
+      <a class="vk disabled">🅥 VK-бот не настроен</a>
+      {% endif %}
+    </div>
+
+    <div class="how">
+      <b>Как это работает:</b>
+      <ol>
+        <li>Нажмите кнопку — откроется бот.</li>
+        <li>Отправьте боту «<b>Начать</b>» (VK) или «<b>/start</b>» (Telegram).</li>
+        <li>Бот пришлёт вашу персональную ссылку — по ней вы войдёте в меню игры.</li>
+        <li>Ссылка постоянная: сохраните её, чтобы заходить снова.</li>
+      </ol>
+    </div>
+
+    {% if allow_dev %}
+    <details class="demo">
+      <summary>🧪 Демо-вход (для тестирования, без бота)</summary>
+      <form action="/chat" method="get">
+        <input type="text" name="id" placeholder="ник, напр. parar020100"
+               autocomplete="off" autocapitalize="off" spellcheck="false">
+        <button type="submit">Открыть</button>
+      </form>
+    </details>
+    {% endif %}
+
+    <p class="foot">Вопросы — в поддержку: {{ support_contact }}</p>
   </main>
 </body>
 </html>

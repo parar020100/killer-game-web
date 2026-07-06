@@ -32,6 +32,10 @@ VK_GROUP_TOKEN = os.getenv("VK_GROUP_TOKEN", "")
 VK_GROUP_ID = os.getenv("VK_GROUP_ID", "")   # число, id сообщества (без минуса)
 VK_API_VERSION = "5.199"
 
+# Ссылки на ботов для страницы входа (кнопки «Авторизоваться через …»).
+TELEGRAM_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "")   # напр. @my_game_bot
+VK_BOT_URL = os.getenv("VK_BOT_URL", "")                         # напр. https://vk.com/my_game
+
 # Базовый адрес сайта — из него бот собирает ссылку входа (/login?token=...).
 # В проде укажите публичный адрес (напр. https://killer.example.com).
 APP_BASE_URL = os.getenv("APP_BASE_URL", "http://127.0.0.1:8000")
