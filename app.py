@@ -736,16 +736,35 @@ def results_text() -> str:
     return "\n".join(lines)
 
 
-def apply_action(action: str, user: User):
+def apply_action(action: str, user: User) -> str:
+    """Применить действие кнопки и вернуть текст-фидбек для показа игроку (flash).
+
+    Каждая кнопка обязана давать результат: успех — подтверждение, неуспех —
+    внятную причину («почему не сработало»). Пустая строка = молча (незнакомое
+    действие); всё остальное показывается в плашке .flash на дашборде.
+    """
     game = Game()
     who = user.get_name()
+
+    # --- админские действия управления игрой ---
+    if action in ("open_reg", "close_reg", "start_game", "stop_game", "pause",
+                  "resume", "reset_game", "end_game", "make_test_users"):
+        if not user.is_admin():
+            return "⛔ Это действие доступно только организаторам."
+
     if action == "open_reg":
+        if game.is_started() and not game.is_paused():
+            return "⚠️ Открыть регистрацию нельзя, пока идёт игра. Поставьте паузу."
         game.open_registration()
         admin_log.log(f"🟡 {who} открыл(а) регистрацию")
         _broadcast(mode.t("bcast_reg_open"), players_only=False)
+        return "✅ Регистрация открыта."
     elif action == "close_reg":
+        if not game.is_registration_open():
+            return "ℹ️ Регистрация и так закрыта."
         game.close_registration()
         admin_log.log(f"🚫 {who} закрыл(а) регистрацию")
+        return "🚫 Регистрация закрыта."
     elif action == "start_game":
         ok, msg = game.start()
         if ok:
@@ -753,58 +772,83 @@ def apply_action(action: str, user: User):
             _broadcast(mode.t("bcast_started"))
             for ply in User.alive_players():
                 notify_target(ply)
-        else:
-            admin_log.log(f"⚠️ {who} не смог(ла) запустить игру: {msg}")
+            return f"🟢 {msg} Игроков: {game.count_players()}. Цели разосланы."
+        admin_log.log(f"⚠️ {who} не смог(ла) запустить игру: {msg}")
+        return f"⚠️ Не удалось запустить игру: {msg}"
     elif action == "stop_game":
+        if not game.is_started():
+            return "ℹ️ Игра сейчас не запущена — останавливать нечего."
         game.stop()
         admin_log.log(f"🔴 {who} остановил(а) игру")
         _broadcast("🔴 Игра остановлена администратором.")
+        return "🔴 Игра остановлена."
     elif action == "pause":
-        if game.is_started() and not game.is_paused():
-            game.pause()
-            admin_log.log(f"⏸️ {who} поставил(а) игру на паузу")
-            _broadcast("⏸️ Игра поставлена на паузу администратором.")
+        if not game.is_started():
+            return "⚠️ Игра сейчас не идёт — ставить на паузу нечего."
+        if game.is_paused():
+            return "ℹ️ Игра уже на паузе."
+        game.pause()
+        admin_log.log(f"⏸️ {who} поставил(а) игру на паузу")
+        _broadcast("⏸️ Игра поставлена на паузу администратором.")
+        return "⏸️ Игра на паузе."
     elif action == "resume":
-        if game.is_started() and game.is_paused():
-            game.resume()
-            admin_log.log(f"▶️ {who} возобновил(а) игру")
-            _broadcast("▶️ Игра продолжается!")
+        if not game.is_started():
+            return "⚠️ Игра сейчас не запущена — продолжать нечего."
+        if not game.is_paused():
+            return "ℹ️ Игра уже идёт."
+        game.resume()
+        admin_log.log(f"▶️ {who} возобновил(а) игру")
+        _broadcast("▶️ Игра продолжается!")
+        return "▶️ Игра продолжается."
     elif action == "reset_game":
+        if not game.is_paused():
+            return "⚠️ Сбросить игру можно только во время паузы — сначала поставьте паузу."
         game.reset()
         admin_log.log(f"♻️ {who} сбросил(а) игру")
         _broadcast("♻️ Игра сброшена администратором. Спасибо за участие!",
                    players_only=False)
+        return "♻️ Игра сброшена, все игроки сняты с игры."
     elif action == "end_game":
+        if not game.is_paused():
+            return "⚠️ Завершить игру можно только во время паузы — сначала поставьте паузу."
         game.pause()
         admin_log.log(f"🏁 {who} завершил(а) игру, разосланы итоги")
         _broadcast("🏁 Игра завершена! Итоги:\n\n" + results_text(),
                    players_only=False)
+        return "🏁 Игра завершена, итоги разосланы всем."
     elif action == "leave":
-        if user.is_player():
-            was_alive = user.is_alive()
-            user.leave()
-            admin_log.log(f"➖ {who} вышел(ла) из игры")
-            user.notify("🚪 Вы вышли из игры.")
-            # Если игра шла, а игрок был жив — чинить круг: пересобрать цели,
-            # подтянуть очередь возрождения и проверить конец игры.
-            if was_alive and game.is_started():
-                game.try_revive_one()
-                game.reassign_targets()
-                if game.check_finished():
-                    game.announce_winner()
+        if not user.is_player():
+            return "ℹ️ Вы и так не участвуете в игре."
+        was_alive = user.is_alive()
+        user.leave()
+        admin_log.log(f"➖ {who} вышел(ла) из игры")
+        user.notify("🚪 Вы вышли из игры.")
+        # Если игра шла, а игрок был жив — чинить круг: пересобрать цели,
+        # подтянуть очередь возрождения и проверить конец игры.
+        if was_alive and game.is_started():
+            game.try_revive_one()
+            game.reassign_targets()
+            if game.check_finished():
+                game.announce_winner()
+        return "🚪 Вы вышли из игры."
     elif action == "make_test_users":
-        if user.is_admin():
-            n = _create_test_users(5)
-            admin_log.log(f"🧪 {who} создал(а) {n} тестовых игроков (веб-чат)")
+        n = _create_test_users(5)
+        admin_log.log(f"🧪 {who} создал(а) {n} тестовых игроков (веб-чат)")
+        return f"🧪 Создано тестовых игроков: {n}."
     elif action == "report_capture":
-        user.attempt_capture()
+        ok, msg = user.attempt_capture()
+        return ("✅ " if ok else "⚠️ ") + msg
     elif action == "cancel_capture":
-        user.cancel_capture()
+        ok, msg = user.cancel_capture()
+        return ("✅ " if ok else "⚠️ ") + msg
     elif action == "confirm_capture":
-        user.confirm_capture()
+        ok, msg = user.confirm_capture()
+        return ("✅ " if ok else "⚠️ ") + msg
     elif action == "deny_capture":
-        user.deny_capture()
-    # "noop" / незнакомое — просто перерисовать
+        ok, msg = user.deny_capture()
+        return ("✅ " if ok else "⚠️ ") + msg
+    # "noop" / незнакомое — просто перерисовать без плашки
+    return ""
 
 
 # ---------------------------------------------------------------------------
@@ -1439,7 +1483,8 @@ async def capture_submit(request: Request):
                  error="Пожалуйста, прикрепите фотографию поимки."),
         )
     admin_log.log(f"🖼️ {user.get_name()} приложил(а) фото-пруф поимки цели")
-    user.attempt_capture()
+    ok, msg = user.attempt_capture()
+    request.session["flash"] = ("✅ " if ok else "⚠️ ") + msg
     return _redirect(request, "/app")
 
 
@@ -1590,59 +1635,92 @@ def user_action(request: Request, uid: int, action: str = Form(...),
     if target is None:
         return _redirect(request, "/app")
 
-    if action == "promote" and not target.is_admin():
-        target.set_admin(True)
-        admin_log.log(f"👑 {admin.get_name()} выдал(а) права админа: {target.get_name()}")
-        target.notify("👑 Вам выданы права администратора игры.")
-    elif action == "demote" and target.is_admin() and not target.is_default_admin():
-        target.set_admin(False)
-        admin_log.log(f"🧹 {admin.get_name()} снял(а) права админа: {target.get_name()}")
-        target.notify("Права администратора сняты.")
-    elif action == "set_score" and target.is_player():
-        try:
-            target.admin_set_score(admin, max(0, int(value)))
-        except (ValueError, TypeError):
-            pass
-    elif action == "set_order" and target.is_player():
-        try:
-            before = _snapshot_targets()
-            target.admin_set_order(admin, int(value))
-            _notify_retargets(before)
-        except (ValueError, TypeError):
-            pass
+    # Каждое админское действие оставляет плашку-фидбек (что произошло / почему нет).
+    flash = ""
+    if action == "promote":
+        if target.is_admin():
+            flash = f"ℹ️ {target.get_name()} уже администратор."
+        else:
+            target.set_admin(True)
+            admin_log.log(f"👑 {admin.get_name()} выдал(а) права админа: {target.get_name()}")
+            target.notify("👑 Вам выданы права администратора игры.")
+            flash = f"👑 {target.get_name()} назначен(а) администратором."
+    elif action == "demote":
+        if target.is_default_admin():
+            flash = "⛔ root-пользователя нельзя разжаловать."
+        elif not target.is_admin():
+            flash = f"ℹ️ {target.get_name()} и так не администратор."
+        else:
+            target.set_admin(False)
+            admin_log.log(f"🧹 {admin.get_name()} снял(а) права админа: {target.get_name()}")
+            target.notify("Права администратора сняты.")
+            flash = f"🧹 С {target.get_name()} сняты права администратора."
+    elif action == "set_score":
+        if not target.is_player():
+            flash = "⚠️ Пользователь не участвует в игре — счёт менять нечему."
+        else:
+            try:
+                flash = "✅ " + target.admin_set_score(admin, max(0, int(value)))
+            except (ValueError, TypeError):
+                flash = "⚠️ Введите число — счёт не изменён."
+    elif action == "set_order":
+        if not target.is_player():
+            flash = "⚠️ Пользователь не участвует в игре — позиция не меняется."
+        else:
+            try:
+                before = _snapshot_targets()
+                flash = "✅ " + target.admin_set_order(admin, int(value))
+                _notify_retargets(before)
+            except (ValueError, TypeError):
+                flash = "⚠️ Введите число — позиция не изменена."
     elif action == "message":
         # Одностороннее сообщение админа игроку (как admin_msg в боте).
         text = (value or "").strip()
-        if text:
+        if not text:
+            flash = "⚠️ Пустое сообщение не отправлено."
+        else:
             target.notify(f"✉️ Сообщение от организаторов:\n{text}")
             admin_log.log(f"✉️ {admin.get_name()} написал(а) игроку "
                           f"{target.get_name()}: {text}")
-    elif action == "reassign_kill" and target.is_player():
-        # value — позиция в круге (#) нового «охотника», которому засчитать поимку.
-        pos = None
-        try:
-            pos = int(value)
-        except (ValueError, TypeError):
-            pass
-        new_m = User.by_game_order(pos) if pos else None
-        if new_m is None:
-            request.session["flash"] = (
-                f"⚠️ Игрок с позицией №{value} не найден — поимка не переназначена.")
+            flash = f"✉️ Сообщение отправлено игроку {target.get_name()}."
+    elif action == "reassign_kill":
+        if not target.is_player():
+            flash = "⚠️ Пользователь не участвует в игре — поимку переназначить нельзя."
         else:
-            request.session["flash"] = target.admin_reassign_kill(admin, new_m)
+            # value — позиция в круге (#) нового «охотника», которому засчитать поимку.
+            pos = None
+            try:
+                pos = int(value)
+            except (ValueError, TypeError):
+                pass
+            new_m = User.by_game_order(pos) if pos else None
+            if new_m is None:
+                flash = f"⚠️ Игрок с позицией №{value} не найден — поимка не переназначена."
+            else:
+                flash = target.admin_reassign_kill(admin, new_m)
     elif action == "delete":
         # нельзя удалить себя или дефолт-админа
-        if target.id != admin.id and not target.is_default_admin():
+        if target.id == admin.id:
+            flash = "⛔ Нельзя удалить самого себя."
+        elif target.is_default_admin():
+            flash = "⛔ root-пользователя удалить нельзя."
+        else:
             before = _snapshot_targets()
+            name = target.get_name()
             target.delete_from_system(admin)
             _notify_retargets(before)
+            request.session["flash"] = f"🗑️ Пользователь {name} удалён из системы."
             return _redirect(request, "/app")
     elif action in _USER_ACTIONS:
         method, structural = _USER_ACTIONS[action]
         before = _snapshot_targets() if structural else None
-        method(target, admin)
+        flash = method(target, admin)
         if structural:
             _notify_retargets(before)
+    else:
+        flash = "⚠️ Неизвестное действие."
+    if flash:
+        request.session["flash"] = flash
     return _redirect(request, dest)
 
 
@@ -1743,7 +1821,9 @@ def act(request: Request, action: str = Form(...)):
     user = current_user(request)
     if user is None:
         return RedirectResponse(url="/", status_code=303)
-    apply_action(action, user)
+    flash = apply_action(action, user)
+    if flash:
+        request.session["flash"] = flash
     return _redirect(request, "/app")
 
 
