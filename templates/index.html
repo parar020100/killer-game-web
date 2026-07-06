@@ -446,10 +446,11 @@
     </div>
 
     <div class="devbar">
-      <span>{% if accounts and accounts|length > 1 %}Аккаунт:
+      <span>Аккаунт:
         <select onchange="if(this.value)location.href=this.value" title="Выбрать активный аккаунт">
           {% for a in accounts %}<option value="{{ a.url }}"{% if a.active %} selected{% endif %}>{{ a.name }}{% if a.is_admin %} 👑{% endif %}</option>{% endfor %}
-        </select>{% else %}Вы вошли как <b>{{ user_name }}</b>{% endif %}</span>
+          <option value="/">➕ Сменить аккаунт…</option>
+        </select></span>
       <span class="as-links"><a href="{{ link('/logout') }}">выйти</a></span>
     </div>
 

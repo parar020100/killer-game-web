@@ -52,6 +52,7 @@
   }
   .auth a.tg { background: var(--tg); }
   .auth a.vk { background: var(--vk); }
+  .auth a.acct { background: linear-gradient(135deg, var(--accent), #8a1f2b); }
   .auth a:hover { filter: brightness(1.05); }
   .auth a.disabled { background: var(--btn-bg); color: var(--text-dim);
     border: 1px dashed var(--border); pointer-events: none; box-shadow: none; }
@@ -86,7 +87,17 @@
       </div>
     </div>
 
+    {% if accounts %}
+    <p class="lead">Вы уже вошли на этом устройстве — продолжить как:</p>
+    <div class="auth">
+      {% for a in accounts %}
+      <a class="acct" href="{{ a.url }}">▶️ {{ a.name }}{% if a.is_admin %} 👑{% endif %}</a>
+      {% endfor %}
+    </div>
+    <p class="lead" style="margin-top:4px">Или войдите под другим аккаунтом через мессенджер:</p>
+    {% else %}
     <p class="lead">Войдите через мессенджер — бот пришлёт персональную ссылку:</p>
+    {% endif %}
 
     <div class="auth">
       {% if tg_url %}
