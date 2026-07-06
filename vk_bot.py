@@ -82,7 +82,7 @@ def handle_message(from_id, text: str):
     user = _ensure_user(from_id)
     ident = user.identity("vk")
 
-    if low in _START_WORDS or text == botcommon.LOGIN_BUTTON:
+    if low in _START_WORDS or botcommon.is_login_request(text):
         link, reissued = botcommon.issue_login_link(ident)
         _send(from_id, botcommon.welcome_text(link, reissued))
         log.info("start: user id=%s vk=%s", user.id, from_id)

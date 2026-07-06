@@ -20,7 +20,8 @@ import logging
 
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
-    Application, CommandHandler, MessageHandler, ContextTypes, filters,
+    Application, CommandHandler, MessageHandler, CallbackQueryHandler,
+    ContextTypes, filters,
 )
 
 import config
@@ -57,6 +58,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     log.info("start: user id=%s tg=%s (@%s)", user.id, tg.id, tg.username)
 
 
+async def new_link_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Нажата inline-кнопка «Новая ссылка для входа» под уведомлением — перевыпуск."""
+    query = update.callback_query
+    await query.answer()
+    tg = update.effective_user
+    user = _ensure_user(tg)
+    link, reissued = botcommon.issue_login_link(user.identity("tg"))
+    await query.message.reply_text(
+        botcommon.welcome_text(link, reissued), reply_markup=_KB)
+    log.info("new_link: user id=%s tg=%s", user.id, tg.id)
+
+
 async def link_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """/link КОД — привязать этот Telegram-канал к аккаунту с сайта."""
     tg = update.effective_user
@@ -69,7 +82,7 @@ async def link_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def forward_to_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Текстовые сообщения игрока: нажатие кнопки-«/start» → /start, иначе — админам."""
     text = (update.effective_message.text or "").strip()
-    if text == botcommon.LOGIN_BUTTON:
+    if botcommon.is_login_request(text):
         await start(update, context)
         return
     tg = update.effective_user
@@ -98,6 +111,8 @@ def main():
            .post_init(_announce_connected).build())
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("link", link_cmd))
+    app.add_handler(CallbackQueryHandler(
+        new_link_cb, pattern=f"^{botcommon.NEW_LINK_CALLBACK}$"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_to_admins))
     log.info("Telegram-бот запускается (long polling)… Ctrl+C для остановки.")
     app.run_polling(allowed_updates=Update.ALL_TYPES)

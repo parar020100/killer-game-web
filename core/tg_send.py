@@ -34,9 +34,7 @@ def send(chat_id, text: str, with_menu: bool = True, silent: bool = False) -> bo
     if silent:
         payload["disable_notification"] = True
     if with_menu:
-        from core import botcommon
-        payload["reply_markup"] = {"inline_keyboard": [[
-            {"text": botcommon.MENU_BUTTON, "url": botcommon.menu_url()}]]}
+        payload["reply_markup"] = _reply_markup()
     try:
         r = httpx.post(_API.format(token=token), json=payload, timeout=10)
         if r.status_code == 200 and r.json().get("ok", False):
@@ -46,6 +44,16 @@ def send(chat_id, text: str, with_menu: bool = True, silent: bool = False) -> bo
     except (httpx.HTTPError, ValueError, TypeError) as e:
         _log_error(f"Telegram sendMessage → chat {chat_id}: {type(e).__name__}: {e}")
         return False
+
+
+def _reply_markup() -> dict:
+    """Inline-клавиатура под каждым уведомлением: «открыть меню» (ссылка) и
+    «новая ссылка для входа» (callback → обрабатывает tg_bot.py)."""
+    from core import botcommon
+    return {"inline_keyboard": [
+        [{"text": botcommon.MENU_BUTTON, "url": botcommon.menu_url()}],
+        [{"text": botcommon.NEW_LINK_BUTTON, "callback_data": botcommon.NEW_LINK_CALLBACK}],
+    ]}
 
 
 def _log_error(text: str):

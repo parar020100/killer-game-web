@@ -16,6 +16,16 @@ def base_url() -> str:
 LOGIN_BUTTON = "🔗 Ссылка для входа"
 # Подпись кнопки «открыть меню игры», которая добавляется к каждому уведомлению.
 MENU_BUTTON = "🎮 Открыть меню игры"
+# Кнопка «перевыпустить ссылку входа» — добавляется к каждому сообщению бота
+# (в Telegram — inline-кнопка с этим callback_data; в VK — text-кнопка с этой
+# подписью). Её нажатие боты трактуют как запрос новой ссылки (как /start).
+NEW_LINK_BUTTON = "🔗 Новая ссылка для входа"
+NEW_LINK_CALLBACK = "new_login_link"
+
+
+def is_login_request(text: str) -> bool:
+    """True, если текст — нажатие кнопки запроса ссылки входа (любой из вариантов)."""
+    return (text or "").strip() in (LOGIN_BUTTON, NEW_LINK_BUTTON)
 
 
 def menu_url() -> str:
