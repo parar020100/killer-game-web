@@ -21,8 +21,10 @@ import threading
 import time
 
 import config
+from core import control
 
 PY = sys.executable
+HERE = os.path.dirname(os.path.abspath(__file__))
 HOST = os.getenv("HOST", "127.0.0.1")
 PORT = os.getenv("PORT", "8000")
 
@@ -44,22 +46,38 @@ def _start(name, args):
     threading.Thread(target=_pump, args=(name, proc), daemon=True).start()
 
 
+def _tg_on():
+    return (bool(getattr(config, "ENABLE_TG_BOT", True))
+            and bool((getattr(config, "TELEGRAM_BOT_TOKEN", "") or "").strip()))
+
+
+def _vk_on():
+    return (bool(getattr(config, "ENABLE_VK_BOT", True))
+            and bool((getattr(config, "VK_GROUP_TOKEN", "") or "").strip()))
+
+
 def main():
+    control.take()   # сбросить возможную «залежавшуюся» команду управления
+
     _start("web", [PY, "-m", "uvicorn", "app:app", "--host", HOST, "--port", PORT])
 
-    if (getattr(config, "TELEGRAM_BOT_TOKEN", "") or "").strip():
+    if _tg_on():
         _start("tg", [PY, "tg_bot.py"])
     else:
-        print("[run] TELEGRAM_BOT_TOKEN пуст — Telegram-бот пропущен (эмуляция чата).")
+        print("[run] Telegram-бот выключен/без токена — пропущен (эмуляция чата).")
 
-    if (getattr(config, "VK_GROUP_TOKEN", "") or "").strip():
+    if _vk_on():
         _start("vk", [PY, "vk_bot.py"])
     else:
-        print("[run] VK_GROUP_TOKEN пуст — VK-бот пропущен (эмуляция чата).")
+        print("[run] VK-бот выключен/без токена — пропущен (эмуляция чата).")
 
     print(f"[run] Запущено: веб http://{HOST}:{PORT} + боты. Ctrl+C — остановить всё.")
     try:
         while True:
+            cmd = control.take()
+            if cmd:
+                print(f"[run] команда управления: {cmd}")
+                _handle_control(cmd)
             for name, proc in list(_procs):
                 if proc.poll() is not None:
                     print(f"[run] ⚠️  процесс [{name}] завершился (код {proc.returncode}).")
@@ -87,6 +105,60 @@ def _shutdown():
             print(f"[run] [{name}] не остановился — снимаю принудительно.")
             proc.kill()
     print("[run] Остановлено.")
+
+
+def _code_dir():
+    d = (getattr(config, "CODE_DIR", "") or "").strip()
+    return d or HERE
+
+
+def _git_pull() -> bool:
+    d = _code_dir()
+    print(f"[run] git pull в {d} …")
+    try:
+        r = subprocess.run(["git", "-C", d, "pull", "--ff-only"],
+                           capture_output=True, text=True, timeout=120)
+    except (OSError, subprocess.SubprocessError) as exc:
+        print(f"[run] git pull не выполнен: {exc}")
+        return False
+    if r.stdout:
+        print("[run] " + r.stdout.strip())
+    if r.returncode != 0:
+        print("[run] git pull ошибка: " + (r.stderr or "").strip())
+    return r.returncode == 0
+
+
+def _systemctl(action: str):
+    svc = getattr(config, "SYSTEMD_SERVICE", "killer")
+    print(f"[run] sudo systemctl {action} {svc} …")
+    subprocess.Popen(["sudo", "systemctl", action, svc])
+
+
+def _do_restart():
+    if getattr(config, "START_MODE", "manual") == "systemctl":
+        _systemctl("restart")     # systemd перезапустит unit (нас снимет SIGTERM)
+    else:
+        _shutdown()
+        print("[run] перезапуск…")
+        os.execv(PY, [PY, os.path.join(HERE, "run_all.py")])
+
+
+def _do_stop():
+    if getattr(config, "START_MODE", "manual") == "systemctl":
+        _systemctl("stop")        # systemd остановит unit
+    else:
+        _shutdown()
+        os._exit(0)
+
+
+def _handle_control(cmd: str):
+    if cmd == "update":
+        _git_pull()
+        _do_restart()
+    elif cmd == "restart":
+        _do_restart()
+    elif cmd == "stop":
+        _do_stop()
 
 
 def _on_term(signum, frame):

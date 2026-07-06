@@ -118,6 +118,8 @@ def _resolve_group_id(configured: str) -> str:
 
 
 def main():
+    if not getattr(config, "ENABLE_VK_BOT", True):
+        raise SystemExit("VK-бот выключен в config.py (ENABLE_VK_BOT = False).")
     token = (config.VK_GROUP_TOKEN or "").strip()
     if not token:
         raise SystemExit("VK_GROUP_TOKEN не задан в config.py — VK-бот не запущен.")

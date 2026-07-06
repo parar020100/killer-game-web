@@ -67,6 +67,8 @@
   .soon s { color: var(--text-dim); }
   .btn.ghost { background: var(--btn-bg); border-color: var(--border); color: var(--text); font-weight: 600; }
   .qrow { display: flex; gap: 8px; }
+  .ctlrow { display: flex; flex-wrap: wrap; gap: 8px; }
+  .ctlrow form { margin: 0; }
   .qrow input:first-child { flex: 0 0 34%; min-width: 0; }
   .qrow input:last-child { flex: 1 1 auto; min-width: 0; }
   code { background: var(--btn-bg); border: 1px solid var(--border); border-radius: 5px; padding: 0 5px; font-size: 12.5px; }
@@ -200,14 +202,30 @@
       <button type="submit" class="btn">💾 Сохранить вопросы</button>
     </form>
 
-    <form class="card" method="post" action="{{ link('/app/settings') }}"
-          onsubmit="return confirm('Перезапустить приложение? На пару секунд сайт будет недоступен, данные игры сохранятся.')">
-      <input type="hidden" name="action" value="restart">
-      <h2>🔁 Перезапуск приложения</h2>
-      <p class="hint">Перезагружает сервер приложения (например, после обновления кода
-         или изменения настроек). Данные игры сохраняются, занимает пару секунд.</p>
-      <button type="submit" class="btn ghost">🔁 Перезапустить приложение</button>
-    </form>
+    <div class="card">
+      <h2>🔁 Управление приложением</h2>
+      <p class="hint">Режим запуска: <code>{{ start_mode }}</code>
+         {% if start_mode == 'systemctl' %}(через systemd){% else %}(вручную){% endif %}.
+         Команды исполняет супервизор <code>run_all.py</code>; применяются за пару секунд.
+         Данные игры сохраняются.</p>
+      <div class="ctlrow">
+        <form method="post" action="{{ link('/app/settings') }}"
+              onsubmit="return confirm('Перезагрузить приложение? На пару секунд сайт будет недоступен.')">
+          <input type="hidden" name="action" value="restart">
+          <button type="submit" class="btn ghost">🔁 Перезагрузить</button>
+        </form>
+        <form method="post" action="{{ link('/app/settings') }}"
+              onsubmit="return confirm('Обновить код (git pull) и перезапустить приложение?')">
+          <input type="hidden" name="action" value="update">
+          <button type="submit" class="btn ghost">⬇️ Обновить (git pull)</button>
+        </form>
+        <form method="post" action="{{ link('/app/settings') }}"
+              onsubmit="return confirm('Выключить приложение? Сайт станет недоступен{% if start_mode != 'systemctl' %}, потребуется ручной запуск{% endif %}.')">
+          <input type="hidden" name="action" value="stop">
+          <button type="submit" class="btn danger">⏹️ Выключить</button>
+        </form>
+      </div>
+    </div>
 
     <form class="card danger" method="post" action="{{ link('/app/settings') }}"
           onsubmit="return confirm('Полностью стереть базу данных? Все пользователи, игроки и настройки будут удалены безвозвратно.')">

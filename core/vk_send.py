@@ -20,7 +20,8 @@ _API = "https://api.vk.com/method/messages.send"
 
 
 def enabled() -> bool:
-    return bool((getattr(config, "VK_GROUP_TOKEN", "") or "").strip())
+    return (bool(getattr(config, "ENABLE_VK_BOT", True))
+            and bool((getattr(config, "VK_GROUP_TOKEN", "") or "").strip()))
 
 
 def _menu_keyboard() -> str:
@@ -35,9 +36,9 @@ def send(user_id, text: str, with_menu: bool = True) -> bool:
 
     with_menu=True добавляет к сообщению inline-кнопку «Открыть меню игры».
     """
-    token = (getattr(config, "VK_GROUP_TOKEN", "") or "").strip()
-    if not token:
+    if not enabled():
         return False
+    token = (getattr(config, "VK_GROUP_TOKEN", "") or "").strip()
     params = {
         "access_token": token,
         "v": getattr(config, "VK_API_VERSION", "5.199"),

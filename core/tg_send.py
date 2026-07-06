@@ -16,7 +16,8 @@ _API = "https://api.telegram.org/bot{token}/sendMessage"
 
 
 def enabled() -> bool:
-    return bool((getattr(config, "TELEGRAM_BOT_TOKEN", "") or "").strip())
+    return (bool(getattr(config, "ENABLE_TG_BOT", True))
+            and bool((getattr(config, "TELEGRAM_BOT_TOKEN", "") or "").strip()))
 
 
 def send(chat_id, text: str, with_menu: bool = True) -> bool:
@@ -24,9 +25,9 @@ def send(chat_id, text: str, with_menu: bool = True) -> bool:
 
     with_menu=True добавляет к сообщению inline-кнопку «Открыть меню игры».
     """
-    token = (getattr(config, "TELEGRAM_BOT_TOKEN", "") or "").strip()
-    if not token:
+    if not enabled():
         return False
+    token = (getattr(config, "TELEGRAM_BOT_TOKEN", "") or "").strip()
     payload = {"chat_id": int(chat_id), "text": text,
                "disable_web_page_preview": True}
     if with_menu:

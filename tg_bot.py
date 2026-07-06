@@ -89,6 +89,8 @@ async def _announce_connected(application):
 
 
 def main():
+    if not getattr(config, "ENABLE_TG_BOT", True):
+        raise SystemExit("Telegram-бот выключен в config.py (ENABLE_TG_BOT = False).")
     token = (config.TELEGRAM_BOT_TOKEN or "").strip()
     if not token:
         raise SystemExit("TELEGRAM_BOT_TOKEN не задан в config.py — бот не запущен.")

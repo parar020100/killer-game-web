@@ -1028,6 +1028,7 @@ def _settings_ctx(request, user, saved="", **extra):
         game_mode=mode.current(),
         db_files=db.list_db_files(),
         active_db=db.active_db_name(),
+        start_mode=getattr(config, "START_MODE", "manual"),
         saved=saved,
         **extra,
     )
@@ -1128,18 +1129,23 @@ async def settings_save(request: Request):
             applied = db.set_active_db(name)
             admin_log.log(f"🗄️ {user.get_name()} выбрал(а) активную игру (БД): {applied}")
             # перезапуск, чтобы приложение переоткрыло выбранный файл БД
-            import threading
-            threading.Timer(0.6, lambda: Path(__file__).touch()).start()
-            return _redirect(request, "/app")
-        saved = "Имя файла БД не задано."
-    elif action == "restart":
-        # Перезапуск приложения: под uvicorn --reload достаточно «тронуть» файл
-        # исходника — наблюдатель перезагрузит воркер. Делаем с задержкой, чтобы
-        # успеть отдать ответ-редирект до перезапуска.
-        admin_log.log(f"🔁 {user.get_name()} перезапустил(а) приложение")
-        import threading
-        threading.Timer(0.6, lambda: Path(__file__).touch()).start()
-        return _redirect(request, "/app")
+            from core import control
+            control.request("restart")
+            saved = f"Активная игра: {applied}. Приложение перезапускается…"
+        else:
+            saved = "Имя файла БД не задано."
+    elif action in ("restart", "stop", "update"):
+        # Управление процессом приложения: команду исполнит супервизор run_all.py
+        # (с учётом START_MODE — вручную или через systemctl). См. core/control.py.
+        from core import control
+        labels = {"restart": "перезагрузку", "stop": "выключение",
+                  "update": "обновление (git pull) и перезапуск"}
+        if control.request(action):
+            admin_log.log(f"🔁 {user.get_name()} инициировал(а) {labels[action]} приложения")
+            saved = (f"Команда «{labels[action]}» отправлена. "
+                     "Применится в течение пары секунд.")
+        else:
+            saved = "Неизвестная команда управления."
     elif action == "full_reset":
         # Полный сброс БД — необратимо. Текущая сессия становится недействительной.
         admin_log.log(f"💣 {user.get_name()} выполнил(а) полный сброс базы данных")
