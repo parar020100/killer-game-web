@@ -123,7 +123,13 @@ def main():
                 "Также: Управление → Сообщения → включить «Сообщения сообщества».\n"
                 "Подробно — в SETUP.md, раздел 5.") from exc
         raise
-    log.info("VK-бот запущен (long poll). Ctrl+C для остановки.")
+
+    try:
+        grp = _api("groups.getById")["groups"][0]
+        who = f"{grp.get('name')} (id {group_id})"
+    except Exception:  # noqa: BLE001
+        who = f"id {group_id}"
+    log.info("✅ VK-бот успешно подключён: %s. Ожидаю сообщения…", who)
     while True:
         try:
             resp = httpx.get(server, params={"act": "a_check", "key": key,

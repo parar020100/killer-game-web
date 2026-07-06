@@ -73,15 +73,23 @@ async def forward_to_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "(нет администраторов).")
 
 
+async def _announce_connected(application):
+    """Вызывается после подключения — печатаем явную индикацию, что бот на связи."""
+    me = await application.bot.get_me()
+    log.info("✅ Telegram-бот успешно подключён: @%s (id %s). Ожидаю сообщения…",
+             me.username, me.id)
+
+
 def main():
     token = (config.TELEGRAM_BOT_TOKEN or "").strip()
     if not token:
         raise SystemExit("TELEGRAM_BOT_TOKEN не задан в config.py — бот не запущен.")
-    app = Application.builder().token(token).build()
+    app = (Application.builder().token(token)
+           .post_init(_announce_connected).build())
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("link", link_cmd))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_to_admins))
-    log.info("Telegram-бот запущен (long-polling). Ctrl+C для остановки.")
+    log.info("Telegram-бот запускается (long polling)… Ctrl+C для остановки.")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
