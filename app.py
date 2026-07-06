@@ -882,8 +882,11 @@ def apply_action(action: str, user: User, count: int = 5) -> str:
             return "⚠️ Игра сейчас не запущена — продолжать нечего."
         if not game.is_paused():
             return "ℹ️ Игра уже идёт."
-        game.resume()
+        reg_closed = game.resume()
         admin_log.log(f"▶️ {who} возобновил(а) игру")
+        if reg_closed:
+            admin_log.log("🚫 Регистрация закрыта при возобновлении игры")
+            _broadcast("🚫 Регистрация на игру закрыта.", players_only=False)
         _broadcast("▶️ Игра продолжается!", silent=True)
         return "▶️ Игра продолжается."
     elif action == "reset_game":

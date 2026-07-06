@@ -76,8 +76,22 @@ class Game:
         self.set_paused(True)
 
     def resume(self):
-        if self.is_started():
-            self.set_paused(False)
+        """Возобновить игру после паузы.
+
+        Как в боте (там возобновление — тот же `admin_start_game`): регистрация
+        допустима ТОЛЬКО на паузе или до старта, поэтому при возобновлении она
+        принудительно закрывается, а цели пересчитываются (во время паузы мог
+        меняться состав/позиции игроков). Возвращает True, если регистрация была
+        открыта и её закрыли — чтобы вызывающий разослал уведомление.
+        """
+        if not self.is_started():
+            return False
+        reg_was_open = self.is_registration_open()
+        self.set_registration_open(False)
+        for ply in User.all_players():
+            ply.update_target_quiet()
+        self.set_paused(False)
+        return reg_was_open
 
     def reset(self):
         """Полный сброс игры: снять всех игроков и обнулить игровые данные."""
