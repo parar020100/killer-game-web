@@ -17,6 +17,9 @@
     --accent: #e23b4e;
     --accent-soft: rgba(226, 59, 78, .10);
     --accent-border: rgba(226, 59, 78, .28);
+    --primary: #2f6fed;
+    --primary-soft: rgba(47, 111, 237, .10);
+    --primary-border: rgba(47, 111, 237, .32);
     --danger: #d64550;
     --danger-soft: rgba(214, 69, 80, .09);
     --danger-border: rgba(214, 69, 80, .25);
@@ -38,6 +41,9 @@
       --accent: #ff5069;
       --accent-soft: rgba(255, 80, 105, .14);
       --accent-border: rgba(255, 80, 105, .35);
+      --primary: #6b9bff;
+      --primary-soft: rgba(107, 155, 255, .15);
+      --primary-border: rgba(107, 155, 255, .40);
       --danger: #ff6161;
       --danger-soft: rgba(255, 97, 97, .12);
       --danger-border: rgba(255, 97, 97, .32);
@@ -168,7 +174,7 @@
   .keyboard .btn:not(.full) {
     min-height: 40px; padding: 9px 10px; font-size: 13px; font-weight: 500; border-radius: 11px;
   }
-  .btn.primary { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); font-weight: 650; }
+  .btn.primary { background: var(--primary-soft); border-color: var(--primary-border); color: var(--primary); font-weight: 650; }
   .btn.danger { background: var(--danger-soft); border-color: var(--danger-border); color: var(--danger); }
   .btn.ok { background: var(--ok-soft); border-color: var(--ok-border); color: var(--ok); font-weight: 650; }
   .btn.todo { cursor: not-allowed; color: var(--text-dim); opacity: .7; box-shadow: none; }

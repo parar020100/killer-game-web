@@ -581,7 +581,7 @@ def admin_management_buttons(user: User):
 
     # Жизненный цикл: один слот, меняющий смысл (старт / пауза / продолжить).
     if not started:
-        b.append(_btn("▶️ Запустить игру", "start_game", "primary"))
+        b.append(_btn("▶️ Запустить игру", "start_game"))
     elif paused:
         b.append(_btn("▶️ Продолжить", "resume", "primary"))
     else:
@@ -601,19 +601,21 @@ def admin_management_buttons(user: User):
                       note="Открыть регистрацию можно только когда игра не идёт "
                            "или поставлена на паузу."))
 
+    # Промежуточные итоги — только пока игра идёт (перед «Завершить»).
+    b.append(_btn("📊 Промежуточные итоги", href="/app/results" if started else None,
+                  disabled=not started,
+                  note="Промежуточные итоги доступны только во время игры."))
+
     # Завершение / сброс — всегда видны, серые вне паузы (опасные → подтверждение).
     end_note = "Завершить или сбросить игру можно только во время паузы — сначала поставьте паузу."
-    b.append(_btn("🏁 Завершить (итоги)", "end_game" if paused else None, "danger",
+    b.append(_btn("🏁 Завершить игру", "end_game" if paused else None, "danger",
                   disabled=not paused, note=end_note,
                   confirm="Завершить игру и разослать итоги всем?"))
     b.append(_btn("♻️ Сбросить игру", "reset_game" if paused else None, "danger",
                   disabled=not paused, note=end_note,
                   confirm="Сбросить игру? Все игроки будут сняты с игры."))
 
-    # Инструменты. Промежуточные итоги — только пока игра идёт.
-    b.append(_btn("📊 Промежуточные итоги", href="/app/results" if started else None,
-                  disabled=not started,
-                  note="Промежуточные итоги доступны только во время игры."))
+    # Инструменты.
     b.append(_btn("📢 Рассылка", href="/broadcast"))
     b.append(_btn("⚙️ Настройки игры", href="/app/settings"))
     b.append(_btn("📋 Журнал", href="/admin-log"))
