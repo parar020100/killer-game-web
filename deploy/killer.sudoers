@@ -1,0 +1,7 @@
+# Шаблон правила sudoers: разрешает сервисному пользователю перезапускать/
+# останавливать сервис без пароля (для кнопок «Перезагрузить/Выключить» в UI при
+# START_MODE="systemctl"). Замените __USER__ и __SERVICE__ (это делает
+# deploy/setup-service.sh) и установите:
+#   sudo install -m 0440 deploy/killer.sudoers /etc/sudoers.d/killer
+#   sudo visudo -cf /etc/sudoers.d/killer      # проверка синтаксиса
+__USER__ ALL=(root) NOPASSWD: /usr/bin/systemctl restart __SERVICE__, /usr/bin/systemctl stop __SERVICE__

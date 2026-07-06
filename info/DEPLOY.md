@@ -6,6 +6,12 @@
 Базовая настройка (config.py, боты, привязка каналов) — в [SETUP.md](SETUP.md).
 Здесь — всё про прод-развёртывание на отдельном хосте под доменом.
 
+> **Быстрый путь (скрипты и шаблоны).** Готовые файлы — в папке
+> [`deploy/`](../deploy/README.md): `install.sh` (система + venv + зависимости +
+> config.py), `setup-service.sh` (systemd + nginx + sudoers из шаблонов
+> `killer.service` / `nginx.conf` / `killer.sudoers`). Ниже — те же шаги вручную,
+> с пояснениями и диагностикой.
+
 ---
 
 ## 0. Схема
@@ -72,7 +78,10 @@ nano config.py
 ```python
 APP_BASE_URL = "https://killer.parar.ru"     # ссылки ботов станут https
 SECRET_KEY = "<длинная-случайная-строка>"    # см. команду ниже
-ALLOW_DEV_LOGIN = 0                          # ОБЯЗАТЕЛЬНО в проде
+
+# Админы по умолчанию — раздельно для каждой платформы (id или username/screen_name):
+DEFAULT_ADMINS_TG = ["my_tg_username"]
+DEFAULT_ADMINS_VK = ["my_vk_screenname"]
 
 ENABLE_TG_BOT = True
 TELEGRAM_BOT_TOKEN = "…"
