@@ -1,0 +1,134 @@
+"""Реальный VK-бот сообщества для веб-версии игры «Киллер / Папарацци».
+
+Отдельный процесс (аналог tg_bot.py, но для ВКонтакте). Работает через Bots Long
+Poll API сообщества, без внешних библиотек (только httpx). Отвечает за VK-сторону:
+
+  • «Начать» / /start — создаёт/привязывает identity (platform='vk',
+    platform_uid = числовой VK-id), выдаёт постоянную ссылку входа на сайт;
+  • /link КОД — привязывает этот VK-канал к аккаунту с сайта (объединение tg+vk);
+  • любое сообщение — пересылает администраторам;
+  • исходящие уведомления шлёт сам веб-процесс через messages.send
+    (см. core/vk_send.py и Identity.deliver).
+
+Настройка сообщества (Long Poll, права, токен) — в SETUP.md.
+
+Запуск:  .venv/Scripts/python.exe vk_bot.py
+"""
+import logging
+import random
+import time
+
+import httpx
+
+import config
+import db  # noqa: F401 — инициализация БД
+from core import botcommon
+from core.user import User
+
+logging.basicConfig(
+    format="%(asctime)s [vk_bot] %(levelname)s: %(message)s", level=logging.INFO)
+log = logging.getLogger("vk_bot")
+
+_START_WORDS = {"/start", "start", "начать", "старт", "привет", "begin"}
+
+
+def _api(method: str, **params):
+    params.setdefault("access_token", config.VK_GROUP_TOKEN)
+    params.setdefault("v", getattr(config, "VK_API_VERSION", "5.199"))
+    r = httpx.get(f"https://api.vk.com/method/{method}", params=params, timeout=30).json()
+    if "error" in r:
+        raise RuntimeError(f"VK API {method}: {r['error'].get('error_msg')}")
+    return r["response"]
+
+
+def _send(user_id, text: str):
+    try:
+        _api("messages.send", user_id=user_id, message=text,
+             random_id=random.randint(1, 2_000_000_000))
+    except Exception as exc:  # noqa: BLE001
+        log.warning("send to %s failed: %s", user_id, exc)
+
+
+def _vk_name(user_id):
+    """Имя и screen_name пользователя (для профиля). Возвращает (name, screen_name)."""
+    try:
+        info = _api("users.get", user_ids=user_id, fields="screen_name")[0]
+        name = " ".join(p for p in (info.get("first_name"), info.get("last_name")) if p)
+        return name or None, info.get("screen_name")
+    except Exception:  # noqa: BLE001
+        return None, None
+
+
+def _ensure_user(from_id):
+    name, screen = _vk_name(from_id)
+    return User.get_or_create_by_vk(str(from_id), username=screen, name=name or str(from_id))
+
+
+def handle_message(from_id, text: str):
+    text = (text or "").strip()
+    low = text.lower()
+    user = _ensure_user(from_id)
+    ident = user.identity("vk")
+
+    if low in _START_WORDS:
+        link, reissued = botcommon.issue_login_link(ident)
+        _send(from_id, botcommon.welcome_text(link, reissued))
+        log.info("start: user id=%s vk=%s", user.id, from_id)
+        return
+    if low.startswith("/link"):
+        code = text.split(maxsplit=1)[1] if len(text.split()) > 1 else ""
+        _send(from_id, botcommon.do_link(ident, code))
+        return
+
+    # прочее — пересылаем администраторам
+    has_admins = botcommon.forward_to_admins(user, "VK", text)
+    if not has_admins:
+        _send(from_id, "Сообщение получено, но пока некому его переслать "
+                       "(нет администраторов).")
+
+
+def _get_long_poll_server(group_id):
+    r = _api("groups.getLongPollServer", group_id=group_id)
+    return r["server"], r["key"], r["ts"]
+
+
+def main():
+    token = (config.VK_GROUP_TOKEN or "").strip()
+    group_id = (str(config.VK_GROUP_ID) or "").strip()
+    if not token or not group_id:
+        raise SystemExit("VK_GROUP_TOKEN / VK_GROUP_ID не заданы в config.py — VK-бот не запущен.")
+
+    server, key, ts = _get_long_poll_server(group_id)
+    log.info("VK-бот запущен (long poll). Ctrl+C для остановки.")
+    while True:
+        try:
+            resp = httpx.get(server, params={"act": "a_check", "key": key,
+                                             "ts": ts, "wait": 25}, timeout=30).json()
+        except httpx.HTTPError as exc:
+            log.warning("long poll network error: %s", exc)
+            time.sleep(3)
+            continue
+        # Ошибки long poll: 1 — устарел ts; 2/3 — ключ/сервер невалидны → переполучить.
+        if "failed" in resp:
+            failed = resp["failed"]
+            if failed == 1:
+                ts = resp["ts"]
+            else:
+                server, key, ts = _get_long_poll_server(group_id)
+            continue
+        ts = resp["ts"]
+        for upd in resp.get("updates", []):
+            if upd.get("type") != "message_new":
+                continue
+            msg = upd.get("object", {}).get("message", {})
+            from_id = msg.get("from_id")
+            if not from_id or from_id < 0:   # сообщения от сообществ игнорируем
+                continue
+            try:
+                handle_message(from_id, msg.get("text", ""))
+            except Exception as exc:  # noqa: BLE001 — не роняем бота из-за одного апдейта
+                log.exception("handle_message failed: %s", exc)
+
+
+if __name__ == "__main__":
+    main()

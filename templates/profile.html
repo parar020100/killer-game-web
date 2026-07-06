@@ -64,6 +64,17 @@
   .card.danger { border-color: rgba(214,69,80,.4); }
   .btn.danger { background: rgba(214,69,80,.1); border-color: rgba(214,69,80,.4); color: var(--danger); }
   code { background: var(--btn-bg); border: 1px solid var(--border); border-radius: 5px; padding: 0 5px; font-size: 12.5px; }
+  .btn.tiny { font-size: 12px; padding: 5px 10px; align-self: center; }
+  .accounts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+  .accounts li { display: flex; align-items: center; gap: 10px; font-size: 13.5px; }
+  .accounts .acc { flex: 1 1 auto; min-width: 0; word-break: break-word; }
+  .accounts form { margin: 0; }
+  .code-box {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 22px; font-weight: 700; letter-spacing: 3px; text-align: center;
+    background: var(--btn-bg); border: 1px dashed var(--accent-border);
+    border-radius: 10px; padding: 10px; margin: 0; color: var(--accent);
+  }
   .note {
     background: var(--ok-soft); border: 1px solid var(--ok-border); color: var(--ok);
     border-radius: 12px; padding: 10px 14px; font-size: 14px; font-weight: 550;
@@ -120,6 +131,38 @@
       <button type="submit" class="btn ghost">{{ '🔕 Выключить' if admin_log_on else '🔔 Включить' }}</button>
     </form>
     {% endif %}
+
+    <div class="card">
+      <h2>🔗 Привязка аккаунтов (Telegram / VK)</h2>
+      <p class="hint">Можно объединить Telegram и VK под одним аккаунтом (уведомления
+         придут в оба канала, вход — с любого) или держать их раздельно.</p>
+      {% if accounts %}
+      <ul class="accounts">
+        {% for a in accounts %}
+        <li>
+          <span class="acc">{{ a.icon }} {{ a.platform }}: <strong>{{ a.handle }}</strong></span>
+          {% if can_unlink %}
+          <form method="post" action="{{ link('/app/profile') }}"
+                onsubmit="return confirm('Отвязать этот канал в отдельный аккаунт? Он перестанет быть связан с остальными.')">
+            <input type="hidden" name="action" value="unlink">
+            <input type="hidden" name="identity_id" value="{{ a.id }}">
+            <button type="submit" class="btn ghost tiny">Отвязать</button>
+          </form>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      {% if link_code %}
+      <p class="hint">Ваш код привязки — отправьте его боту <strong>другой</strong>
+         платформы командой <code>/link {{ link_code }}</code>:</p>
+      <p class="code-box">{{ link_code }}</p>
+      {% endif %}
+      <form method="post" action="{{ link('/app/profile') }}">
+        <input type="hidden" name="action" value="link_code">
+        <button type="submit" class="btn ghost">🔗 Получить код привязки</button>
+      </form>
+    </div>
 
     <form class="card danger" method="post" action="{{ link('/app/profile') }}"
           onsubmit="return confirm('Отозвать все ссылки входа? Текущий вход завершится, а старые ссылки перестанут работать. Новую можно получить в чате командой /start.')">

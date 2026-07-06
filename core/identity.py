@@ -62,6 +62,7 @@ class Identity:
     # --- поля -------------------------------------------------------------
 
     def get_user_id(self):       return self._get("user_id")
+    def set_user_id(self, value): self._set("user_id", int(value))
     def get_platform(self):      return self._get("platform")
     def get_platform_uid(self):  return self._get("platform_uid")
     def get_username(self):      return self._get("username")
@@ -105,6 +106,13 @@ class Identity:
                     return
             from core.chat import add_bot_message
             add_bot_message(uid, text)
+        elif platform == "vk":
+            # Реальный ВК: числовой uid + заданный ключ сообщества → messages.send.
+            if str(uid).isdigit():
+                from core import vk_send
+                if vk_send.send(uid, text):
+                    return
+            from core.chat import add_bot_message
+            add_bot_message(uid, text)
         else:
-            # Реальные боты (vk и т.п.) подключим на шаге уведомлений.
             print(f"[notify:{platform}] -> {uid}: {text}")

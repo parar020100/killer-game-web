@@ -1070,17 +1070,32 @@ async def settings_save(request: Request):
                                       _settings_ctx(request, user, saved=saved))
 
 
-def _render_profile(request, user, values, errors, saved, answers):
+def _profile_accounts(user: User):
+    """Привязанные каналы пользователя для страницы профиля (с id для отвязки)."""
+    idents = user.identities()
+    from core.identity import PLATFORM_ICON, PLATFORM_LABEL
+    out = []
+    for i in idents:
+        pl = i.get_platform()
+        handle = i.get_username() or i.get_name() or i.get_platform_uid()
+        out.append({"id": i.id, "icon": PLATFORM_ICON.get(pl, "•"),
+                    "platform": PLATFORM_LABEL.get(pl, pl), "handle": handle})
+    return out
+
+
+def _render_profile(request, user, values, errors, saved, answers, link_code=""):
     """Отрисовать страницу профиля. answers — dict {метка: значение} для полей."""
     muted = bool(user.identities()) and all(i.is_muted() for i in user.identities())
     # Доп. вопросы показываем только участникам игры (как в боте, d_edit.py).
     fields = _extra_fields(answers, errors) if user.is_player() else []
+    accounts = _profile_accounts(user)
     return templates.TemplateResponse(
         request, "profile.html",
         _ctx(request, values=values, errors=errors, saved=saved,
              extra_fields=fields, muted=muted,
              is_admin=user.is_admin(), admin_log_on=_admin_log_enabled(user),
-             is_root=user.is_root()),
+             is_root=user.is_root(),
+             accounts=accounts, can_unlink=len(accounts) >= 2, link_code=link_code),
     )
 
 
@@ -1121,6 +1136,33 @@ async def profile_save(request: Request):
         user.forget_self()
         request.session.clear()
         return RedirectResponse(url="/", status_code=303)
+
+    # Привязка второго канала (tg↔vk): выдать одноразовый код для команды /link.
+    if action == "link_code":
+        from core import linking
+        code = linking.create_code(user.id)
+        values = {"real_name": user.get_real_name() or ""}
+        return _render_profile(request, user, values, {},
+                               "Код привязки создан — отправьте его боту.",
+                               get_extra_answers(user), link_code=code)
+
+    # Отвязать канал в отдельный аккаунт (разъединение). Только если каналов ≥2.
+    if action == "unlink":
+        from core import linking
+        from core.identity import Identity
+        try:
+            iid = int(form.get("identity_id") or 0)
+        except (ValueError, TypeError):
+            iid = 0
+        ident = Identity.by_id(iid)
+        saved = "Не удалось отвязать канал."
+        if (ident and ident.get_user_id() == user.id
+                and len(user.identities()) >= 2):
+            linking.unlink_identity(ident)
+            admin_log.log(f"🔗 {user.get_name()} отвязал(а) канал в отдельный аккаунт")
+            saved = "Канал отвязан в отдельный аккаунт."
+        values = {"real_name": user.get_real_name() or ""}
+        return _render_profile(request, user, values, {}, saved, get_extra_answers(user))
 
     # Переключатель уведомлений («Отключить бота» из меню игрока в боте).
     if action in ("mute", "unmute"):

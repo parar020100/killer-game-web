@@ -3,3 +3,5 @@ uvicorn[standard]>=0.30
 jinja2>=3.1
 python-multipart>=0.0.9
 itsdangerous>=2.1
+httpx>=0.27                 # доставка сообщений в Telegram/VK (core/tg_send, vk_send)
+python-telegram-bot>=22     # Telegram-бот (tg_bot.py); VK-бот работает на httpx

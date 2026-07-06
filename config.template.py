@@ -26,6 +26,12 @@ NAME_MAX_LEN = 50
 # Telegram-бот: токен от @BotFather. Пусто = бот отключён (остаётся эмуляция чата).
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 
+# VK-бот сообщества (Long Poll API): ключ доступа сообщества и его числовой id.
+# Пусто = VK-бот отключён. Пошаговая настройка — в SETUP.md.
+VK_GROUP_TOKEN = os.getenv("VK_GROUP_TOKEN", "")
+VK_GROUP_ID = os.getenv("VK_GROUP_ID", "")   # число, id сообщества (без минуса)
+VK_API_VERSION = "5.199"
+
 # Базовый адрес сайта — из него бот собирает ссылку входа (/login?token=...).
 # В проде укажите публичный адрес (напр. https://killer.example.com).
 APP_BASE_URL = os.getenv("APP_BASE_URL", "http://127.0.0.1:8000")

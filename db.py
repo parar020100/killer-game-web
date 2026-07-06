@@ -211,6 +211,17 @@ def init_db():
     );
     """)
 
+    # Одноразовые коды привязки второго канала (tg↔vk) к одному пользователю.
+    # Пользователь получает код на сайте и отправляет его боту другой платформы:
+    # `/link <code>` переносит identity бота на этого пользователя (объединение).
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS link_code (
+        code       TEXT PRIMARY KEY,
+        user_id    INTEGER NOT NULL REFERENCES user(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+
     _migrate_flat_to_identity(cur)
 
     if cur.execute("SELECT COUNT(*) FROM game").fetchone()[0] == 0:
