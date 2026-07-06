@@ -45,8 +45,9 @@ def _send(user_id, text: str):
     try:
         _api("messages.send", user_id=user_id, message=text,
              random_id=random.randint(1, 2_000_000_000))
+        log.info("→ ответ отправлен пользователю %s", user_id)
     except Exception as exc:  # noqa: BLE001
-        log.warning("send to %s failed: %s", user_id, exc)
+        log.warning("НЕ удалось отправить пользователю %s: %s", user_id, exc)
 
 
 def _vk_name(user_id):
@@ -66,6 +67,7 @@ def _ensure_user(from_id):
 
 def handle_message(from_id, text: str):
     text = (text or "").strip()
+    log.info("← сообщение от %s: %r", from_id, text)
     low = text.lower()
     user = _ensure_user(from_id)
     ident = user.identity("vk")
@@ -147,15 +149,21 @@ def main():
                 server, key, ts = _get_long_poll_server(group_id)
             continue
         ts = resp["ts"]
-        for upd in resp.get("updates", []):
+        updates = resp.get("updates", [])
+        if updates:
+            log.info("получено обновлений: %d (%s)", len(updates),
+                     ", ".join(u.get("type", "?") for u in updates))
+        for upd in updates:
             if upd.get("type") != "message_new":
                 continue
-            msg = upd.get("object", {}).get("message", {})
-            from_id = msg.get("from_id")
+            obj = upd.get("object", {})
+            # API 5.x: событие в object.message; на старых версиях — сам object.
+            msg = obj.get("message", obj)
+            from_id = msg.get("from_id") or msg.get("user_id")
             if not from_id or from_id < 0:   # сообщения от сообществ игнорируем
                 continue
             try:
-                handle_message(from_id, msg.get("text", ""))
+                handle_message(from_id, msg.get("text", "") or msg.get("body", ""))
             except Exception as exc:  # noqa: BLE001 — не роняем бота из-за одного апдейта
                 log.exception("handle_message failed: %s", exc)
 
