@@ -95,10 +95,16 @@ class Identity:
 
     def deliver(self, text: str):
         platform = self.get_platform()
+        uid = self.get_platform_uid()
         if platform == "tg":
-            # Пока Telegram эмулируется страницей чата (core/chat.py).
+            # Реальный Telegram: если platform_uid — числовой chat_id и задан токен,
+            # шлём через Bot API. Иначе (эмуляция: uid = username) — в файл чата.
+            if str(uid).isdigit():
+                from core import tg_send
+                if tg_send.send(uid, text):
+                    return
             from core.chat import add_bot_message
-            add_bot_message(self.get_platform_uid(), text)
+            add_bot_message(uid, text)
         else:
             # Реальные боты (vk и т.п.) подключим на шаге уведомлений.
-            print(f"[notify:{platform}] -> {self.get_platform_uid()}: {text}")
+            print(f"[notify:{platform}] -> {uid}: {text}")
