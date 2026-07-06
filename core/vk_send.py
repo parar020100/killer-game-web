@@ -50,6 +50,18 @@ def send(user_id, text: str, with_menu: bool = True) -> bool:
         params["keyboard"] = _menu_keyboard()
     try:
         r = httpx.get(_API, params=params, timeout=10).json()
-        return "response" in r
-    except (httpx.HTTPError, ValueError, TypeError):
+        if "response" in r:
+            return True
+        _log_error(f"VK messages.send → user {user_id}: {str(r)[:200]}")
         return False
+    except (httpx.HTTPError, ValueError, TypeError) as e:
+        _log_error(f"VK messages.send → user {user_id}: {type(e).__name__}: {e}")
+        return False
+
+
+def _log_error(text: str):
+    try:
+        from core import bot_log
+        bot_log.error(text)
+    except Exception:
+        pass

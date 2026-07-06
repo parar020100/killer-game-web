@@ -16,7 +16,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 from fastapi import FastAPI, Request, Form, Query
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, PlainTextResponse
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
 from starlette.middleware.sessions import SessionMiddleware
@@ -26,7 +26,7 @@ import os
 
 import config
 import db  # noqa: F401 — импорт инициализирует БД
-from core import chat, auth, admin_log, mode, settings as app_settings, version
+from core import chat, auth, admin_log, bot_log, mode, settings as app_settings, version
 from core.game import Game
 from core.user import User
 
@@ -490,6 +490,17 @@ def recent_notifications(user: User, limit: int = 8):
     return out
 
 
+def game_log_entries(limit: int = 40):
+    """Последние записи игрового журнала (admin_log) для панели «Лог игры».
+
+    Возвращает список {ts, html} от новых к старым (read_messages уже новые сверху).
+    """
+    out = []
+    for m in admin_log.read_messages()[:limit]:
+        out.append({"ts": m["ts"], "html": linkify(m["body"])})
+    return out
+
+
 def capture_prompt(user: User):
     """Секция «вас поймали»: сообщение + кнопки подтвердить/это не так.
 
@@ -547,6 +558,10 @@ def admin_management_buttons(user: User):
     # Показать/скрыть встроенный список игроков (рядом с паузой; состояние —
     # в куке/localStorage, поэтому это кнопка-переключатель на клиенте).
     b.append(_btn("👥 Список игроков", toggle="userlist"))
+
+    # Показать/скрыть панель «Лог игры» (правый 3-й столбец на широком экране,
+    # иначе стопкой снизу) — тем же механизмом переключателя, что и список.
+    b.append(_btn("📋 Лог игры", toggle="gamelog"))
 
     # Регистрация: закрыть, если открыта; иначе открыть — серая во время игры.
     if reg_open:
@@ -1123,6 +1138,9 @@ def dashboard(request: Request):
             show_userlist=is_admin and request.cookies.get("userlist") == "1",
             # меню админа по умолчанию раскрыто; свёрнуто только если явно выбрано
             show_adminmenu=request.cookies.get("adminmenu") != "0",
+            # лог игры — правая панель (3-й столбец), включается кнопкой (как список)
+            show_gamelog=is_admin and request.cookies.get("gamelog") == "1",
+            game_log=game_log_entries() if is_admin else None,
             support_contact=app_settings.support_contact(),
             game_name=mode.term("name"),
             game_tagline=mode.term("tagline"),
@@ -2029,7 +2047,7 @@ def broadcast_send(request: Request, audience: str = Form("players"),
 
 
 # ---------------------------------------------------------------------------
-# Общий журнал администраторов (один файл на всю игру)
+# Журналы: игровой (admin_log, события игры + действия) и лог бота (bot_log)
 # ---------------------------------------------------------------------------
 
 @app.get("/admin-log", response_class=HTMLResponse)
@@ -2048,3 +2066,21 @@ def admin_log_clear(request: Request):
     if user and user.is_admin():
         admin_log.clear()
     return _redirect(request, "/admin-log")
+
+
+@app.get("/admin-log/raw", response_class=PlainTextResponse)
+def admin_log_raw(request: Request):
+    """Сырой текст игрового журнала — открывается в новой вкладке (только админ)."""
+    user = current_user(request)
+    if user is None or not user.is_admin():
+        return PlainTextResponse("403", status_code=403)
+    return PlainTextResponse(admin_log.read_raw() or "Журнал игры пуст.")
+
+
+@app.get("/bot-log/raw", response_class=PlainTextResponse)
+def bot_log_raw(request: Request):
+    """Сырой текст лога бота — открывается в новой вкладке (только админ)."""
+    user = current_user(request)
+    if user is None or not user.is_admin():
+        return PlainTextResponse("403", status_code=403)
+    return PlainTextResponse(bot_log.read_raw() or "Лог бота пуст.")

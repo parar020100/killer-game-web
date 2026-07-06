@@ -36,6 +36,18 @@ def send(chat_id, text: str, with_menu: bool = True) -> bool:
             {"text": botcommon.MENU_BUTTON, "url": botcommon.menu_url()}]]}
     try:
         r = httpx.post(_API.format(token=token), json=payload, timeout=10)
-        return r.status_code == 200 and r.json().get("ok", False)
-    except (httpx.HTTPError, ValueError, TypeError):
+        if r.status_code == 200 and r.json().get("ok", False):
+            return True
+        _log_error(f"Telegram sendMessage → chat {chat_id}: HTTP {r.status_code} {r.text[:200]}")
         return False
+    except (httpx.HTTPError, ValueError, TypeError) as e:
+        _log_error(f"Telegram sendMessage → chat {chat_id}: {type(e).__name__}: {e}")
+        return False
+
+
+def _log_error(text: str):
+    try:
+        from core import bot_log
+        bot_log.error(text)
+    except Exception:
+        pass

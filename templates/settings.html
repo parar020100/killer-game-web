@@ -203,6 +203,18 @@
     </form>
 
     <div class="card">
+      <h2>📋 Журналы</h2>
+      <p class="hint">Два журнала: <b>игровой</b> (события игры и все действия
+         пользователей, плюс ошибки ботов) и <b>лог бота</b> (технические события
+         ботов). Открываются сырым текстом в новой вкладке.</p>
+      <div class="ctlrow">
+        <a class="btn ghost" href="{{ link('/admin-log/raw') }}" target="_blank" rel="noopener">🎮 Лог игры (сырой)</a>
+        <a class="btn ghost" href="{{ link('/bot-log/raw') }}" target="_blank" rel="noopener">🤖 Лог бота (сырой)</a>
+        <a class="btn ghost" href="{{ link('/admin-log') }}">📋 Журнал игры (страница)</a>
+      </div>
+    </div>
+
+    <div class="card">
       <h2>🔁 Управление приложением</h2>
       <p class="hint">Режим запуска: <code>{{ start_mode }}</code>
          {% if start_mode == 'systemctl' %}(через systemd){% else %}(вручную){% endif %}.

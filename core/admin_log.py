@@ -29,6 +29,11 @@ def read_messages():
     return msgfile.read(LOG_PATH)
 
 
+def read_raw() -> str:
+    """Сырой текст файла журнала (для просмотра в браузере)."""
+    return LOG_PATH.read_text(encoding="utf-8") if LOG_PATH.exists() else ""
+
+
 def clear():
     if LOG_PATH.exists():
         LOG_PATH.unlink()
