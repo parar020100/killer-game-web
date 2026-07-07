@@ -1,3 +1,11 @@
+<style>
+/* Кратковременная подсветка карточки при переходе по клику на «кем пойман» (TODO 75) */
+.ucard.jump-flash { animation: jumpflash 1.6s ease-out; }
+@keyframes jumpflash {
+  0%, 30% { background: rgba(255, 170, 40, .45); }
+  100%    { background: transparent; }
+}
+</style>
 <script>
 // Живой поиск по списку игроков: подсвечивает совпадения оранжевым. По мере ввода
 // перескакивает к первому; Enter (и стрелки ‹/›) листают совпадения по кругу
@@ -58,19 +66,19 @@
   document.addEventListener('click', function (e) {
     var nav = e.target.closest('#usearch-next, #usearch-prev');
     if (nav) { e.preventDefault(); step(nav.id === 'usearch-next' ? 1 : -1); return; }
-    // клик по метке «кем пойман» — подставить имя в поиск, найти игрока в списке
-    // и раскрыть его карточку (замена перехода на отдельную страницу игрока)
+    // клик по метке «кем пойман» — перейти к карточке этого игрока ПО ID и раскрыть
+    // её (data-jump = id убийцы; см. _userlist.html). Раньше искали по имени — это
+    // открывало поиск и было неоднозначно при совпадении имён (TODO 75).
     var jump = e.target.closest('[data-jump]');
     if (jump) {
       e.preventDefault();
       e.stopPropagation();
-      var inp = input();
-      if (inp) {
-        inp.value = jump.getAttribute('data-jump');
-        apply(true);
-        var m = document.querySelector('.ucard.match');
-        if (m) m.open = true;   // раскрыть меню найденного игрока
-        inp.focus();
+      var card = document.querySelector('.ucard[data-keep="u' + jump.getAttribute('data-jump') + '"]');
+      if (card) {
+        card.open = true;
+        card.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        card.classList.add('jump-flash');
+        setTimeout(function () { card.classList.remove('jump-flash'); }, 1600);
       }
     }
   });

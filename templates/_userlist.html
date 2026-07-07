@@ -16,7 +16,7 @@
       {% if u.kills is not none %}<span class="ubadge">{{ game_icon }} {{ u.kills }}</span>{% endif %}
       {# «кем пойман» коротко: ☠️ подтверждено / ⏳ ждём подтверждения.
          Клик по метке ищет этого игрока в списке (data-jump — см. _search.html). #}
-      {% if u.killed_by %}<span class="ubadge kb" data-jump="{{ u.killed_by }}" title="Кем пойман: {{ u.killed_by }}{{ ' (ждёт подтверждения)' if u.kill_pending else '' }} — нажмите, чтобы найти в списке">{{ '⏳' if u.kill_pending else '☠️' }} {{ u.killed_by }}</span>{% endif %}
+      {% if u.killed_by %}<span class="ubadge kb" data-jump="{{ u.killed_by_id }}" title="Кем пойман: {{ u.killed_by }}{{ ' (ждёт подтверждения)' if u.kill_pending else '' }} — нажмите, чтобы перейти к нему">{{ '⏳' if u.kill_pending else '☠️' }} {{ u.killed_by }}</span>{% endif %}
       <span class="chev">⚙️<span class="cw"> управлять</span> ▾</span>
     </summary>
 
@@ -25,7 +25,7 @@
       <div><dt>🆔 ID</dt><dd>{{ u.id }}</dd></div>
       {% if u.order is not none %}<div><dt>🔢 Позиция</dt><dd>{{ u.order }}</dd></div>{% endif %}
       {% if u.kills is not none %}<div><dt>{{ game_icon }} Поймал целей</dt><dd>{{ u.kills }}</dd></div>{% endif %}
-      {% if u.killed_by %}<div><dt>{{ '⏳ Заявка о поимке' if u.kill_pending else '☠️ Кем пойман' }}</dt><dd><a class="kb-link" data-jump="{{ u.killed_by }}" role="button" tabindex="0" title="найти этого игрока в списке">{{ u.killed_by }}</a></dd></div>{% endif %}
+      {% if u.killed_by %}<div><dt>{{ '⏳ Заявка о поимке' if u.kill_pending else '☠️ Кем пойман' }}</dt><dd><a class="kb-link" data-jump="{{ u.killed_by_id }}" role="button" tabindex="0" title="перейти к этому игроку">{{ u.killed_by }}</a></dd></div>{% endif %}
       {% if u.real_name %}<div><dt>🧑 Настоящее имя</dt><dd>{{ u.real_name }}</dd></div>{% endif %}
       {# привязанные профили разных типов: сначала Telegram, потом VK #}
       {% for a in u.accounts %}
@@ -127,7 +127,7 @@
           </form>
         </div>
       </details>
-      {% if u.capture_photo_uid %}<a class="btn chip" href="{{ link('/app/users/' ~ u.capture_photo_uid ~ '/photo') }}" target="_blank" rel="noopener" title="фото поимки/устранения этого игрока">📷 Фото поимки</a>{% endif %}
+      {% if u.capture_photo_uid %}<a class="btn chip" href="{{ link('/app/users/' ~ u.capture_photo_uid ~ '/photo') }}" data-photo="{{ link('/app/users/' ~ u.capture_photo_uid ~ '/photo') }}" target="_blank" rel="noopener" title="фото поимки/устранения — наведите для превью">📷 Фото поимки</a>{% endif %}
       {% if u.is_local and u.username %}<a class="btn chip" href="/chat/{{ u.username }}" target="_blank" rel="noopener" title="эмуляция чата с этим пользователем (только для админа)">🐛 Дебаг-чат</a>{% endif %}
       {% if u.is_local %}<a class="btn chip" href="{{ link('/app/users/' ~ u.id ~ '/open') }}" target="_blank" rel="noopener" title="сгенерировать токен и открыть меню от имени этого пользователя (только для админа)">🚪 Открыть меню</a>{% endif %}
     </div>
@@ -139,7 +139,7 @@
 {% macro pending_row(u, back) -%}
   <div class="prow">
     <span class="ptxt">{{ game_icon }} <strong>{{ u.killed_by }}</strong> → {{ u.name }}{% if u.order is not none %} <span class="unick">#{{ u.order }}</span>{% endif %} — ждёт подтверждения</span>
-    {% if u.capture_photo_uid %}<a class="btn chip" href="{{ link('/app/users/' ~ u.capture_photo_uid ~ '/photo') }}" target="_blank" rel="noopener" title="открыть фото поимки">📷 Фото</a>{% endif %}
+    {% if u.capture_photo_uid %}<a class="btn chip" href="{{ link('/app/users/' ~ u.capture_photo_uid ~ '/photo') }}" data-photo="{{ link('/app/users/' ~ u.capture_photo_uid ~ '/photo') }}" target="_blank" rel="noopener" title="фото поимки — наведите для превью">📷 Фото</a>{% endif %}
     <form method="post" action="{{ link('/app/users/' ~ u.id ~ '/act') }}">
       <input type="hidden" name="action" value="force_accept">
       <input type="hidden" name="next" value="{{ back }}">

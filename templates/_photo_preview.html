@@ -1,0 +1,96 @@
+{# Превью фото-пруфа поимки (TODO 70). Наведение на кнопку «📷 Фото» (десктоп) или
+   тап (тач-устройства) показывает миниатюру снимка во всплывающем окошке, без ухода
+   на отдельную вкладку. Кнопка помечена атрибутом data-photo (см. _userlist.html);
+   href сохранён — на hover-устройствах обычный клик по-прежнему открывает полный
+   снимок в новой вкладке, в попапе также есть ссылка «Открыть полностью». Делегирование
+   на document, поэтому переживает живое обновление списка. #}
+<style>
+  #photo-pop {
+    position: fixed; z-index: 10000; display: none;
+    padding: 5px; background: #fff; border: 1px solid #b9b9b9;
+    border-radius: 9px; box-shadow: 0 8px 30px rgba(0, 0, 0, .30);
+  }
+  #photo-pop img {
+    display: block; max-width: min(340px, 80vw); max-height: 62vh;
+    border-radius: 5px; object-fit: contain; background: #f2f2f2;
+  }
+  #photo-pop .php-open {
+    display: block; text-align: center; margin-top: 5px;
+    font-size: .82rem; text-decoration: none;
+  }
+  @media (prefers-color-scheme: dark) {
+    #photo-pop { background: #262626; border-color: #454545; }
+    #photo-pop img { background: #333; }
+  }
+</style>
+<script>
+(function () {
+  var pop, img, link, curA = null, hideT = null;
+  var canHover = !(window.matchMedia && window.matchMedia('(hover: none)').matches);
+
+  function ensure() {
+    if (pop) return;
+    pop = document.createElement('div'); pop.id = 'photo-pop';
+    img = document.createElement('img'); img.alt = 'фото поимки';
+    link = document.createElement('a');
+    link.className = 'php-open'; link.target = '_blank'; link.rel = 'noopener';
+    link.textContent = '🔍 Открыть полностью';
+    pop.appendChild(img); pop.appendChild(link);
+    document.body.appendChild(pop);
+    pop.addEventListener('mouseenter', function () { if (hideT) clearTimeout(hideT); });
+    pop.addEventListener('mouseleave', hide);
+  }
+
+  function position(a) {
+    var r = a.getBoundingClientRect();
+    var pw = pop.offsetWidth, ph = pop.offsetHeight;
+    var left = Math.max(6, Math.min(r.left, window.innerWidth - pw - 6));
+    var top = r.top - ph - 8;
+    if (top < 6) top = r.bottom + 8;            // не влезло сверху — покажем снизу
+    pop.style.left = left + 'px';
+    pop.style.top = top + 'px';
+  }
+
+  function show(a) {
+    ensure();
+    var url = a.getAttribute('data-photo');
+    if (!url) return;
+    img.src = url;
+    link.href = a.getAttribute('href') || url;
+    pop.style.display = 'block';
+    position(a);
+    curA = a;
+  }
+
+  function hide() { if (pop) { pop.style.display = 'none'; } curA = null; }
+
+  if (canHover) {
+    document.addEventListener('mouseover', function (e) {
+      var a = e.target.closest && e.target.closest('[data-photo]');
+      if (a) { if (hideT) clearTimeout(hideT); show(a); }
+    });
+    document.addEventListener('mouseout', function (e) {
+      var a = e.target.closest && e.target.closest('[data-photo]');
+      if (a) { hideT = setTimeout(hide, 200); }
+    });
+    // обычный клик по кнопке на hover-устройстве открывает полный снимок (target=_blank)
+  } else {
+    // тач: первый тап — показать превью (не уходя), повторный тап по той же кнопке —
+    // закрыть; для полного снимка — ссылка «Открыть полностью» внутри попапа.
+    document.addEventListener('click', function (e) {
+      var a = e.target.closest && e.target.closest('[data-photo]');
+      if (a) {
+        e.preventDefault();
+        if (curA === a && pop && pop.style.display === 'block') hide();
+        else show(a);
+        return;
+      }
+      if (pop && pop.style.display === 'block' &&
+          !(e.target.closest && e.target.closest('#photo-pop'))) hide();
+    });
+  }
+
+  window.addEventListener('scroll', hide, true);
+  window.addEventListener('resize', hide);
+})();
+</script>
