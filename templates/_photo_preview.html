@@ -39,6 +39,8 @@
     document.body.appendChild(pop);
     pop.addEventListener('mouseenter', function () { if (hideT) clearTimeout(hideT); });
     pop.addEventListener('mouseleave', hide);
+    // размеры снимка известны только после загрузки — тогда перепозиционируем
+    img.addEventListener('load', function () { if (curA) position(curA); });
   }
 
   function position(a) {
