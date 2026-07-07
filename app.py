@@ -845,7 +845,10 @@ def apply_action(action: str, user: User, count: int = 5) -> str:
             return "⚠️ Открыть регистрацию нельзя, пока идёт игра. Поставьте паузу."
         game.open_registration()
         admin_log.log(f"🟡 {who} открыл(а) регистрацию")
-        _broadcast(mode.t("bcast_reg_open"), players_only=False)
+        # Приглашение вступить — ТОЛЬКО не-игрокам (как suggest_join в боте:
+        # get_all_non_players), а не всем подряд.
+        for u in User.non_players():
+            u.notify(mode.t("bcast_reg_open"))
         return "✅ Регистрация открыта."
     elif action == "close_reg":
         if not game.is_registration_open():
@@ -914,15 +917,16 @@ def apply_action(action: str, user: User, count: int = 5) -> str:
         if not user.is_player():
             return "ℹ️ Вы и так не участвуете в игре."
         was_alive = user.is_alive()
-        freed_order = user.get_game_order_raw()   # слот до сброса в leave()
+        before = _snapshot_targets()
         user.leave()
         admin_log.log(f"➖ {who} вышел(ла) из игры")
         user.notify("🚪 Вы вышли из игры.")
-        # Если игра шла, а игрок был жив — чинить круг: вернуть одного из очереди в
-        # освободившийся слот, пересобрать цели и проверить конец игры.
+        # Если игра шла, а игрок был жив — чинить круг (в боте выход НЕ оживляет
+        # очередь): пересобрать цели, уведомить «охотника» выбывшего о смене цели и
+        # проверить конец игры.
         if was_alive and game.is_started():
-            game.try_revive_one(at_order=freed_order)
             game.reassign_targets()
+            _notify_retargets(before, "retarget_left")
             if game.check_finished():
                 game.announce_winner()
         return "🚪 Вы вышли из игры."
@@ -941,9 +945,14 @@ def apply_action(action: str, user: User, count: int = 5) -> str:
         return f"🧪 Удалено тестовых пользователей: {n}."
     elif action in ("report_capture", "cancel_capture", "confirm_capture",
                     "deny_capture"):
-        # Игровые действия игрока заблокированы на паузе (как в боте).
+        # Проверки состояния как в боте (h_user.kill/accept/deny): игра запущена,
+        # не на паузе, игрок участвует. Серверно, а не только скрытием кнопок.
+        if not game.is_started():
+            return "⛔ Игра ещё не началась."
         if game.is_paused():
             return "⏸️ Игра на паузе — действие сейчас недоступно."
+        if not user.is_player():
+            return "❌ Вы не участвуете в игре."
         if action == "report_capture":
             ok, msg = user.attempt_capture()
         elif action == "cancel_capture":
@@ -1812,12 +1821,32 @@ def _snapshot_targets():
     return {u.id: u.get_target_id() for u in User.alive_players()}
 
 
-def _notify_retargets(before):
-    """Уведомить о смене цели тех живых игроков, у кого она изменилась (без имени)."""
+def _notify_retargets(before, reason_key=None):
+    """Уведомить о смене цели тех живых игроков, у кого она изменилась (без имени).
+
+    `reason_key` (напр. "retarget_left") — объяснить ПРИЧИНУ смены формулировкой из
+    бота; без него — нейтральное «цель изменилась». Хвост «откройте приложение»
+    добавляем здесь, т.к. в вебе имя цели скрыто.
+    """
+    reason = mode.t(reason_key) if reason_key else None
     for u in User.alive_players():
         new = u.get_target_id()
         if new and before.get(u.id) != new:
-            notify_target(u, changed=True)
+            if reason:
+                u.notify(reason + "\n🎯 Откройте приложение, чтобы увидеть новую цель.")
+            else:
+                notify_target(u, changed=True)
+
+
+# Действие над игроком → причина смены цели у затронутых (формулировки бота).
+_RETARGET_REASON = {
+    "kill":            "retarget_admin_killed",
+    "kick":            "retarget_left",
+    "revive":          "retarget_revived",
+    "randomize_order": "retarget_reorder",
+    "set_order":       "retarget_reorder",
+    "delete":          "retarget_left",
+}
 
 
 # Отдельные страницы «Пользователи» (/app/users) и «Профиль пользователя»
@@ -1881,7 +1910,7 @@ def user_action(request: Request, uid: int, action: str = Form(...),
             try:
                 before = _snapshot_targets()
                 flash = "✅ " + target.admin_set_order(admin, int(value))
-                _notify_retargets(before)
+                _notify_retargets(before, _RETARGET_REASON.get("set_order"))
             except (ValueError, TypeError):
                 flash = "⚠️ Введите число — позиция не изменена."
     elif action == "message":
@@ -1923,7 +1952,7 @@ def user_action(request: Request, uid: int, action: str = Form(...),
             before = _snapshot_targets()
             name = target.get_name()
             target.delete_from_system(admin)
-            _notify_retargets(before)
+            _notify_retargets(before, _RETARGET_REASON.get("delete"))
             request.session["flash"] = f"🗑️ Пользователь {name} удалён из системы."
             return _redirect(request, "/app")
     elif action in _USER_ACTIONS:
@@ -1931,7 +1960,7 @@ def user_action(request: Request, uid: int, action: str = Form(...),
         before = _snapshot_targets() if structural else None
         flash = method(target, admin)
         if structural:
-            _notify_retargets(before)
+            _notify_retargets(before, _RETARGET_REASON.get(action))
     else:
         flash = "⚠️ Неизвестное действие."
     if flash:

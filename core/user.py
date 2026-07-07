@@ -450,9 +450,10 @@ class User:
 
         from core.game import Game
         game = Game()
-        # Освободилось место убитого — вернём одного из очереди В ЕГО СЛОТ, чтобы
-        # киллер (self) получил целью воскрешённого (как в боте).
-        game.try_revive_one(at_order=victim.get_game_order_raw())
+        # Освободилось место убитого — вернём ВСЮ очередь возрождения в его слот
+        # (в случайном порядке, друг за другом), чтобы киллер (self) получил целью
+        # первого воскрешённого — для него поимка неотличима от обычной (как в боте).
+        game.try_revive_all(at_order=victim.get_game_order_raw())
         game.reassign_targets()
         finished = game.check_finished()
 
@@ -477,16 +478,18 @@ class User:
 
     # --- действия администратора над игроком ------------------------------
 
-    def _finish_structural_change(self, was_alive: bool, at_order=None):
+    def _finish_structural_change(self, was_alive: bool, at_order=None, revive=False):
         """Общий хвост админ-действий, меняющих состав живых: возрождение/круг/итог.
 
-        `at_order` — освободившийся слот в круге (game_order выбывшего), чтобы
-        воскрешённого поставить на его место (см. `Game.try_revive_one`).
+        `revive=True` (только устранение админом — как в боте) вернёт ВСЮ очередь в
+        освободившийся слот `at_order`. При выходе/кике очередь НЕ трогаем (в боте
+        leave/kick не оживляют) — только пересобираем круг и проверяем конец.
         """
         from core.game import Game
         game = Game()
         if was_alive and game.is_started():
-            game.try_revive_one(at_order=at_order)   # вернём одного из очереди в слот
+            if revive:
+                game.try_revive_all(at_order=at_order)   # вернём очередь в слот
             game.reassign_targets()
             if game.check_finished():
                 game.announce_winner()
@@ -503,7 +506,7 @@ class User:
         self.set_alive(False)
         self.set_target_id(None)
         self.set_murderer(None)
-        self._finish_structural_change(was_alive, at_order=freed_order)
+        self._finish_structural_change(was_alive, at_order=freed_order, revive=True)
         return f"Игрок {self.get_name()} устранён из игры."
 
     def admin_revive(self, admin: "User") -> str:

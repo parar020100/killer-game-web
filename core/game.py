@@ -142,32 +142,42 @@ class Game:
             "WHERE u.is_alive = 0 AND u.is_player = 1 ORDER BY rq.id ASC LIMIT 1")
         return User(row["user_id"]) if row else None
 
-    def try_revive_one(self, at_order=None):
-        """Вернуть в игру одного игрока из очереди (при выбытии освободилось место).
+    def revive_queue_all(self):
+        """Все выбывшие игроки из очереди на возрождение (в порядке добавления)."""
+        rows = query_all(
+            "SELECT rq.user_id FROM revive_queue rq JOIN user u ON u.id = rq.user_id "
+            "WHERE u.is_alive = 0 AND u.is_player = 1 ORDER BY rq.id ASC")
+        return [User(r["user_id"]) for r in rows]
 
-        `at_order` — `game_order` только что выбывшего игрока (освободившийся «слот»
-        в круге). Воскрешённого ставим В ЭТОТ слот (со сдвигом при конфликте), чтобы
-        он занял место выбывшего, а «киллер» выбывшего получил целью именно
-        воскрешённого — как в боте (`try_revive_all_queued_players` вставляет
-        оживлённого в разрыв на месте убитого). Без `at_order` (совместимость) —
-        воскрешённый остаётся на своей прежней позиции.
+    def try_revive_all(self, at_order):
+        """Вернуть в игру ВСЮ очередь сразу — как `try_revive_all_queued_players` в боте.
+
+        Все ожидающие возрождения игроки в СЛУЧАЙНОМ порядке вставляются подряд в
+        освободившийся слот (`at_order` — game_order выбывшего), друг за другом между
+        выбывшим и следующим по кругу. За счёт этого «киллер» выбывшего получает целью
+        первого воскрешённого — для него поимка неотличима от обычной. Возвращает
+        список воскрешённых (пустой, если очередь пуста).
         """
-        p = self.revive_queue_next()
-        if p is None:
-            return None
+        import random
+        queued = self.revive_queue_all()
+        if not queued or at_order is None:
+            return []
+        random.shuffle(queued)
         from core import admin_log
-        p.set_alive(True)
-        p.set_murderer(None)
-        p.revive_queue_remove()
-        if at_order is not None:
-            p.set_game_order(at_order, increase=True)   # занять слот выбывшего
-        elif p.get_game_order_raw() is None:
-            p.randomize_game_order()
+        order = at_order
+        revived = []
+        for p in queued:
+            p.set_alive(True)
+            p.set_murderer(None)
+            p.revive_queue_remove()
+            order = p.set_game_order(order, increase=True)   # встать сразу за предыдущим
+            revived.append(p)
         self.reassign_targets()
-        admin_log.log(f"🧟 Игрок {p.get_name()} автоматически возрождён из очереди.")
-        p.notify("🧟 Вы снова в игре! 🎯 Вам назначена цель — "
-                 "откройте приложение, чтобы увидеть её.")
-        return p
+        for p in revived:
+            admin_log.log(f"🧟 Игрок {p.get_name()} автоматически возрождён из очереди.")
+            p.notify("🧟 Вы снова в игре! 🎯 Вам назначена цель — "
+                     "откройте приложение, чтобы увидеть её.")
+        return revived
 
     def check_finished(self) -> bool:
         """Если живых ≤ 1 — поставить игру на паузу (ожидание итогов). True, если конец."""
