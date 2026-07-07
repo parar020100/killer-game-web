@@ -274,6 +274,13 @@ def init_db():
         created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """)
+    # token_plain — сырой токен, чтобы ссылку входа можно было ПОКАЗАТЬ повторно и
+    # переиспользовать (кнопка «Открыть меню игры» ведёт в игру сразу с токеном, без
+    # генерации новой ссылки). Хранение допустимо: игра для локальных мероприятий, без
+    # персональных данных; отозвать ссылку можно в «Настройках профиля». (TODO 76.)
+    _plcols = {r["name"] for r in cur.execute("PRAGMA table_info(persistent_login)")}
+    if "token_plain" not in _plcols:
+        cur.execute("ALTER TABLE persistent_login ADD COLUMN token_plain TEXT")
 
     # Редактируемые из UI настройки игры (ключ-значение): контакт поддержки, файл
     # правил, доп. вопросы, режим подтверждения поимок, id root-пользователя и т.п.
@@ -354,6 +361,7 @@ CREATE TABLE IF NOT EXISTS revive_queue (
 CREATE TABLE IF NOT EXISTS persistent_login (
     identity_id INTEGER PRIMARY KEY REFERENCES identity(id) ON DELETE CASCADE,
     token_hash  TEXT NOT NULL UNIQUE,
+    token_plain TEXT,
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS setting (

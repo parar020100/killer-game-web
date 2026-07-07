@@ -30,16 +30,45 @@ def _hash(token: str) -> str:
 def set_permanent_token(identity_id: int) -> str:
     """Создать/перевыпустить постоянный токен для канала (старый перестаёт работать).
 
-    Возвращает сырое значение — показать его нужно один раз, в БД хранится лишь хеш.
+    Возвращает сырое значение. Кроме хеша (для проверки) храним и сырой токен
+    (`token_plain`), чтобы ссылку можно было ПОКАЗАТЬ повторно и переиспользовать —
+    напр. кнопкой «Открыть меню игры» без генерации новой ссылки (TODO 76). Хранение
+    допустимо для этой игры (локальные мероприятия, без персональных данных); отозвать
+    ссылку можно в «Настройках профиля».
     """
     token = secrets.token_urlsafe(LOGIN_TOKEN_BYTES)
     # ON CONFLICT работает и в sqlite (3.24+), и в postgres — перевыпуск токена канала.
     execute(
-        "INSERT INTO persistent_login (identity_id, token_hash) VALUES (?, ?) "
-        "ON CONFLICT(identity_id) DO UPDATE SET token_hash = excluded.token_hash",
-        (identity_id, _hash(token)),
+        "INSERT INTO persistent_login (identity_id, token_hash, token_plain) "
+        "VALUES (?, ?, ?) ON CONFLICT(identity_id) DO UPDATE SET "
+        "token_hash = excluded.token_hash, token_plain = excluded.token_plain",
+        (identity_id, _hash(token), token),
     )
     return token
+
+
+def get_permanent_token(identity_id: int):
+    """Сырой постоянный токен канала (для повторного показа ссылки) или None.
+
+    None — если токена ещё нет ИЛИ он выдан в старой схеме (хранился лишь хеш): тогда
+    для стабильной ссылки нужен перевыпуск (см. get_or_create_permanent_token)."""
+    row = query_one(
+        "SELECT token_plain FROM persistent_login WHERE identity_id = ?", (identity_id,))
+    return row["token_plain"] if row else None
+
+
+def get_or_create_permanent_token(identity_id: int):
+    """Вернуть постоянный токен канала, переиспользуя существующий; создать при отсутствии.
+
+    Если строки нет — создаём новый токен. Если строка есть, но `token_plain` пуст
+    (легаси-запись только с хешем) — НЕ перевыпускаем молча (чтобы не сломать уже
+    выданную ссылку), возвращаем None; стабильная ссылка появится после следующего
+    /start. Возвращает сырой токен или None."""
+    row = query_one(
+        "SELECT token_plain FROM persistent_login WHERE identity_id = ?", (identity_id,))
+    if row is None:
+        return set_permanent_token(identity_id)
+    return row["token_plain"]
 
 
 def resolve_permanent_token(token: str):

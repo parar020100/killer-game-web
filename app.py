@@ -1196,7 +1196,9 @@ def open_as_user(request: Request, uid: int):
     ident = target.identity("local") if target else None
     if ident is None:
         return RedirectResponse(url="/app", status_code=303)
-    token = auth.set_permanent_token(ident.id)
+    # Переиспользуем постоянный токен канала (не перевыпускаем — чтобы не рвать уже
+    # выданную ссылку этого пользователя, TODO 76).
+    token = auth.get_or_create_permanent_token(ident.id)
     return RedirectResponse(url=f"/login?token={token}", status_code=303)
 
 

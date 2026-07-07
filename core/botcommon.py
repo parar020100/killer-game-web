@@ -34,6 +34,22 @@ def menu_url() -> str:
     return base_url() + "/app"
 
 
+def menu_url_for(platform: str, platform_uid) -> str:
+    """Ссылка «Открыть меню игры» с постоянным токеном канала — открывает игру сразу
+    в аккаунте пользователя, без отдельной генерации ссылки (TODO 76).
+
+    Переиспользует уже сохранённый токен канала; создаёт при отсутствии. Для легаси-
+    записей (хранился лишь хеш) токена нет — откатываемся на бестокенный /app (там
+    сработает вход по webview-сессии или предложение войти)."""
+    from core.identity import Identity
+    ident = Identity.by_platform(platform, platform_uid)
+    if ident:
+        token = auth.get_or_create_permanent_token(ident.id)
+        if token:
+            return f"{base_url()}/login?token={token}"
+    return menu_url()
+
+
 def issue_login_link(identity) -> tuple[str, bool]:
     """Выдать постоянную ссылку входа для канала. (ссылка, была_ли_перевыпущена)."""
     reissued = auth.has_permanent_token(identity.id)

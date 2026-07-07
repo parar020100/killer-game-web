@@ -34,7 +34,7 @@ def send(chat_id, text: str, with_menu: bool = True, silent: bool = False) -> bo
     if silent:
         payload["disable_notification"] = True
     if with_menu:
-        payload["reply_markup"] = _reply_markup()
+        payload["reply_markup"] = _reply_markup(chat_id)
     try:
         r = httpx.post(_API.format(token=token), json=payload, timeout=10)
         if r.status_code == 200 and r.json().get("ok", False):
@@ -47,12 +47,13 @@ def send(chat_id, text: str, with_menu: bool = True, silent: bool = False) -> bo
         return False
 
 
-def _reply_markup() -> dict:
-    """Inline-клавиатура под каждым уведомлением: «открыть меню» (ссылка) и
-    «новая ссылка для входа» (callback → обрабатывает tg_bot.py)."""
+def _reply_markup(chat_id) -> dict:
+    """Inline-клавиатура под каждым уведомлением: «открыть меню» (ссылка с постоянным
+    токеном получателя — сразу открывает игру) и «новая ссылка для входа» (callback →
+    обрабатывает tg_bot.py)."""
     from core import botcommon
     return {"inline_keyboard": [
-        [{"text": botcommon.MENU_BUTTON, "url": botcommon.menu_url()}],
+        [{"text": botcommon.MENU_BUTTON, "url": botcommon.menu_url_for("tg", chat_id)}],
         [{"text": botcommon.NEW_LINK_BUTTON, "callback_data": botcommon.NEW_LINK_CALLBACK}],
     ]}
 

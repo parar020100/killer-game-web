@@ -24,12 +24,13 @@ def enabled() -> bool:
             and bool((getattr(config, "VK_GROUP_TOKEN", "") or "").strip()))
 
 
-def _menu_keyboard() -> str:
-    """Inline-клавиатура под уведомлением: «открыть меню» (ссылка) и «новая ссылка
-    для входа» (text-кнопка — её нажатие бот принимает как запрос новой ссылки)."""
+def _menu_keyboard(user_id) -> str:
+    """Inline-клавиатура под уведомлением: «открыть меню» (ссылка с постоянным токеном
+    получателя — сразу открывает игру) и «новая ссылка для входа» (text-кнопка — её
+    нажатие бот принимает как запрос новой ссылки)."""
     from core import botcommon
     return json.dumps({"inline": True, "buttons": [
-        [{"action": {"type": "open_link", "link": botcommon.menu_url(),
+        [{"action": {"type": "open_link", "link": botcommon.menu_url_for("vk", user_id),
                      "label": botcommon.MENU_BUTTON}}],
         [{"action": {"type": "text", "label": botcommon.NEW_LINK_BUTTON,
                      "payload": "{}"}}],
@@ -54,7 +55,7 @@ def send(user_id, text: str, with_menu: bool = True, silent: bool = False) -> bo
         "random_id": random.randint(1, 2_000_000_000),
     }
     if with_menu:
-        params["keyboard"] = _menu_keyboard()
+        params["keyboard"] = _menu_keyboard(user_id)
     try:
         r = httpx.get(_API, params=params, timeout=10).json()
         if "response" in r:
