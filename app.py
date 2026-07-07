@@ -266,6 +266,8 @@ def _ctx(request: Request, **extra):
         "link": _link_fn(_tab_user_param(request)),
         "accounts": _accounts_ctx(request),
         "game_icon": mode.term("icon"),
+        # Легенда статусов списка игроков — подписи зависят от режима (Киллер/Папарацци).
+        "legend": Markup(mode.t("userlist_legend")),
         **extra,
     }
 
