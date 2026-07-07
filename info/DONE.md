@@ -264,11 +264,13 @@
   и её обработчик (`new_link_cb`, `NEW_LINK_*` в `botcommon`/`tg_bot`) — ротация только
   через профиль. К самому приветствию добавлены inline-кнопки «🎮 Открыть меню игры»
   (сразу в аккаунт по токену) и «📖 Правила игры» (ссылка `<домен>/rules`,
-  `botcommon.rules_url`) — в TG (`_welcome_markup`) и VK (`_welcome_kb`). Приветствия:
-  Telegram задаёт `setMyDescription`/`setMyShortDescription` + `setMyCommands`
-  (`/start`, `/link`) при старте (`tg_bot._announce_connected`); для VK «Приветствие»
-  и кнопку «Начать» включают в настройках сообщества — задокументировано в
-  [SETUP.md](SETUP.md).
+  `botcommon.rules_url`) — в TG (`_welcome_markup`) и VK (`_welcome_kb`). Приветствие
+  на пустом экране — общий `botcommon.intro_text()` (домен + правила + «Нажмите
+  "Начать"…»): Telegram назначает его сам через `setMyDescription` (+ короткое
+  `setMyShortDescription`, `setMyCommands` `/start`,`/link`) при старте
+  (`tg_bot._announce_connected`); VK через API приветствие задать не может, поэтому
+  `vk_bot` при запуске пишет текст в `intro.txt` (в `.gitignore`) для ручной вставки в
+  «Приветствие» сообщества — задокументировано в [SETUP.md](SETUP.md).
 - (76) Постоянные (переиспользуемые) ссылки входа: кроме хеша теперь храним и сырой
   токен канала (`persistent_login.token_plain`, идемпотентная миграция в `db.py`).
   Кнопка «🎮 Открыть меню игры» под каждым уведомлением ведёт на `/login?token=<токен>`

@@ -93,9 +93,8 @@ async def forward_to_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "(нет администраторов).", reply_markup=_KB)
 
 
-# Приветствие на пустом экране чата (кнопка «Начать» в Telegram запускает /start).
-_GREETING = ("🕵️ Игра «Киллер / Папарацци».\n"
-             "Нажмите «Начать», чтобы получить ссылку для входа на сайт.")
+# Короткое описание на странице профиля бота (лимит Telegram — 120 символов).
+_SHORT_DESC = ("🕵️ Игра «Киллер / Папарацци». Нажмите «Начать», чтобы войти на сайт игры.")
 
 
 async def _announce_connected(application):
@@ -103,8 +102,8 @@ async def _announce_connected(application):
     me = await application.bot.get_me()
     # Текст на экране пустого чата (до первого /start) — предлагает нажать «Начать».
     try:
-        await application.bot.set_my_description(_GREETING)
-        await application.bot.set_my_short_description(_GREETING)
+        await application.bot.set_my_description(botcommon.intro_text())
+        await application.bot.set_my_short_description(_SHORT_DESC)
         await application.bot.set_my_commands([
             BotCommand("start", "получить ссылку для входа"),
             BotCommand("link", "привязать этот чат к аккаунту (код из профиля)"),

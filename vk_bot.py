@@ -16,6 +16,7 @@ Poll API сообщества, без внешних библиотек (тол�
 """
 import json
 import logging
+import os
 import random
 import time
 
@@ -110,6 +111,19 @@ def handle_message(from_id, text: str):
                        "(нет администраторов).")
 
 
+def _write_intro_file():
+    """Сохранить текст приветствия в intro.txt (рядом с ботом). VK не даёт задать
+    «Приветствие» сообщества через API — этот файл готов к копированию в настройки
+    сообщества (Управление → Сообщения → Настройки для бота → «Приветствие»)."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "intro.txt")
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(botcommon.intro_text())
+        log.info("приветствие сохранено в %s (вставьте его в «Приветствие» сообщества)", path)
+    except OSError as exc:
+        log.warning("не удалось записать intro.txt: %s", exc)
+
+
 def _get_long_poll_server(group_id):
     r = _api("groups.getLongPollServer", group_id=group_id)
     return r["server"], r["key"], r["ts"]
@@ -154,6 +168,7 @@ def main():
         who = f"{grp.get('name')} (id {group_id})"
     except Exception:  # noqa: BLE001
         who = f"id {group_id}"
+    _write_intro_file()
     log.info("✅ VK-бот успешно подключён: %s. Ожидаю сообщения…", who)
     while True:
         try:
