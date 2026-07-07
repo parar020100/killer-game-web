@@ -134,6 +134,22 @@
     </form>
 
     <form class="card" method="post" action="{{ link('/app/settings') }}" autocomplete="off">
+      <input type="hidden" name="action" value="bot_intro">
+      <h2>👋 Приветствие бота</h2>
+      <p class="hint">Текст на пустом экране диалога (до нажатия «Начать»). По умолчанию —
+         сгенерированный (сайт + ссылка на правила); можно отредактировать. Пустое поле
+         вернёт текст по умолчанию.</p>
+      <label>
+        Текст приветствия
+        <textarea name="bot_intro" rows="6" maxlength="512">{{ bot_intro }}</textarea>
+      </label>
+      <p class="hint">В <b>Telegram</b> применится сразу; в <b>VK</b> его нужно вставить
+         вручную (Управление → Сообщения → Настройки для бота → «Приветствие»; готовый
+         текст бот пишет в файл <code>intro.txt</code>).</p>
+      <button type="submit" class="btn">💾 Сохранить (Telegram)</button>
+    </form>
+
+    <form class="card" method="post" action="{{ link('/app/settings') }}" autocomplete="off">
       <input type="hidden" name="action" value="rules">
       <h2>📜 Файл правил</h2>
       <p class="hint">HTML-файл с правилами из папки <code>rules/</code>.

@@ -47,6 +47,27 @@ def send(chat_id, text: str, with_menu: bool = True, silent: bool = False) -> bo
         return False
 
 
+def set_description(text: str) -> bool:
+    """Задать описание бота (текст на пустом экране чата) через Bot API `setMyDescription`.
+
+    Позволяет применить приветствие из «⚙️ Настройки игры» сразу, не дожидаясь
+    перезапуска бот-процесса. True при успехе, False если бот выключен/ошибка."""
+    if not enabled():
+        return False
+    token = (getattr(config, "TELEGRAM_BOT_TOKEN", "") or "").strip()
+    url = f"https://api.telegram.org/bot{token}/setMyDescription"
+    try:
+        r = httpx.post(url, json={"description": text}, timeout=10)
+        if r.status_code == 200 and r.json().get("ok", False):
+            _log_ok("описание бота (приветствие) обновлено")
+            return True
+        _log_error(f"Telegram setMyDescription: HTTP {r.status_code} {r.text[:200]}")
+        return False
+    except (httpx.HTTPError, ValueError, TypeError) as e:
+        _log_error(f"Telegram setMyDescription: {type(e).__name__}: {e}")
+        return False
+
+
 def _reply_markup(chat_id) -> dict:
     """Inline-клавиатура под каждым уведомлением: «открыть меню» (ссылка с постоянным
     токеном получателя — сразу открывает игру в его аккаунте)."""

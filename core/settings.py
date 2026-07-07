@@ -39,6 +39,22 @@ def set_support_contact(value: str):
     _set_raw("support_contact", (value or "").strip())
 
 
+# --- приветствие бота (пустой экран диалога) --------------------------------
+
+def bot_intro():
+    """Кастомный текст приветствия пустого экрана диалога или None, если не задан.
+
+    Если None (или пусто) — используется сгенерированный `botcommon.intro_text()`
+    (домен + ссылка на правила). Задаётся на странице «⚙️ Настройки игры» и
+    применяется к описанию Telegram-бота; в VK его вставляют вручную."""
+    v = _raw("bot_intro")
+    return v if v else None
+
+
+def set_bot_intro(value: str):
+    _set_raw("bot_intro", (value or "").strip())
+
+
 # --- файл правил (HTML) -----------------------------------------------------
 
 def rules_filename() -> str:

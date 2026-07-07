@@ -1281,10 +1281,12 @@ def _admin_log_enabled(user: User) -> bool:
 
 
 def _settings_ctx(request, user, saved="", **extra):
+    from core import botcommon
     return _ctx(
         request,
         current=Game().get_password(),
         support_contact=app_settings.support_contact(),
+        bot_intro=botcommon.intro_text(),
         rules_filename=app_settings.rules_filename(),
         rules_files=_rules_choices(),
         extra_questions=app_settings.extra_questions(),
@@ -1333,6 +1335,24 @@ async def settings_save(request: Request):
         app_settings.set_support_contact(form.get("support_contact") or "")
         admin_log.log(f"📞 {user.get_name()} изменил(а) контакт поддержки")
         saved = "Контакт поддержки сохранён."
+    elif action == "bot_intro":
+        from core import botcommon, tg_send
+        text = (form.get("bot_intro") or "").strip()
+        app_settings.set_bot_intro(text)
+        admin_log.log(f"👋 {user.get_name()} изменил(а) приветствие бота")
+        # Пустое поле = вернуть сгенерированное по умолчанию.
+        effective = text or botcommon.default_intro_text()
+        tg_ok = tg_send.set_description(effective)
+        # Обновляем intro.txt для VK (его вставляют в «Приветствие» сообщества вручную).
+        try:
+            (BASE_DIR / "intro.txt").write_text(effective, encoding="utf-8")
+        except OSError:
+            pass
+        saved = ("Приветствие сохранено. ✅ Применено для Telegram; "
+                 "в VK его нужно добавить вручную (файл intro.txt → «Приветствие» "
+                 "сообщества)." if tg_ok else
+                 "Приветствие сохранено. В VK его нужно добавить вручную; для Telegram "
+                 "применится при следующем запуске бота (сейчас он недоступен).")
     elif action == "rules":
         app_settings.set_rules_filename(form.get("rules_filename") or "")
         admin_log.log(f"📜 {user.get_name()} изменил(а) файл правил")
