@@ -1234,7 +1234,7 @@ def dashboard(request: Request):
     )
 
 
-@app.get("/app/users/{uid}/open")
+@app.post("/app/users/{uid}/open")
 def open_as_user(request: Request, uid: int):
     """Админ: войти под дебаг-пользователем (веб-чат) в этой вкладке.
 
@@ -1242,6 +1242,11 @@ def open_as_user(request: Request, uid: int):
     аккаунт добавляется в набор сессии, вкладка привязывается к нему (?user=<uid>).
     Открывать в новой вкладке (target=_blank). Только для админа и только для
     пользователей с веб-каналом ('local') — реальные tg/vk-ссылки не трогаем.
+
+    ВАЖНО: это POST, а не GET. Раньше был GET-ссылкой на каждого пользователя, и любой
+    префетч/сканер ссылок (спекулятивный prefetch браузера, антивирус, превью-боты) слал
+    её с cookie админа → молча логинил админа под всеми local-пользователями, и они
+    всплывали в списке аккаунтов входа. POST такие автозапросы не триггерят.
     """
     actor = current_user(request)
     if actor is None or not actor.is_admin():
