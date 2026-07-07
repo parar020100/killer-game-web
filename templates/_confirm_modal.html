@@ -63,10 +63,13 @@
   var textEl = modal.querySelector('.cmodal-text');
   var okBtn  = modal.querySelector('[data-confirm-ok]');
   var pending = null;
+  var pendingSubmitter = null;
 
-  function open(form, msg) { pending = form; textEl.textContent = msg;
-                             modal.hidden = false; okBtn.focus(); }
-  function close() { modal.hidden = true; pending = null; }
+  function open(form, submitter, msg) {
+    pending = form; pendingSubmitter = submitter; textEl.textContent = msg;
+    modal.hidden = false; okBtn.focus();
+  }
+  function close() { modal.hidden = true; pending = null; pendingSubmitter = null; }
 
   // Делегирование на document (в фазе перехвата) — переживает живое обновление DOM:
   // любые новые формы с data-confirm тоже перехватываются.
@@ -75,12 +78,22 @@
     if (!form || !form.matches || !form.matches('[data-confirm]')) return;
     if (form.dataset.confirmed === '1') return;   // уже подтверждено — пропускаем
     e.preventDefault();
-    open(form, form.getAttribute('data-confirm'));
+    open(form, e.submitter || null, form.getAttribute('data-confirm'));
   }, true);
 
   okBtn.addEventListener('click', function () {
-    var form = pending; close();
-    if (form) { form.dataset.confirmed = '1'; form.submit(); }  // submit работает и на detached-форме
+    var form = pending, submitter = pendingSubmitter; close();
+    if (!form) return;
+    form.dataset.confirmed = '1';
+    // form.submit() НЕ передаёт кнопку-отправитель, поэтому action, заданный только на
+    // <button name="action" value="…">, потерялся бы (422 «Field required»). Сохраняем
+    // имя/значение отправителя скрытым полем перед отправкой.
+    if (submitter && submitter.name) {
+      var hid = document.createElement('input');
+      hid.type = 'hidden'; hid.name = submitter.name; hid.value = submitter.value;
+      form.appendChild(hid);
+    }
+    form.submit();  // submit работает и на detached-форме (живое обновление DOM)
   });
   modal.querySelectorAll('[data-confirm-cancel]').forEach(function (el) {
     el.addEventListener('click', close);
