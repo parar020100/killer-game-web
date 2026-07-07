@@ -234,6 +234,7 @@ def init_db():
 
         is_admin     BOOLEAN NOT NULL DEFAULT 0,
 
+        session_version INTEGER NOT NULL DEFAULT 0,  -- «версия» логина: выход её бампает
         created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """)
@@ -286,6 +287,12 @@ def init_db():
     _plcols = {r["name"] for r in cur.execute("PRAGMA table_info(persistent_login)")}
     if "token_plain" not in _plcols:
         cur.execute("ALTER TABLE persistent_login ADD COLUMN token_plain TEXT")
+
+    # session_version — «версия» логина для авторитетного выхода (см. User). Добавляем
+    # в старые БД, где колонки ещё нет (значение по умолчанию 0 — вход не ломается).
+    _ucols = {r["name"] for r in cur.execute("PRAGMA table_info(user)")}
+    if "session_version" not in _ucols:
+        cur.execute("ALTER TABLE user ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0")
 
     # Редактируемые из UI настройки игры (ключ-значение): контакт поддержки, файл
     # правил, доп. вопросы, режим подтверждения поимок, id root-пользователя и т.п.
@@ -344,6 +351,7 @@ CREATE TABLE IF NOT EXISTS "user" (
     target       INTEGER REFERENCES "user"(id),
     killed_by    INTEGER REFERENCES "user"(id),
     is_admin     INTEGER NOT NULL DEFAULT 0,
+    session_version INTEGER NOT NULL DEFAULT 0,
     created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS identity (

@@ -258,6 +258,20 @@ class User:
     def set_player(self, value: bool): self._set("is_player", int(value))
     def set_alive(self, value: bool):  self._set("is_alive", int(value))
 
+    # --- версия сессии (авторитетный выход, независимо от cookie) -----------
+    # Сессия-cookie хранит версию, с которой аккаунт вошёл. «Выйти» инкрементит
+    # серверную версию — и все cookie со старой версией (в т.ч. в других вкладках,
+    # и «воскрешённые» гонкой перезаписи cookie) перестают давать доступ к аккаунту.
+
+    def get_session_version(self) -> int:
+        v = self._get("session_version")
+        return int(v) if v is not None else 0
+
+    def bump_session_version(self) -> int:
+        execute("UPDATE user SET session_version = COALESCE(session_version, 0) + 1 "
+                "WHERE id = ?", (self.id,))
+        return self.get_session_version()
+
     # --- счёт поимок ------------------------------------------------------
 
     def set_score(self, value: int):   self._set("kill_count", value)
