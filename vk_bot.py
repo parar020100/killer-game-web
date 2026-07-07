@@ -104,11 +104,10 @@ def handle_message(from_id, text: str):
         log.info("link: user id=%s vk=%s code=%r", user.id, from_id, code)
         return
 
-    # прочее — пересылаем администраторам
-    has_admins = botcommon.forward_to_admins(user, "VK", text)
-    if not has_admins:
-        _send(from_id, "Сообщение получено, но пока некому его переслать "
-                       "(нет администраторов).")
+    # прочее: пересылаем админам (best-effort) и всегда отвечаем игроку авто-ответом —
+    # сообщения боту могут быть не прочитаны, управление на сайте, поддержка (TODO 86).
+    botcommon.forward_to_admins(user, "VK", text)
+    _send(from_id, botcommon.auto_reply_text(), keyboard=_welcome_kb(from_id))
 
 
 def _write_intro_file():

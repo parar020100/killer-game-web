@@ -113,6 +113,21 @@ def do_link(identity, code: str) -> str:
     return msg
 
 
+def auto_reply_text() -> str:
+    """Авто-ответ на обычное сообщение боту (не команду): сообщения боту могут быть
+    не прочитаны, управление игрой — на сайте, за поддержкой — контакт из настроек
+    (TODO 86). Контакт берётся из «⚙️ Настройки игры» (`settings.support_contact`)."""
+    from core import settings
+    support = (settings.support_contact() or "").strip()
+    support_line = (f"\nЕсли нужна помощь — напишите в поддержку: {support}"
+                    if support else "")
+    return (
+        "🤖 Это игровой бот, и сообщения ему могут быть не прочитаны.\n"
+        "Всё управление игрой — в меню на сайте (кнопки ниже)."
+        f"{support_line}"
+    )
+
+
 def forward_to_admins(sender_user, platform_label: str, text: str) -> bool:
     """Переслать сообщение игрока всем администраторам (в их каналы). True — если есть кому."""
     who = sender_user.get_name() if sender_user else "неизвестный"

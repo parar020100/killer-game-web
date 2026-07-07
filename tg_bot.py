@@ -86,11 +86,11 @@ async def forward_to_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     tg = update.effective_user
     user = User.by_tg(str(tg.id))
-    has_admins = botcommon.forward_to_admins(user, "Telegram", text)
-    if not has_admins:
-        await update.effective_message.reply_text(
-            "Сообщение получено, но пока некому его переслать "
-            "(нет администраторов).", reply_markup=_KB)
+    # Пересылаем админам (best-effort) и всегда отвечаем игроку авто-ответом: сообщения
+    # боту могут быть не прочитаны, управление — на сайте, за поддержкой — контакт (TODO 86).
+    botcommon.forward_to_admins(user, "Telegram", text)
+    await update.effective_message.reply_text(
+        botcommon.auto_reply_text(), reply_markup=_welcome_markup(tg.id))
 
 
 # Короткое описание на странице профиля бота (лимит Telegram — 120 символов).
