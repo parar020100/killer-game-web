@@ -1532,10 +1532,14 @@ async def settings_save(request: Request):
         saved = (f"Закрыто сессий: {n}. Ваша текущая сессия сохранена; остальным "
                  "нужно войти заново по своей ссылке (ссылки для входа не изменились).")
     elif action == "full_reset":
-        # Полный сброс БД — необратимо. Текущая сессия становится недействительной.
+        # Полный сброс БД — необратимо. Все гранты входа стёрты вместе с БД, поэтому
+        # текущая сессия (и любые открытые) становятся недействительными. Тут же
+        # пересоздаём root и печатаем свежую ссылку входа в лог сервера (TODO 83),
+        # чтобы доступ не потерялся без перезапуска процесса.
         admin_log.log(f"💣 {user.get_name()} выполнил(а) полный сброс базы данных")
         db.drop_db()
         db.init_db()
+        bootstrap_root()
         return RedirectResponse(url="/", status_code=303)
 
     return templates.TemplateResponse(request, "settings.html",
@@ -1804,8 +1808,8 @@ def secret_page(request: Request):
     user = current_user(request)
     if user is None:
         return RedirectResponse(url="/", status_code=303)
-    # Кто полез в «секрет» — в лог бота (TODO 85).
-    bot_log.log(f"🤫 {user.get_name()} открыл(а) «Узнать секрет»", "web")
+    # Кто полез в «секрет» — в ADMIN LOG (видно админам, TODO 85).
+    admin_log.log(f"🤫 {user.get_name()} открыл(а) «Узнать секрет»")
     return templates.TemplateResponse(
         request, "secret.html",
         _ctx(request, youtube=SECRET_YOUTUBE, rutube=SECRET_RUTUBE),
