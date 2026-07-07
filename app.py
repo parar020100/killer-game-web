@@ -1418,9 +1418,9 @@ async def settings_save(request: Request):
             for ply in User.all_players():
                 ans = get_extra_answers(ply)
                 if any(lbl not in ans for lbl in added):
-                    ply.notify("❓ Организаторы добавили новые вопросы для участников. "
-                               "Пожалуйста, зайдите в «Настройки профиля» на сайте и "
-                               "ответьте на них.")
+                    ply.notify("❓ Для участия в игре необходимо ввести дополнительную "
+                               "информацию о себе. Пожалуйста, зайдите в «Настройки "
+                               "профиля» на сайте и ответьте на вопросы.")
                     notified += 1
             if notified:
                 saved += f" Игроков без ответов уведомлено: {notified}."
