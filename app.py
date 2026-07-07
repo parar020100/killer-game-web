@@ -1767,6 +1767,41 @@ _USER_ACTIONS = {
 }
 
 
+def _game_state_error(action: str, game: Game) -> str:
+    """Проверки состояния игры для управляющих действий — как в боте, но серверно.
+
+    В боте проверки `is_started`/`is_paused` стоят в обработчике команды, поэтому их
+    нельзя обойти. В вебе кнопки лишь скрываются в UI — здесь дублируем проверки на
+    сервере, чтобы действие нельзя было выполнить crafted-POST-запросом мимо паузы.
+    Возвращает текст ошибки (плашку) или "" — если состояние допускает действие.
+    """
+    started, paused = game.is_started(), game.is_paused()
+    if action == "kill":
+        if not started:
+            return "⚠️ Игра ещё не началась."
+        if not paused:
+            return "⚠️ Игра должна быть на паузе для мгновенного устранения игрока."
+    elif action == "revive":
+        if not started:
+            return "⚠️ Игра ещё не началась."
+        if not paused:
+            return "⚠️ Игра должна быть на паузе для воскрешения игрока."
+    elif action == "kick":
+        if started and not paused:
+            return "⚠️ Игра должна быть на паузе для удаления игрока."
+    elif action in ("give_life", "take_life", "force_accept", "force_deny",
+                    "reassign_kill"):
+        if not started:
+            return "⚠️ Игра ещё не началась."
+    elif action == "set_score":
+        if not paused:
+            return "⚠️ Менять счёт можно только на паузе."
+    elif action in ("set_order", "randomize_order"):
+        if started and not paused:
+            return "⚠️ Менять позицию в круге можно на паузе или до старта игры."
+    return ""
+
+
 def _snapshot_targets():
     return {u.id: u.get_target_id() for u in User.alive_players()}
 
@@ -1798,6 +1833,12 @@ def user_action(request: Request, uid: int, action: str = Form(...),
     target = User.by_id(uid)
     if target is None:
         return _redirect(request, "/app")
+
+    # Серверная проверка состояния игры (как в боте) — не полагаемся только на UI.
+    state_err = _game_state_error(action, Game())
+    if state_err:
+        request.session["flash"] = state_err
+        return _redirect(request, dest)
 
     # Каждое админское действие оставляет плашку-фидбек (что произошло / почему нет).
     flash = ""
@@ -1863,11 +1904,15 @@ def user_action(request: Request, uid: int, action: str = Form(...),
             else:
                 flash = target.admin_reassign_kill(admin, new_m)
     elif action == "delete":
-        # нельзя удалить себя или дефолт-админа
+        # нельзя удалить себя, дефолт-админа или действующего игрока (как в боте:
+        # admin_drop_user требует НЕ is_player — сначала убрать из игры).
         if target.id == admin.id:
             flash = "⛔ Нельзя удалить самого себя."
         elif target.is_default_admin():
             flash = "⛔ root-пользователя удалить нельзя."
+        elif target.is_player():
+            flash = ("⛔ Нельзя удалить пользователя, пока он в игре — "
+                     "сначала уберите его из игры («Удалить игрока»).")
         else:
             before = _snapshot_targets()
             name = target.get_name()
