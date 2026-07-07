@@ -887,6 +887,10 @@ def apply_action(action: str, user: User, count: int = 5, reason: str = "") -> s
     """
     game = Game()
     who = user.get_name()
+    # Действия пользователей (нажатия кнопок) — в технический лог бота, чтобы видеть
+    # активность: кто что нажимал и т.п. (TODO 85). «noop» — не действие, пропускаем.
+    if action and action != "noop":
+        bot_log.log(f"🕹️ {who}: {action}", "web")
 
     # --- админские действия управления игрой ---
     if action in ("open_reg", "close_reg", "start_game", "stop_game", "pause",
@@ -1654,6 +1658,13 @@ async def profile_save(request: Request):
         saved = "Канал не найден."
         if ident and ident.get_user_id() == user.id:
             ident.set_muted(action == "mute_ident")
+            # активность для админов (TODO 85): аналог «отключил/заново активировал бота»
+            from core.identity import PLATFORM_LABEL
+            pl = PLATFORM_LABEL.get(ident.get_platform(), ident.get_platform())
+            admin_log.log(
+                f"🔕 {user.get_name()} отключил(а) уведомления бота ({pl})"
+                if action == "mute_ident" else
+                f"🔔 {user.get_name()} включил(а) уведомления бота ({pl})")
             saved = ("Уведомления для канала отключены." if action == "mute_ident"
                      else "Уведомления для канала включены.")
         values = {"real_name": user.get_real_name() or ""}
@@ -1690,6 +1701,10 @@ async def profile_save(request: Request):
         admin_log.log(f"✏️ {old or '—'} изменил(а) имя на {name}")
     user.set_real_name(name)
     if is_player:
+        # Редактирование профиля игроком — в лог (TODO 85): изменение ответов на доп.
+        # вопросы регистрации (комната, телефон и т.п.).
+        if answers != get_extra_answers(user):
+            admin_log.log(f"📝 {name} изменил(а) ответы на доп. вопросы профиля")
         set_extra_answers(user, answers)
     values = {"real_name": name}
     return _render_profile(request, user, values, {}, "Профиль обновлён.",
@@ -1789,6 +1804,8 @@ def secret_page(request: Request):
     user = current_user(request)
     if user is None:
         return RedirectResponse(url="/", status_code=303)
+    # Кто полез в «секрет» — в лог бота (TODO 85).
+    bot_log.log(f"🤫 {user.get_name()} открыл(а) «Узнать секрет»", "web")
     return templates.TemplateResponse(
         request, "secret.html",
         _ctx(request, youtube=SECRET_YOUTUBE, rutube=SECRET_RUTUBE),
@@ -1986,6 +2003,8 @@ def user_action(request: Request, uid: int, action: str = Form(...),
     target = User.by_id(uid)
     if target is None:
         return _redirect(request, "/app")
+    # Действие админа над игроком — в лог бота (нажатые кнопки, TODO 85).
+    bot_log.log(f"🕹️ {admin.get_name()} → {action} (над {target.get_name()})", "web")
 
     # Серверная проверка состояния игры (как в боте) — не полагаемся только на UI.
     state_err = _game_state_error(action, Game())

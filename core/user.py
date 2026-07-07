@@ -120,6 +120,15 @@ class User:
             new_id = execute("INSERT INTO user DEFAULT VALUES")
             Identity.create(new_id, platform, platform_uid, username, name)
             user = cls(new_id)
+            # Первый контакт с ботом — в лог для картины активности (TODO 85). Только
+            # для настоящих каналов бота (tg/vk); 'local' — это веб-эмуляция, тестовые
+            # и root, их логировать как «открыл бота» не нужно.
+            if platform in ("tg", "vk"):
+                from core import admin_log
+                from core.identity import PLATFORM_LABEL
+                who = name or username or platform_uid
+                admin_log.log(f"🆕 Новый пользователь {who} впервые открыл бота "
+                              f"({PLATFORM_LABEL.get(platform, platform)})")
         # Админ по умолчанию (config.py, отдельно для tg/vk): если этот канал в
         # списке — выдаём права (идемпотентно, при каждом входе; не снимает).
         if not user.is_admin() and is_default_admin_identity(platform, platform_uid, username):
