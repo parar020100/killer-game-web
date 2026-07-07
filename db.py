@@ -234,7 +234,6 @@ def init_db():
 
         is_admin     BOOLEAN NOT NULL DEFAULT 0,
 
-        session_version INTEGER NOT NULL DEFAULT 0,  -- «версия» логина: выход её бампает
         created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """)
@@ -288,11 +287,17 @@ def init_db():
     if "token_plain" not in _plcols:
         cur.execute("ALTER TABLE persistent_login ADD COLUMN token_plain TEXT")
 
-    # session_version — «версия» логина для авторитетного выхода (см. User). Добавляем
-    # в старые БД, где колонки ещё нет (значение по умолчанию 0 — вход не ломается).
-    _ucols = {r["name"] for r in cur.execute("PRAGMA table_info(user)")}
-    if "session_version" not in _ucols:
-        cur.execute("ALTER TABLE user ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0")
+    # Гранты входа: по одному на «браузер-логин» аккаунта. Cookie хранит grant_id;
+    # доступ действителен, пока грант есть в таблице. «Выйти» удаляет грант ЭТОГО
+    # браузера (его вкладки теряют доступ), не трогая гранты других устройств.
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS auth_grant (
+        grant_id   TEXT PRIMARY KEY,
+        user_id    INTEGER NOT NULL REFERENCES user(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_auth_grant_user ON auth_grant(user_id)")
 
     # Редактируемые из UI настройки игры (ключ-значение): контакт поддержки, файл
     # правил, доп. вопросы, режим подтверждения поимок, id root-пользователя и т.п.
@@ -351,7 +356,6 @@ CREATE TABLE IF NOT EXISTS "user" (
     target       INTEGER REFERENCES "user"(id),
     killed_by    INTEGER REFERENCES "user"(id),
     is_admin     INTEGER NOT NULL DEFAULT 0,
-    session_version INTEGER NOT NULL DEFAULT 0,
     created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS identity (
@@ -387,6 +391,12 @@ CREATE TABLE IF NOT EXISTS link_code (
     user_id    INTEGER NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS auth_grant (
+    grant_id   TEXT PRIMARY KEY,
+    user_id    INTEGER NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_auth_grant_user ON auth_grant(user_id);
 """
 
 
@@ -498,7 +508,7 @@ def drop_db():
         conn = psycopg.connect(config.POSTGRES_DSN)
         try:
             with conn.cursor() as cur:
-                cur.execute('DROP TABLE IF EXISTS link_code, persistent_login, '
+                cur.execute('DROP TABLE IF EXISTS auth_grant, link_code, persistent_login, '
                             'revive_queue, identity, setting, "user", game CASCADE')
             conn.commit()
         finally:

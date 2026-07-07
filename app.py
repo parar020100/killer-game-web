@@ -176,16 +176,17 @@ def validate_real_name(raw: str):
 def _authed_uids(request: Request):
     """uid, подтверждённые входом в этой сессии И не «разлогиненные» на сервере.
 
-    Для каждого uid сессия хранит версию логина (`session["uidv"]`). Если серверная
-    версия аккаунта (`User.session_version`) стала больше — значит был выход (в этой
-    или в другой вкладке/на другом устройстве), и uid больше не действителен, даже
-    если остался в cookie (в т.ч. «воскрешённый» гонкой перезаписи cookie между
-    вкладками — из-за неё раньше вышедший аккаунт снова появлялся на экране входа)."""
+    Для каждого uid сессия хранит его «грант входа» (`session["grants"][uid]`) —
+    случайный id, выданный при входе в ЭТОМ браузере. uid действителен, только пока
+    грант есть на сервере (`auth.grant_valid`). «Выйти» удаляет грант этого браузера,
+    поэтому его вкладки теряют доступ (в т.ч. если cookie «воскресает» гонкой
+    перезаписи — из-за неё раньше вышедший аккаунт снова появлялся на экране входа),
+    а гранты других устройств не затрагиваются."""
     uids = request.session.get("uids")
     if not uids:
         legacy = request.session.get("uid")   # совместимость со старой одиночной сессией
         uids = [legacy] if legacy else []
-    versions = request.session.get("uidv") or {}
+    grants = request.session.get("grants") or {}
     seen = []
     for u in uids:
         try:
@@ -194,11 +195,7 @@ def _authed_uids(request: Request):
             continue
         if u in seen:
             continue
-        user = User.by_id(u)
-        if user is None:
-            continue
-        # версия из сессии должна совпадать с серверной; отсутствует (легаси) → 0.
-        if int(versions.get(str(u), 0)) != user.get_session_version():
+        if not auth.grant_valid(grants.get(str(u)), u):
             continue
         seen.append(u)
     return seen
@@ -1118,12 +1115,12 @@ def login(request: Request, token: str = ""):
     if uid not in uids:
         uids.append(uid)
     request.session["uids"] = uids
-    # Запоминаем текущую серверную версию логина этого аккаунта — по ней последующий
-    # «выход» (инкремент версии) сделает эту и любую другую cookie недействительной.
-    u = User.by_id(uid)
-    versions = dict(request.session.get("uidv") or {})
-    versions[str(uid)] = u.get_session_version() if u else 0
-    request.session["uidv"] = versions
+    # Выдаём этому браузеру «грант входа» для аккаунта и кладём его id в cookie. Пока
+    # грант жив на сервере — доступ действителен; «выход» удалит именно его (этот
+    # браузер), не трогая входы на других устройствах.
+    grants = dict(request.session.get("grants") or {})
+    grants[str(uid)] = auth.create_grant(uid)
+    request.session["grants"] = grants
     request.session.pop("uid", None)   # уходим со старой одиночной схемы
     # Вкладка привязывается к этому аккаунту через ?user=<uid> (uid уже в наборе) —
     # так разные ссылки в разных вкладках одного браузера не мешают друг другу.
@@ -1134,29 +1131,24 @@ def login(request: Request, token: str = ""):
 def logout(request: Request):
     # Мульти-аккаунт: выходим из АКТИВНОГО аккаунта (убираем его из набора). Если он
     # был последним — очищаем сессию полностью. ?all=1 — выйти из всех сразу.
-    # ВАЖНО: выход инкрементит серверную версию логина аккаунта (bump_session_version),
-    # поэтому он авторитетен — аккаунт перестаёт действовать во всех вкладках/устройствах,
-    # а не только правит текущую cookie (иначе другая вкладка со старой cookie «воскрешала»
-    # аккаунт обратно из-за перезаписи cookie на каждый ответ).
+    # Выход удаляет серверный «грант входа» именно ЭТОГО браузера (auth.revoke_grant):
+    # его вкладки теряют доступ к аккаунту (в т.ч. при «воскрешении» cookie гонкой),
+    # а входы того же аккаунта на других устройствах не затрагиваются.
     authed = _authed_uids(request)
+    grants = dict(request.session.get("grants") or {})
     if request.query_params.get("all") == "1":
         for uid in authed:
-            u = User.by_id(uid)
-            if u:
-                u.bump_session_version()
+            auth.revoke_grant(grants.get(str(uid)))
         request.session.clear()
         return RedirectResponse(url="/", status_code=303)
     active = _active_uid(request, authed)
     if active is not None:
-        u = User.by_id(active)
-        if u:
-            u.bump_session_version()
+        auth.revoke_grant(grants.get(str(active)))
     remaining = [x for x in authed if x != active]
     if remaining:
         request.session["uids"] = remaining
-        versions = dict(request.session.get("uidv") or {})
-        versions.pop(str(active), None)
-        request.session["uidv"] = versions
+        grants.pop(str(active), None)
+        request.session["grants"] = grants
         request.session.pop("uid", None)
         return RedirectResponse(url=f"/app?user={remaining[0]}", status_code=303)
     request.session.clear()

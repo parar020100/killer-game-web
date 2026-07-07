@@ -102,3 +102,30 @@ def has_permanent_token(identity_id: int) -> bool:
 
 def revoke_permanent_token(identity_id: int):
     execute("DELETE FROM persistent_login WHERE identity_id = ?", (identity_id,))
+
+
+# --- гранты входа (пер-браузерный выход, устойчивый к гонке cookie) ---------
+# Каждый вход по ссылке создаёт «грант» — случайный id, который кладётся в cookie
+# этого браузера рядом с uid. Доступ действителен, только пока грант есть в таблице.
+# «Выйти» удаляет грант ЭТОГО браузера → все его вкладки теряют доступ (даже если
+# cookie «воскресает» гонкой перезаписи), а гранты других устройств не затрагиваются.
+
+def create_grant(user_id: int) -> str:
+    gid = secrets.token_urlsafe(LOGIN_TOKEN_BYTES)
+    execute("INSERT INTO auth_grant (grant_id, user_id) VALUES (?, ?)", (gid, user_id))
+    return gid
+
+
+def grant_valid(grant_id: str, user_id: int) -> bool:
+    """True, если грант существует и принадлежит этому пользователю."""
+    if not grant_id:
+        return False
+    return query_one(
+        "SELECT 1 FROM auth_grant WHERE grant_id = ? AND user_id = ?",
+        (grant_id, user_id),
+    ) is not None
+
+
+def revoke_grant(grant_id: str):
+    if grant_id:
+        execute("DELETE FROM auth_grant WHERE grant_id = ?", (grant_id,))
