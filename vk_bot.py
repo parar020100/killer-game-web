@@ -48,6 +48,16 @@ _PERSISTENT_KB = json.dumps({"one_time": False, "buttons": [[
     ensure_ascii=False)
 
 
+def _welcome_kb(user_id) -> str:
+    """Inline-кнопки под приветствием: «Открыть меню игры» (сразу в аккаунт) и «Правила»."""
+    return json.dumps({"inline": True, "buttons": [
+        [{"action": {"type": "open_link", "link": botcommon.menu_url_for("vk", user_id),
+                     "label": botcommon.MENU_BUTTON}}],
+        [{"action": {"type": "open_link", "link": botcommon.rules_url(),
+                     "label": botcommon.RULES_BUTTON}}],
+    ]}, ensure_ascii=False)
+
+
 def _send(user_id, text: str, keyboard: str = _PERSISTENT_KB):
     try:
         params = dict(user_id=user_id, message=text,
@@ -84,7 +94,7 @@ def handle_message(from_id, text: str):
 
     if low in _START_WORDS or botcommon.is_login_request(text):
         link = botcommon.login_link(ident)
-        _send(from_id, botcommon.welcome_text(link))
+        _send(from_id, botcommon.welcome_text(link), keyboard=_welcome_kb(from_id))
         log.info("start: user id=%s vk=%s", user.id, from_id)
         return
     if low.startswith("/link"):

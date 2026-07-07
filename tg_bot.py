@@ -18,7 +18,10 @@ Telegram-сторону:
 """
 import logging
 
-from telegram import Update, ReplyKeyboardMarkup
+from telegram import (
+    Update, ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton,
+    BotCommand,
+)
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, ContextTypes, filters,
 )
@@ -47,13 +50,21 @@ def _ensure_user(tg_user):
         str(tg_user.id), username=tg_user.username or None, name=_tg_name(tg_user))
 
 
+def _welcome_markup(tg_id) -> InlineKeyboardMarkup:
+    """Inline-кнопки под приветствием: «Открыть меню игры» (сразу в аккаунт) и «Правила»."""
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(botcommon.MENU_BUTTON, url=botcommon.menu_url_for("tg", tg_id))],
+        [InlineKeyboardButton(botcommon.RULES_BUTTON, url=botcommon.rules_url())],
+    ])
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """/start — привязать identity и показать ссылку входа (не сбрасывая её)."""
     tg = update.effective_user
     user = _ensure_user(tg)
     link = botcommon.login_link(user.identity("tg"))
     await update.effective_message.reply_text(
-        botcommon.welcome_text(link), reply_markup=_KB)
+        botcommon.welcome_text(link), reply_markup=_welcome_markup(tg.id))
     log.info("start: user id=%s tg=%s (@%s)", user.id, tg.id, tg.username)
 
 
@@ -94,8 +105,12 @@ async def _announce_connected(application):
     try:
         await application.bot.set_my_description(_GREETING)
         await application.bot.set_my_short_description(_GREETING)
+        await application.bot.set_my_commands([
+            BotCommand("start", "получить ссылку для входа"),
+            BotCommand("link", "привязать этот чат к аккаунту (код из профиля)"),
+        ])
     except Exception as exc:  # noqa: BLE001 — приветствие не критично для работы
-        log.warning("не удалось задать описание бота: %s", exc)
+        log.warning("не удалось задать описание/команды бота: %s", exc)
     log.info("✅ Telegram-бот успешно подключён: @%s (id %s). Ожидаю сообщения…",
              me.username, me.id)
 
