@@ -514,10 +514,10 @@
                 <button type="submit" name="action" value="add_test_users" class="btn wide">👤 Добавить пользователей</button>
                 <button type="submit" name="action" value="add_test_players" class="btn wide primary">🎮 Добавить игроков</button>
               </form>
-              <form method="post" action="{{ link('/act') }}" onsubmit="return confirm('Снять всех тестовых игроков (test…) с игры?')">
+              <form method="post" action="{{ link('/act') }}" data-confirm="Снять всех тестовых игроков (test…) с игры?">
                 <button type="submit" name="action" value="del_test_players" class="btn wide">🚪 Убрать тестовых из игры</button>
               </form>
-              <form method="post" action="{{ link('/act') }}" onsubmit="return confirm('Удалить всех тестовых пользователей (test…) из системы? Это необратимо.')">
+              <form method="post" action="{{ link('/act') }}" data-confirm="Удалить всех тестовых пользователей (test…) из системы? Это необратимо.">
                 <button type="submit" name="action" value="del_test_users" class="btn wide danger">🗑️ Удалить тестовых пользователей</button>
               </form>
             </div>
@@ -529,7 +529,7 @@
           {% elif b.href %}
           <a class="btn{% if b.kind %} {{ b.kind }}{% endif %}{% if b.full %} full{% endif %}" href="{{ link(b.href) }}">{{ b.label }}</a>
           {% elif b.action %}
-          <form method="post" action="{{ link('/act') }}"{% if b.confirm %} onsubmit="return confirm('{{ b.confirm }}')"{% endif %}>
+          <form method="post" action="{{ link('/act') }}"{% if b.confirm %} data-confirm="{{ b.confirm }}"{% endif %}>
             <input type="hidden" name="action" value="{{ b.action }}">
             <button type="submit" class="btn{% if b.kind %} {{ b.kind }}{% endif %}{% if b.full %} full{% endif %}">{{ b.label }}</button>
           </form>
@@ -579,6 +579,7 @@
   {% include "_live.html" %}
   {% include "_cards.html" %}
   {% include "_search.html" %}
+  {% include "_confirm_modal.html" %}
   <script>
   // Универсальные переключатели (список игроков, меню админа): меняют класс
   // show-<name> на <html>, текст самой кнопки и запоминают выбор в куке

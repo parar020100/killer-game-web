@@ -145,7 +145,7 @@
           </form>
           {% if can_unlink %}
           <form method="post" action="{{ link('/app/profile') }}"
-                onsubmit="return confirm('Отвязать этот канал в отдельный аккаунт? Он перестанет быть связан с остальными.')">
+                data-confirm="Отвязать этот канал в отдельный аккаунт? Он перестанет быть связан с остальными.">
             <input type="hidden" name="action" value="unlink">
             <input type="hidden" name="identity_id" value="{{ a.id }}">
             <button type="submit" class="btn ghost tiny">Отвязать</button>
@@ -189,7 +189,7 @@
     </div>
 
     <form class="card danger" method="post" action="{{ link('/app/profile') }}"
-          onsubmit="return confirm('Отозвать все ссылки входа? Текущий вход завершится, а старые ссылки перестанут работать. Новую можно получить в чате командой /start.')">
+          data-confirm="Отозвать все ссылки входа? Текущий вход завершится, а старые ссылки перестанут работать. Новую можно получить в чате командой /start.">
       <input type="hidden" name="action" value="revoke_login">
       <h2>🔐 Выйти на всех устройствах</h2>
       <p class="hint">Отзывает ваши постоянные ссылки входа и завершает текущий сеанс.
@@ -199,7 +199,7 @@
 
     {% if not is_root %}
     <form class="card danger" method="post" action="{{ link('/app/profile') }}"
-          onsubmit="return confirm('Удалить свою учётную запись? Это необратимо: профиль, участие в игре и ссылки входа будут стёрты.')">
+          data-confirm="Удалить свою учётную запись? Это необратимо: профиль, участие в игре и ссылки входа будут стёрты.">
       <input type="hidden" name="action" value="forget_me">
       <h2>🗑️ Забыть меня</h2>
       <p class="hint">Полностью удаляет вашу учётную запись: профиль, участие в игре
@@ -210,5 +210,6 @@
     </div>
     {% include "_footer.html" %}
   </main>
+  {% include "_confirm_modal.html" %}
 </body>
 </html>

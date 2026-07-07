@@ -1,0 +1,92 @@
+{# Модальное подтверждение действия — замена браузерного confirm() на аккуратное
+   окно сайта («подтвердите действие на сайте»). Любая форма с атрибутом
+   data-confirm="текст" перед отправкой показывает это окно; отправка идёт только
+   после нажатия «Подтвердить». Разметка/стили/скрипт самодостаточны — партиал можно
+   включать на любой странице (index/profile/settings…). #}
+<div class="cmodal-wrap" id="confirm-modal" hidden>
+  <div class="cmodal-backdrop" data-confirm-cancel></div>
+  <div class="cmodal" role="dialog" aria-modal="true" aria-labelledby="cmodal-title">
+    <p class="cmodal-title" id="cmodal-title">Подтвердите действие</p>
+    <p class="cmodal-text"></p>
+    <div class="cmodal-actions">
+      <button type="button" class="cmodal-btn" data-confirm-cancel>Отмена</button>
+      <button type="button" class="cmodal-btn cmodal-ok" data-confirm-ok>Подтвердить</button>
+    </div>
+  </div>
+</div>
+
+<style>
+  .cmodal-wrap[hidden] { display: none; }
+  .cmodal-wrap {
+    position: fixed; inset: 0; z-index: 2000;
+    display: flex; align-items: center; justify-content: center;
+    padding: 18px;
+  }
+  .cmodal-backdrop {
+    position: absolute; inset: 0;
+    background: rgba(10, 12, 18, .55); backdrop-filter: blur(2px);
+  }
+  .cmodal {
+    position: relative; width: 100%; max-width: 360px;
+    background: #ffffff; color: #171a21;
+    border: 1px solid #e2e7ef; border-radius: 16px;
+    box-shadow: 0 12px 40px rgba(23, 26, 40, .28);
+    padding: 18px 18px 16px; animation: cmodal-in .16s ease-out;
+  }
+  @keyframes cmodal-in { from { opacity: 0; transform: translateY(8px) scale(.98); } }
+  .cmodal-title { margin: 0 0 6px; font-size: 15px; font-weight: 700; }
+  .cmodal-text  { margin: 0 0 16px; font-size: 14px; line-height: 1.45; color: #4a5160; }
+  .cmodal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+  .cmodal-btn {
+    appearance: none; font: inherit; font-size: 14px; font-weight: 600;
+    padding: 10px 16px; border-radius: 11px; cursor: pointer;
+    border: 1px solid #e2e7ef; background: #f4f6fa; color: #171a21;
+  }
+  .cmodal-btn.cmodal-ok {
+    border-color: rgba(214, 69, 80, .5); background: rgba(214, 69, 80, .12); color: #c22a37;
+  }
+  @media (prefers-color-scheme: dark) {
+    .cmodal { background: #191d24; color: #e9ecf1; border-color: #2a313b;
+              box-shadow: 0 14px 44px rgba(0, 0, 0, .6); }
+    .cmodal-text { color: #9aa4b2; }
+    .cmodal-btn { background: #222831; border-color: #2a313b; color: #e9ecf1; }
+    .cmodal-btn.cmodal-ok { border-color: rgba(255, 97, 97, .45);
+                            background: rgba(255, 97, 97, .16); color: #ff8080; }
+  }
+</style>
+
+<script>
+(function () {
+  var modal = document.getElementById('confirm-modal');
+  if (!modal || modal.dataset.wired) return;
+  modal.dataset.wired = '1';
+  var textEl = modal.querySelector('.cmodal-text');
+  var okBtn  = modal.querySelector('[data-confirm-ok]');
+  var pending = null;
+
+  function open(form, msg) { pending = form; textEl.textContent = msg;
+                             modal.hidden = false; okBtn.focus(); }
+  function close() { modal.hidden = true; pending = null; }
+
+  // Делегирование на document (в фазе перехвата) — переживает живое обновление DOM:
+  // любые новые формы с data-confirm тоже перехватываются.
+  document.addEventListener('submit', function (e) {
+    var form = e.target;
+    if (!form || !form.matches || !form.matches('[data-confirm]')) return;
+    if (form.dataset.confirmed === '1') return;   // уже подтверждено — пропускаем
+    e.preventDefault();
+    open(form, form.getAttribute('data-confirm'));
+  }, true);
+
+  okBtn.addEventListener('click', function () {
+    var form = pending; close();
+    if (form) { form.dataset.confirmed = '1'; form.submit(); }  // submit работает и на detached-форме
+  });
+  modal.querySelectorAll('[data-confirm-cancel]').forEach(function (el) {
+    el.addEventListener('click', close);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (!modal.hidden && e.key === 'Escape') close();
+  });
+})();
+</script>

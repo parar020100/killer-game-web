@@ -193,7 +193,7 @@
        управление приложением и полный сброс данных. Действуют на весь сервис.</p>
     <div class="grid">
     <form class="card" method="post" action="{{ link('/app/settings') }}" autocomplete="off"
-          onsubmit="return confirm('Переключить активную игру (файл БД)? Приложение перезапустится, текущий вход может завершиться.')">
+          data-confirm="Переключить активную игру (файл БД)? Приложение перезапустится, текущий вход может завершиться.">
       <input type="hidden" name="action" value="active_db">
       <h2>🗄️ Активная игра (файл БД)</h2>
       <p class="hint">Каждый файл БД — отдельная «игра». Переключение требует
@@ -234,17 +234,17 @@
          Данные игры сохраняются.</p>
       <div class="ctlrow">
         <form method="post" action="{{ link('/app/settings') }}"
-              onsubmit="return confirm('Перезагрузить приложение? На пару секунд сайт будет недоступен.')">
+              data-confirm="Перезагрузить приложение? На пару секунд сайт будет недоступен.">
           <input type="hidden" name="action" value="restart">
           <button type="submit" class="btn ghost">🔁 Перезагрузить</button>
         </form>
         <form method="post" action="{{ link('/app/settings') }}"
-              onsubmit="return confirm('Обновить код (git pull) и перезапустить приложение?')">
+              data-confirm="Обновить код (git pull) и перезапустить приложение?">
           <input type="hidden" name="action" value="update">
           <button type="submit" class="btn ghost">⬇️ Обновить (git pull)</button>
         </form>
         <form method="post" action="{{ link('/app/settings') }}"
-              onsubmit="return confirm('Выключить приложение? Сайт станет недоступен{% if start_mode != 'systemctl' %}, потребуется ручной запуск{% endif %}.')">
+              data-confirm="Выключить приложение? Сайт станет недоступен{% if start_mode != 'systemctl' %}, потребуется ручной запуск{% endif %}.">
           <input type="hidden" name="action" value="stop">
           <button type="submit" class="btn danger">⏹️ Выключить</button>
         </form>
@@ -252,7 +252,7 @@
     </div>
 
     <form class="card danger" method="post" action="{{ link('/app/settings') }}"
-          onsubmit="return confirm('Полностью стереть базу данных? Все пользователи, игроки и настройки будут удалены безвозвратно.')">
+          data-confirm="Полностью стереть базу данных? Все пользователи, игроки и настройки будут удалены безвозвратно.">
       <input type="hidden" name="action" value="full_reset">
       <h2>💣 Полный сброс базы данных</h2>
       <p class="hint">Безвозвратно удаляет всех пользователей, игроков и все данные игры,
@@ -262,5 +262,6 @@
     </div>
     {% include "_footer.html" %}
   </main>
+  {% include "_confirm_modal.html" %}
 </body>
 </html>
