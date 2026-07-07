@@ -290,6 +290,23 @@ def _redirect(request: Request, url: str, status_code: int = 303):
         status_code=status_code)
 
 
+def _is_prefetch(request: Request) -> bool:
+    """Похоже ли на спекулятивный префетч/предпросмотр (браузер, антивирус, превью-бот)?
+
+    Такие фоновые запросы не должны иметь побочных эффектов (создавать пользователей,
+    логинить/разлогинивать) — иначе ссылки-триггеры срабатывают сами собой. Опираемся
+    на стандартные заголовки-подсказки префетча."""
+    h = request.headers
+    if "prefetch" in (h.get("sec-purpose") or "").lower() \
+            or "prerender" in (h.get("sec-purpose") or "").lower():
+        return True
+    if (h.get("purpose") or h.get("x-purpose") or "").lower() in ("prefetch", "preview"):
+        return True
+    if (h.get("x-moz") or "").lower() in ("prefetch", "preview"):
+        return True
+    return False
+
+
 def _reloading_page(request: Request, title_msg: str, sub_msg: str,
                     seconds: int = 5, target: str = "/"):
     """Промежуточная страница с обратным отсчётом → уводит на страницу входа (TODO 82).
@@ -1050,8 +1067,10 @@ def chat_view(request: Request, username: str):
         return RedirectResponse(url="/", status_code=303)
     # Открытие чата создаёт профиль при необходимости (как первый контакт с ботом).
     # Эмуляция — самостоятельный канал 'local' со своим никнеймом, НЕ связанный с
-    # Telegram/VK (у тех — числовые id и отдельные аккаунты).
-    User.get_or_create_by_local(username, username=username, name=username)
+    # Telegram/VK (у тех — числовые id и отдельные аккаунты). НО не создаём при
+    # префетче — иначе спекулятивная загрузка ссылки плодила бы пустых пользователей.
+    if not _is_prefetch(request):
+        User.get_or_create_by_local(username, username=username, name=username)
     messages = [
         {"tag": m["tag"] or "bot", "ts": m["ts"], "html": linkify(m["body"])}
         for m in chat.read(username)
@@ -1127,10 +1146,11 @@ def login(request: Request, token: str = ""):
     return RedirectResponse(url=f"/app?user={uid}", status_code=303)
 
 
-@app.get("/logout")
+@app.post("/logout")
 def logout(request: Request):
-    # Мульти-аккаунт: выходим из АКТИВНОГО аккаунта (убираем его из набора). Если он
-    # был последним — очищаем сессию полностью. ?all=1 — выйти из всех сразу.
+    # POST, а не GET: как ссылка выход триггерился бы префетчем/сканером (и с грантами
+    # молча отзывал бы грант — разлогинивал). Мульти-аккаунт: выходим из АКТИВНОГО
+    # аккаунта (убираем из набора). Если он последний — очищаем сессию. ?all=1 — все.
     # Выход удаляет серверный «грант входа» именно ЭТОГО браузера (auth.revoke_grant):
     # его вкладки теряют доступ к аккаунту (в т.ч. при «воскрешении» cookie гонкой),
     # а входы того же аккаунта на других устройствах не затрагиваются.
@@ -1494,6 +1514,19 @@ async def settings_save(request: Request):
             saved = msg
         else:
             saved = "Неизвестная команда управления."
+    elif action == "logout_all_sessions":
+        # Закрыть все открытые сессии всех пользователей (удалить все гранты входа).
+        # Ссылки для входа сохраняются — по ним можно войти заново. Чтобы админ,
+        # нажавший кнопку, не вылетел из своей вкладки, тут же переоформляем гранты
+        # для аккаунтов его текущей сессии (остальные — и другие устройства — закрыты).
+        my_uids = _authed_uids(request)
+        n = auth.revoke_all_grants()
+        new_grants = {str(u): auth.create_grant(u) for u in my_uids}
+        request.session["grants"] = new_grants
+        admin_log.log(f"🚪 {user.get_name()} закрыл(а) все сессии пользователей "
+                      f"(грантов было: {n})")
+        saved = (f"Закрыто сессий: {n}. Ваша текущая сессия сохранена; остальным "
+                 "нужно войти заново по своей ссылке (ссылки для входа не изменились).")
     elif action == "full_reset":
         # Полный сброс БД — необратимо. Текущая сессия становится недействительной.
         admin_log.log(f"💣 {user.get_name()} выполнил(а) полный сброс базы данных")

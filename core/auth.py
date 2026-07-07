@@ -129,3 +129,14 @@ def grant_valid(grant_id: str, user_id: int) -> bool:
 def revoke_grant(grant_id: str):
     if grant_id:
         execute("DELETE FROM auth_grant WHERE grant_id = ?", (grant_id,))
+
+
+def revoke_all_grants() -> int:
+    """Удалить ВСЕ гранты входа — закрыть все открытые сессии всех пользователей.
+
+    Ссылки для входа (persistent_login) НЕ трогаются — по ним можно войти заново.
+    Возвращает число удалённых грантов (сколько сессий было закрыто)."""
+    row = query_one("SELECT COUNT(*) FROM auth_grant")
+    n = row[0] if row else 0
+    execute("DELETE FROM auth_grant")
+    return n
