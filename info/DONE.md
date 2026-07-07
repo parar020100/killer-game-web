@@ -264,6 +264,21 @@
   выданную ссылку. `/start` и «🔗 Новая ссылка для входа» по-прежнему перевыпускают токен
   (явная ротация). Кнопка «🔐 Отозвать ссылки входа» в «Настройках профиля» уже была
   (`revoke_login` → `user.revoke_login_links()`).
+- (77) Killer-формулировки доведены до конца (продолжение п. 30): применены все UK/UP
+  из ALL_TEXTS_2 (лог/результат/админ-строки: `cancel/confirm/deny_log`, `confirm/deny_ok`,
+  `admin_kill_log`, `admin_setscore_notify`, `reassign_old/new/log/ok`, `score_line`) плюс
+  большой второй раунд уточнений из ALL_TEXTS.md: `retarget_left/admin_killed` (убрана
+  строка «Вам будет назначена новая цель…»), `give_life_notify`, `take_life_notify`,
+  `admin_force_deny_victim/murderer`, `admin_force_accept` (доб. уведомление),
+  `admin_revive_notify`, `auto_revive_notify`, `results_line`, `demote_notify`,
+  `rules_missing`, конфирмы завершения/сброса, `note_*_pause`, `alive_count_label`
+  («Ещё играют» в Папарацци), `photo_required`, тосты фото-пруфа, кнопки
+  `btn_admin_kill/revive/give_life/take_life/reset_end/promote_demote/admin_msg`. Все —
+  режимно-зависимые ключи в `core/mode.py`, заведены в `app.py`/`core/user.py`/`core/game.py`.
+  ALL_TEXTS_2 влит в [ALL_TEXTS.md](ALL_TEXTS.md) (дубли не задвоены — выбран вариант
+  ALL_TEXTS_2), файл удалён. Маркеры приведены к правилу пары «✅ ровно у одной из WK/UK».
+- (74) `err_already_pending`: решено оставить веб-guard (не как в боте) — чтобы повторные
+  заявки не спамили жертву уведомлениями. Текст guard-а уже переформулирован.
 - (78) `capture_victim` приведён к стилю режима: «💀 Сожалею, Вы были убиты игроком
   {name}…» (Киллер) / «🗿 Сожалею, Вы были пойманы игроком {name}…» (Папарацци) — убрано
   чужеродное «устранены» (было применено из UK/UP по опечатке).

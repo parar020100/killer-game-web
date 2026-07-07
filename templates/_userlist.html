@@ -116,7 +116,7 @@
 
       {# одностороннее сообщение админа игроку (уведомление) #}
       <details class="mini" data-keep="msg{{ u.id }}">
-        <summary class="btn chip">✉️ Написать сообщение</summary>
+        <summary class="btn chip">✉️ Написать</summary>
         <div class="mini-body msg">
           <form method="post" action="{{ link('/app/users/' ~ u.id ~ '/act') }}">
             <input type="hidden" name="action" value="message">

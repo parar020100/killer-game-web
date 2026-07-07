@@ -408,7 +408,7 @@ def _player_action_buttons(user: User, game: Game):
                                "организаторы её откроют."))
     elif not started:
         b.append(_btn(mode.t("report_btn"), disabled=True, full=True,
-                      note="Сообщить о поимке можно будет после старта игры."))
+                      note=mode.t("note_report_after_start")))
     elif game.is_paused():
         # На паузе игровые действия недоступны (как в боте) — заявку не подать.
         b.append(_btn(mode.t("report_btn"), disabled=True, full=True,
@@ -444,7 +444,7 @@ def _player_game_split(user: User):
     """(строки-статуса-слева, html-цели-справа) для игрока в идущей игре."""
     game = Game()
     lines = [mode.t("score_line", score=user.get_score()),
-             f"💚 Живых игроков: <strong>{game.count_alive()}</strong>"]
+             f"💚 {mode.t('alive_count_label')}: <strong>{game.count_alive()}</strong>"]
     if not user.is_alive():
         lines.append("")
         lines.append(mode.t("status_out"))
@@ -589,13 +589,13 @@ def admin_management_buttons(user: User):
 
     # Завершение / сброс — всегда видны, серые вне паузы (опасные → подтверждение).
     end_note = "Завершить или сбросить игру можно только во время паузы — сначала поставьте паузу."
-    b.append(_btn("🏁 Завершить игру", "end_game" if paused else None, "danger",
+    b.append(_btn("⏹️ Завершить игру", "end_game" if paused else None, "danger",
                   disabled=not paused, note=end_note,
                   confirm="Завершить игру: разослать итоги всем и сбросить игру? "
-                          "Все игроки будут сняты с игры."))
-    b.append(_btn("♻️ Сбросить игру", "reset_game" if paused else None, "danger",
+                          "Список игроков будет очищен."))
+    b.append(_btn("↩️ Сбросить игру", "reset_game" if paused else None, "danger",
                   disabled=not paused, note=end_note,
-                  confirm="Сбросить игру? Все игроки будут сняты с игры."))
+                  confirm="Сбросить игру? Список игроков будет очищен."))
 
     # Инструменты. (Кнопка «Журнал» убрана — тот же журнал (admin_log) доступен
     # переключателем «Показать лог игры» и на странице /admin-log из настроек.)
@@ -811,12 +811,14 @@ def results_text() -> str:
         lines.append("\nЛучшие игроки:")
         for r in d["top_alive"]:
             nick = f" (@{r['nick']})" if r["nick"] else ""
-            lines.append(f"{r['medal']} {r['name']}{nick} — поймал(а) {r['score']}")
+            lines.append(mode.t("results_line", medal=r["medal"], name=r["name"],
+                                 nick=nick, score=r["score"]))
     if d["top_dead"]:
         lines.append("\nЛучшие из выбывших:")
         for r in d["top_dead"]:
             nick = f" (@{r['nick']})" if r["nick"] else ""
-            lines.append(f"😵 {r['medal']} {r['name']}{nick} — поймал(а) {r['score']}")
+            lines.append("😵 " + mode.t("results_line", medal=r["medal"], name=r["name"],
+                                        nick=nick, score=r["score"]))
     lines.append("\nСпасибо за игру!")
     return "\n".join(lines)
 
@@ -1106,7 +1108,7 @@ def rules_page(request: Request):
     html_text = read_rules_html()
     if html_text is None:
         return HTMLResponse(
-            "<h3>Для этой игры правила пока не заданы.</h3>"
+            "<h3>Для этой игры текст правил пока не добавлен.</h3>"
             "<p>Свяжитесь с администратором.</p>",
             status_code=404,
         )
@@ -1343,15 +1345,15 @@ async def settings_save(request: Request):
         admin_log.log(f"📸 {user.get_name()} "
                       + ("включил(а) подтверждение поимок жертвой"
                          if new else "отключил(а) подтверждение поимок"))
-        saved = ("Теперь поимку подтверждает жертва." if new
-                 else "Теперь поимка засчитывается сразу, без подтверждения.")
+        saved = (mode.t("photo_toast_confirm_on") if new
+                 else mode.t("photo_toast_confirm_off"))
     elif action == "photo_proof":
         new = not app_settings.photo_proof()
         app_settings.set_photo_proof(new)
         admin_log.log(f"🖼️ {user.get_name()} "
                       + ("включил(а) фото-пруф поимок" if new else "отключил(а) фото-пруф поимок"))
-        saved = ("Теперь при поимке нужно приложить фото."
-                 if new else "Фото-пруф поимок отключён.")
+        saved = (mode.t("photo_toast_photo_on")
+                 if new else mode.t("photo_toast_photo_off"))
     elif action == "extra_questions":
         # Собираем пары label_i / q_i (пустые строки = удалённые вопросы).
         old_labels = {p[0] for p in app_settings.extra_questions()}
@@ -1661,7 +1663,7 @@ async def capture_submit(request: Request):
         return templates.TemplateResponse(
             request, "capture.html",
             _ctx(request, target_name=target.get_name(), report_label=mode.t("report_btn"),
-                 error="Пожалуйста, прикрепите фотографию поимки."),
+                 error=mode.t("photo_required")),
         )
     admin_log.log(f"🖼️ {user.get_name()} приложил(а) фото-пруф поимки цели")
     ok, msg = user.attempt_capture()
@@ -1709,10 +1711,10 @@ def user_menu_buttons(target: User):
 
     # 1) Роль администратора — один слот-переключатель (всегда на месте).
     if root:
-        add("🧹 Забрать админа", None, disabled=True,
+        add("🧹 Уволить админа", None, disabled=True,
             note="root-пользователя нельзя разжаловать.")
     elif target.is_admin():
-        add("🧹 Забрать админа", "demote")
+        add("🧹 Уволить админа", "demote")
     else:
         add("👑 Выдать админа", "promote")
 
@@ -1726,8 +1728,8 @@ def user_menu_buttons(target: User):
     elif not alive:
         kill_note = "Игрок уже выбыл из игры."
     else:
-        kill_note = "Устранять игрока можно только во время паузы."
-    add(f"{mode.term('icon')} Устранить", "kill", "danger",
+        kill_note = mode.t("note_kill_pause")
+    add(mode.t("btn_admin_kill"), "kill", "danger",
         disabled=not (is_player and alive and paused),
         note=kill_note, confirm=f"Устранить игрока {tname} из игры?")
 
@@ -1737,24 +1739,24 @@ def user_menu_buttons(target: User):
     elif alive:
         revive_note = "Игрок сейчас в игре — оживлять некого."
     else:
-        revive_note = "Оживлять игрока можно только во время паузы."
-    add("♻️ Оживить", "revive", "primary",
+        revive_note = mode.t("note_revive_pause")
+    add(mode.t("btn_admin_revive"), "revive", "primary",
         disabled=not (is_player and not alive and paused), note=revive_note)
 
     # 5) Жизнь (очередь возрождения) — только выбывшему игроку; слот-переключатель.
     if is_player and not alive and target.is_queued_for_revival():
-        add("🚫 Отобрать жизнь", "take_life")
+        add(mode.t("btn_take_life"), "take_life")
     elif is_player and not alive:
-        add("🎁 Подарить жизнь", "give_life")
+        add(mode.t("btn_give_life"), "give_life")
     else:
-        add("🎁 Подарить жизнь", None, disabled=True,
+        add(mode.t("btn_give_life"), None, disabled=True,
             note=not_player_note if not is_player else "Подарить жизнь можно только выбывшему игроку.")
 
     # 6) Удалить из игры (игрока, на паузе или до старта).
     add("👋 Удалить из игры", "kick", "danger",
         disabled=not (is_player and (paused or not started)),
         note=not_player_note if not is_player
-             else "Убирать игрока из игры можно во время паузы или до старта игры.",
+             else "Кикнуть игрока можно во время паузы или до старта игры.",
         confirm=f"Удалить игрока {tname} из игры?")
 
     # 7) Удалить из системы (не-игрока, не root).
@@ -1896,7 +1898,7 @@ def user_action(request: Request, uid: int, action: str = Form(...),
         else:
             target.set_admin(False)
             admin_log.log(f"🧹 {admin.get_name()} снял(а) права админа: {target.get_name()}")
-            target.notify("Права администратора сняты.")
+            target.notify("🧹 Права администратора сняты.")
             flash = f"🧹 С {target.get_name()} сняты права администратора."
     elif action == "set_score":
         if not target.is_player():

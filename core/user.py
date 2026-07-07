@@ -515,6 +515,7 @@ class User:
         return f"Игрок {self.get_name()} устранён из игры."
 
     def admin_revive(self, admin: "User") -> str:
+        from core import mode
         if not self.is_player():
             return "Пользователь не участвует в игре."
         if self.is_alive():
@@ -529,8 +530,7 @@ class User:
         game = Game()
         if game.is_started():
             game.reassign_targets()
-        self.notify("🧟 Администратор вернул вас в игру! 🎯 Вам назначена цель — "
-                    "откройте приложение, чтобы увидеть её.")
+        self.notify(mode.t("admin_revive_notify"))
         return f"Игрок {self.get_name()} снова в игре."
 
     def admin_kick(self, admin: "User") -> str:
@@ -576,23 +576,26 @@ class User:
         return f"Позиция игрока {self.get_name()} в круге: {placed}."
 
     def admin_force_accept(self, admin: "User") -> str:
+        from core import mode
         murderer = self.get_murderer()
         if not self.is_being_caught() or murderer is None:
             return "По этому игроку нет заявки на поимку."
         self._log(f"✅ {admin.get_name()} подтвердил(а) поимку {self.get_name()} "
                   f"игроком {murderer.get_name()}")
+        self.notify(mode.t("admin_force_accept_notify", admin=admin.get_name()))
         murderer.capture(self)
         return f"Поимка игрока {self.get_name()} засчитана."
 
     def admin_force_deny(self, admin: "User") -> str:
+        from core import mode
         murderer = self.get_murderer()
         if not self.is_being_caught():
             return "По этому игроку нет заявки на поимку."
         self.set_murderer(None)
         self._log(f"❌ {admin.get_name()} отклонил(а) поимку игрока {self.get_name()}")
-        self.notify("💚 Администратор отклонил заявку о вашей поимке — вы в игре.")
+        self.notify(mode.t("admin_force_deny_victim"))
         if murderer:
-            murderer.notify(f"🚫 Администратор отклонил вашу поимку {self.get_name()}.")
+            murderer.notify(mode.t("admin_force_deny_murderer", name=self.get_name()))
         return f"Поимка игрока {self.get_name()} отклонена."
 
     def admin_reassign_kill(self, admin: "User", new_murderer: "User") -> str:
@@ -624,10 +627,10 @@ class User:
     def give_life(self, admin: "User") -> str:
         if self.is_alive():
             return "Игрок и так в игре."
+        from core import mode
         self.revive_queue_push()
         self._log(f"🎁 {admin.get_name()} подарил(а) жизнь игроку {self.get_name()}")
-        self.notify("🎁 Администратор дал вам ещё один шанс! "
-                    "Возрождение произойдёт при первой возможности.")
+        self.notify(mode.t("give_life_notify"))
         return f"Игрок {self.get_name()} добавлен в очередь на оживление."
 
     def take_life(self, admin: "User") -> str:
@@ -637,9 +640,10 @@ class User:
             return "Игрок в игре — он не в очереди на возрождение."
         if not self.is_queued_for_revival():
             return f"Игрок {self.get_name()} не в очереди на оживление."
+        from core import mode
         self.revive_queue_remove()
         self._log(f"🚫 {admin.get_name()} отменил(а) шанс возрождения игроку {self.get_name()}")
-        self.notify("☠️ Администратор отменил ваш шанс на возрождение в игре.")
+        self.notify(mode.t("take_life_notify", admin=admin.get_name()))
         return f"Игрок {self.get_name()} убран из очереди на оживление."
 
     def delete_from_system(self, admin: "User") -> str:

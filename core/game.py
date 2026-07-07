@@ -173,10 +173,10 @@ class Game:
             order = p.set_game_order(order, increase=True)   # встать сразу за предыдущим
             revived.append(p)
         self.reassign_targets()
+        from core import mode
         for p in revived:
             admin_log.log(f"🧟 Игрок {p.get_name()} автоматически возрождён из очереди.")
-            p.notify("🧟 Вы снова в игре! 🎯 Вам назначена цель — "
-                     "откройте приложение, чтобы увидеть её.")
+            p.notify(mode.t("auto_revive_notify"))
         return revived
 
     def check_finished(self) -> bool:
