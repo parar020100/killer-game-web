@@ -499,10 +499,10 @@
         {% for b in s.buttons %}
           {% if b.toggle == 'userlist' %}
           <button type="button" class="btn ul-toggle{% if b.full %} full{% endif %}" data-toggle="userlist"
-                  data-on="🙈 Скрыть игроков" data-off="👥 Показать игроков">{{ '🙈 Скрыть игроков' if show_userlist else '👥 Показать игроков' }}</button>
+                  data-on="👥 Скрыть игроков" data-off="👥 Показать игроков">{{ '👥 Скрыть игроков' if show_userlist else '👥 Показать игроков' }}</button>
           {% elif b.toggle == 'gamelog' %}
           <button type="button" class="btn gl-toggle{% if b.full %} full{% endif %}" data-toggle="gamelog"
-                  data-on="🙈 Скрыть лог игры" data-off="📋 Показать лог игры">{{ '🙈 Скрыть лог игры' if show_gamelog else '📋 Показать лог игры' }}</button>
+                  data-on="📋 Скрыть лог игры" data-off="📋 Показать лог игры">{{ '📋 Скрыть лог игры' if show_gamelog else '📋 Показать лог игры' }}</button>
           {% elif b.popover == 'testusers' %}
           <details class="mini testpop" data-keep="testusers">
             <summary class="btn">{{ b.label }}</summary>
