@@ -13,8 +13,13 @@ from db import query_one, execute
 
 # --- значения по умолчанию (первый запуск / после полного сброса) ----------
 DEFAULT_SUPPORT_CONTACT = "@parar020100"
-DEFAULT_RULES_FILENAME = "rules/un2026_1.html"
+# По умолчанию правила НЕ заданы — админ обязан выбрать файл (TODO 89). Существующим
+# играм это не меняет поведение: для БД, созданных раньше, старое значение
+# добивается в таблицу setting миграцией db._migrate_default_rules (см. db.py).
+DEFAULT_RULES_FILENAME = ""
+LEGACY_RULES_FILENAME = "rules/un2026_1.html"  # прежний дефолт (для миграции)
 DEFAULT_CONFIRM_KILLS = True
+DEFAULT_PHOTO_PROOF = True  # требовать фото-пруф поимки по умолчанию (TODO 88)
 DEFAULT_GAME_MODE = "paparazzi"  # 'killer' | 'paparazzi' (оформление игры)
 
 
@@ -80,7 +85,8 @@ def set_confirm_kills(on: bool):
 # --- фото-пруф поимки -------------------------------------------------------
 
 def photo_proof() -> bool:
-    return _raw("photo_proof") == "1"
+    v = _raw("photo_proof")
+    return DEFAULT_PHOTO_PROOF if v is None else v == "1"
 
 
 def set_photo_proof(on: bool):

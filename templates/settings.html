@@ -159,6 +159,7 @@
       <h2>📜 Файл правил</h2>
       <p class="hint">HTML-файл с правилами из папки <code>rules/</code>.
          «— без правил —» скрывает кнопку «Правила».</p>
+      {% if not rules_filename %}<p class="hint" style="color:var(--accent)">⚠️ Правила не выбраны — выберите файл, иначе игроки не увидят кнопку «Правила».</p>{% endif %}
       <label>
         Файл правил
         <select name="rules_filename">

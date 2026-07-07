@@ -201,6 +201,11 @@ def init_db():
     conn = get_connection()
     cur = conn.cursor()
 
+    # Существовала ли БД до этого запуска (таблицы уже созданы)? Нужно, чтобы отличать
+    # обновляемую игру от новой в миграциях (например «прежний дефолт правил», TODO 89).
+    db_preexisting = cur.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='game'").fetchone() is not None
+
     # Единственная строка (id=1) с глобальным состоянием игры.
     cur.execute("""
     CREATE TABLE IF NOT EXISTS game (
@@ -305,6 +310,7 @@ def init_db():
 
     _migrate_flat_to_identity(cur)
     _migrate_emulation_to_local(cur)
+    _migrate_default_rules(cur, db_preexisting)
 
     if cur.execute("SELECT COUNT(*) FROM game").fetchone()[0] == 0:
         cur.execute("INSERT INTO game (id) VALUES (1)")
@@ -422,6 +428,27 @@ def _migrate_flat_to_identity(cur):
         )
         if cur.rowcount:
             print(f"[db] миграция: перенесено {cur.rowcount} '{platform}'-идентичностей")
+
+
+def _migrate_default_rules(cur, db_preexisting: bool):
+    """Сохранить прежний файл правил для игр, созданных до смены дефолта (TODO 89).
+
+    Новый дефолт правил — «не задано» (админ выбирает файл сам). Чтобы обновление не
+    убрало правила у уже существующих игр, для БД, которая существовала до этого
+    запуска и не имеет явной настройки `rules_filename`, один раз записываем прежний
+    дефолт (`core.settings.LEGACY_RULES_FILENAME`). Маркер `mig_rules_default`
+    делает миграцию одноразовой и безопасной при параллельном старте процессов
+    (web + боты): у новой БД он ставится сразу, backfill не срабатывает."""
+    done = cur.execute("SELECT 1 FROM setting WHERE key='mig_rules_default'").fetchone()
+    if done:
+        return
+    if db_preexisting:
+        has_key = cur.execute("SELECT 1 FROM setting WHERE key='rules_filename'").fetchone()
+        if not has_key:
+            cur.execute("INSERT INTO setting (key, value) VALUES ('rules_filename', ?)",
+                        ("rules/un2026_1.html",))
+            print("[db] миграция 89: rules_filename ← прежний дефолт (существующая игра)")
+    cur.execute("INSERT OR IGNORE INTO setting (key, value) VALUES ('mig_rules_default', '1')")
 
 
 def _migrate_emulation_to_local(cur):
