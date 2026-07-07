@@ -10,6 +10,20 @@ from db import query_one, query_all, execute
 from core.identity import Identity
 
 
+# --- причина отклонения поимки (TODO 79) ------------------------------------
+# Когда поимку/убийство не принимают (жертва или админ), можно указать причину.
+# Она добавляется в лог для админов и в уведомление «охотнику» единообразно.
+
+def _reason_log_suffix(reason: str) -> str:
+    reason = (reason or "").strip()
+    return f" (причина: {reason})" if reason else ""
+
+
+def _reason_notify_suffix(reason: str) -> str:
+    reason = (reason or "").strip()
+    return f"\nПричина: {reason}" if reason else ""
+
+
 # --- админы по умолчанию (config.py, отдельно для Telegram и VK) -------------
 # Списки DEFAULT_ADMINS_TG / DEFAULT_ADMINS_VK в config.py содержат id или
 # username/screen_name каналов. Кто входит через такой канал — получает права
@@ -428,18 +442,24 @@ class User:
         murderer.capture(self)
         return True, mode.t("confirm_ok")
 
-    def deny_capture(self):
-        """Жертва опровергает поимку → остаётся в игре."""
+    def deny_capture(self, reason: str = ""):
+        """Жертва опровергает поимку → остаётся в игре.
+
+        reason — необязательная причина отказа: показывается админам в логе и уходит
+        в уведомление «охотнику» (киллеру/папарацци), чтобы он понял, почему поимку
+        не засчитали (TODO 79)."""
         from core import mode
         murderer = self.get_murderer()
         if not self.is_being_caught():
             return False, mode.t("confirm_none")
         self.set_murderer(None)
         self._log(mode.t("deny_log", name=self.get_name(),
-                         murderer=murderer.get_name() if murderer else "?"))
+                         murderer=murderer.get_name() if murderer else "?")
+                  + _reason_log_suffix(reason))
         self.notify(mode.t("deny_self"))
         if murderer:
-            murderer.notify(mode.t("deny_murderer", name=self.get_name()))
+            murderer.notify(mode.t("deny_murderer", name=self.get_name())
+                            + _reason_notify_suffix(reason))
         return True, mode.t("deny_ok")
 
     def capture(self, victim: "User"):
@@ -586,16 +606,20 @@ class User:
         murderer.capture(self)
         return f"Поимка игрока {self.get_name()} засчитана."
 
-    def admin_force_deny(self, admin: "User") -> str:
+    def admin_force_deny(self, admin: "User", reason: str = "") -> str:
+        """Админ отклоняет заявку о поимке. reason — необязательная причина: в лог
+        админам и в уведомление «охотнику» (TODO 79)."""
         from core import mode
         murderer = self.get_murderer()
         if not self.is_being_caught():
             return "По этому игроку нет заявки на поимку."
         self.set_murderer(None)
-        self._log(f"❌ {admin.get_name()} отклонил(а) поимку игрока {self.get_name()}")
+        self._log(f"❌ {admin.get_name()} отклонил(а) поимку игрока {self.get_name()}"
+                  + _reason_log_suffix(reason))
         self.notify(mode.t("admin_force_deny_victim"))
         if murderer:
-            murderer.notify(mode.t("admin_force_deny_murderer", name=self.get_name()))
+            murderer.notify(mode.t("admin_force_deny_murderer", name=self.get_name())
+                            + _reason_notify_suffix(reason))
         return f"Поимка игрока {self.get_name()} отклонена."
 
     def admin_reassign_kill(self, admin: "User", new_murderer: "User") -> str:

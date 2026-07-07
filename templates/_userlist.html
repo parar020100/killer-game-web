@@ -145,12 +145,20 @@
       <input type="hidden" name="next" value="{{ back }}">
       <button type="submit" class="btn chip primary">✅ Засчитать</button>
     </form>
-    <form method="post" action="{{ link('/app/users/' ~ u.id ~ '/act') }}"
-          data-confirm="Отклонить заявку о поимке {{ u.name }}?">
-      <input type="hidden" name="action" value="force_deny">
-      <input type="hidden" name="next" value="{{ back }}">
-      <button type="submit" class="btn chip danger">❌ Отклонить</button>
-    </form>
+    {# отклонить заявку с необязательной причиной (уходит в лог и охотнику, TODO 79) #}
+    <details class="mini" data-keep="deny{{ u.id }}">
+      <summary class="btn chip danger">❌ Отклонить</summary>
+      <div class="mini-body">
+        <form method="post" action="{{ link('/app/users/' ~ u.id ~ '/act') }}">
+          <input type="hidden" name="action" value="force_deny">
+          <input type="hidden" name="next" value="{{ back }}">
+          <textarea name="value" rows="2" maxlength="300"
+                    placeholder="причина отклонения (необязательно)"
+                    aria-label="Причина отклонения поимки"></textarea>
+          <button type="submit" class="btn primary wide">❌ Отклонить поимку</button>
+        </form>
+      </div>
+    </details>
   </div>
 {%- endmacro %}
 

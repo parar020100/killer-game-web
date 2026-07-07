@@ -548,7 +548,9 @@ def capture_prompt(user: User):
     else:
         buttons = [
             _btn("✅ Подтвердить", "confirm_capture", "primary"),
-            _btn("🚫 Это не так", "deny_capture", "danger"),
+            # «Это не так» открывает окошко с необязательной причиной отказа —
+            # она уходит в лог админам и в уведомление охотнику (TODO 79).
+            _btn("🚫 Это не так", "deny_capture", "danger", popover="deny_reason"),
         ]
     return {
         "hint": mode.t("caught_hint"),
@@ -846,7 +848,7 @@ def results_text() -> str:
     return "\n".join(lines)
 
 
-def apply_action(action: str, user: User, count: int = 5) -> str:
+def apply_action(action: str, user: User, count: int = 5, reason: str = "") -> str:
     """Применить действие кнопки и вернуть текст-фидбек для показа игроку (flash).
 
     Каждая кнопка обязана давать результат: успех — подтверждение, неуспех —
@@ -986,7 +988,7 @@ def apply_action(action: str, user: User, count: int = 5) -> str:
         elif action == "confirm_capture":
             ok, msg = user.confirm_capture()
         else:
-            ok, msg = user.deny_capture()
+            ok, msg = user.deny_capture(reason)
         return ("✅ " if ok else "⚠️ ") + msg
     # "noop" / незнакомое — просто перерисовать без плашки
     return ""
@@ -1828,7 +1830,7 @@ _USER_ACTIONS = {
     "take_life":     (User.take_life,           False),
     "randomize_order": (User.admin_randomize_order, True),
     "force_accept":  (User.admin_force_accept,  True),
-    "force_deny":    (User.admin_force_deny,    False),
+    # force_deny обрабатывается отдельно (принимает необязательную причину, TODO 79).
 }
 
 
@@ -1988,6 +1990,9 @@ def user_action(request: Request, uid: int, action: str = Form(...),
                 flash = f"⚠️ Игрок с позицией №{value} не найден — поимка не переназначена."
             else:
                 flash = target.admin_reassign_kill(admin, new_m)
+    elif action == "force_deny":
+        # Отклонить заявку о поимке; value — необязательная причина (в лог + охотнику).
+        flash = target.admin_force_deny(admin, value)
     elif action == "delete":
         # нельзя удалить себя, дефолт-админа или действующего игрока (как в боте:
         # admin_drop_user требует НЕ is_player — сначала убрать из игры).
@@ -2118,10 +2123,12 @@ async def join_submit(request: Request):
 
 
 @app.post("/act")
-def act(request: Request, action: str = Form(...), count: str = Form("5")):
+def act(request: Request, action: str = Form(...), count: str = Form("5"),
+        reason: str = Form("")):
     """Применить действие текущего пользователя и вернуться (Post/Redirect/Get).
 
     ``count`` используют действия с тестовыми пользователями (сколько создать).
+    ``reason`` — необязательная причина (напр. при отказе «Это не так», TODO 79).
     """
     user = current_user(request)
     if user is None:
@@ -2130,7 +2137,7 @@ def act(request: Request, action: str = Form(...), count: str = Form("5")):
         n = int(count)
     except (TypeError, ValueError):
         n = 5
-    flash = apply_action(action, user, count=n)
+    flash = apply_action(action, user, count=n, reason=reason)
     if flash:
         request.session["flash"] = flash
     return _redirect(request, "/app")

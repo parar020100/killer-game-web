@@ -430,6 +430,19 @@
   }
   .mini-body.msg textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
+  /* окошко «причина отказа» (TODO 79): textarea в теле попапа; в клавиатуре — как
+     testpop, занимает одну ячейку сетки, тело всплывает поверх. */
+  .mini-body textarea {
+    width: 100%; font: inherit; font-size: 12.5px; padding: 7px 9px; resize: vertical;
+    min-height: 56px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--btn-bg); color: var(--text);
+  }
+  .mini-body textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .mini-body.denybody { width: 300px; max-width: calc(100vw - 28px); }
+  .mini-body.denybody form { flex-direction: column; align-items: stretch; }
+  .keyboard .mini.denypop { grid-column: auto; position: relative; }
+  .keyboard .mini.denypop > summary { width: 100%; }
+
   /* «окошко» тестовых пользователей — компактная кнопка в пол-строки (п.64):
      занимает одну ячейку сетки; тело-форма всплывает поверх (position:absolute). */
   .keyboard .mini.testpop { grid-column: auto; position: relative; }
@@ -519,6 +532,20 @@
               </form>
               <form method="post" action="{{ link('/act') }}" data-confirm="Удалить всех тестовых пользователей (test…) из системы? Это необратимо.">
                 <button type="submit" name="action" value="del_test_users" class="btn wide danger">🗑️ Удалить тестовых пользователей</button>
+              </form>
+            </div>
+          </details>
+          {% elif b.popover == 'deny_reason' %}
+          {# «Это не так»: окошко с необязательной причиной отказа (TODO 79) #}
+          <details class="mini denypop{% if b.full %} full{% endif %}" data-keep="denyreason">
+            <summary class="btn danger{% if b.full %} full{% endif %}">{{ b.label }}</summary>
+            <div class="mini-body denybody">
+              <form method="post" action="{{ link('/act') }}">
+                <input type="hidden" name="action" value="{{ b.action }}">
+                <textarea name="reason" rows="2" maxlength="300"
+                          placeholder="почему не так? (необязательно)"
+                          aria-label="Причина отказа"></textarea>
+                <button type="submit" class="btn danger wide">🚫 Отклонить поимку</button>
               </form>
             </div>
           </details>
