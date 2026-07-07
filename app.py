@@ -86,6 +86,11 @@ def bootstrap_root():
 # Создание root и печать ссылки — при запуске (можно отключить как и автоинициализацию БД).
 if not os.getenv("NO_INITDB"):
     bootstrap_root()
+    # После обновления (git pull + перезапуск) — один раз отметить смену сборки в
+    # ADMIN LOG «сборка обновлена: old_sha → new_sha» (TODO 82).
+    _build_change = version.detect_build_change()
+    if _build_change:
+        admin_log.log(f"🆙 Сборка обновлена: {_build_change[0]} → {_build_change[1]}")
 
 _NAME_RE = re.compile(r"^[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё \-]*$")
 
@@ -270,6 +275,19 @@ def _redirect(request: Request, url: str, status_code: int = 303):
     return RedirectResponse(
         url=_link_fn(_tab_user_param(request))(url),
         status_code=status_code)
+
+
+def _reloading_page(request: Request, title_msg: str, sub_msg: str,
+                    seconds: int = 5, target: str = "/"):
+    """Промежуточная страница с обратным отсчётом → уводит на страницу входа (TODO 82).
+
+    Показывается после перезапуска / обновления / переключения игры: пока приложение
+    недоступно, пользователь видит счётчик и через `seconds` секунд переходит на
+    `target` (по умолчанию «/» — страница входа), а не на недоступный дашборд."""
+    return templates.TemplateResponse(
+        request, "reloading.html",
+        {"title_msg": title_msg, "sub_msg": sub_msg,
+         "seconds": seconds, "target": target})
 
 
 _URL_RE = re.compile(r"(https?://[^\s]+)")
@@ -1416,7 +1434,9 @@ async def settings_save(request: Request):
             # перезапуск, чтобы приложение переоткрыло выбранный файл БД
             from core import control
             control.request("restart")
-            saved = f"Активная игра: {applied}. Приложение перезапускается…"
+            return _reloading_page(
+                request, "Переключаем игру…",
+                f"Активная игра: {applied}. Приложение перезапускается.")
         else:
             saved = "Имя файла БД не задано."
     elif action in ("restart", "stop", "update"):
@@ -1429,12 +1449,13 @@ async def settings_save(request: Request):
             admin_log.log(f"🔁 {user.get_name()} инициировал(а) {labels[action]} приложения")
             msg = (f"🔁 Команда на {labels[action]} отправлена. "
                    "Применится в течение пары секунд.")
-            # «Обновить»/«Перезагрузить» — уводим на домашнюю страницу (дашборд),
-            # а сообщение показываем всплывающим тостом сайта (п.63). «Выключить»
-            # оставляем на странице настроек — после него приложение недоступно.
+            # «Обновить»/«Перезагрузить» — показываем страницу с обратным отсчётом,
+            # которая уводит на страницу входа (TODO 82): пока приложение недоступно,
+            # пользователь ждёт, а не видит недоступный дашборд. «Выключить» оставляем
+            # на странице настроек — после него приложение недоступно совсем.
             if action in ("update", "restart"):
-                request.session["flash"] = msg
-                return _redirect(request, "/app")
+                title = "Обновляем приложение…" if action == "update" else "Перезапускаем приложение…"
+                return _reloading_page(request, title, msg)
             saved = msg
         else:
             saved = "Неизвестная команда управления."

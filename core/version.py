@@ -29,3 +29,31 @@ def _read_build_sha() -> str:
 
 # Кэш: вычисляется один раз при импорте модуля (при старте приложения).
 BUILD_SHA = _read_build_sha()
+
+# Файл, где запоминаем SHA предыдущего запуска — чтобы после обновления (git pull +
+# перезапуск) заметить смену сборки и один раз записать её в ADMIN LOG (TODO 82).
+_LAST_BUILD_FILE = _BASE_DIR / "data" / "last_build.sha"
+
+
+def detect_build_change() -> tuple[str, str] | None:
+    """Сравнить текущий SHA сборки с сохранённым при прошлом запуске.
+
+    Возвращает `(old_sha, new_sha)`, если сборка изменилась (был сохранён другой
+    непустой SHA), иначе None. Всегда обновляет файл текущим SHA. Если SHA прочитать
+    не удалось (не git-репозиторий) — ничего не делаем."""
+    if not BUILD_SHA:
+        return None
+    old = ""
+    try:
+        old = _LAST_BUILD_FILE.read_text(encoding="utf-8").strip()
+    except OSError:
+        pass
+    if old != BUILD_SHA:
+        try:
+            _LAST_BUILD_FILE.parent.mkdir(parents=True, exist_ok=True)
+            _LAST_BUILD_FILE.write_text(BUILD_SHA, encoding="utf-8")
+        except OSError:
+            pass
+    if old and old != BUILD_SHA:
+        return old, BUILD_SHA
+    return None
