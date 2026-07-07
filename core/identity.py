@@ -105,11 +105,24 @@ class Identity:
             from core import tg_send
             if tg_send.send(uid, text, silent=silent):
                 return
+            if tg_send.enabled():   # бот настроен, но доставка не удалась (блок/ошибка)
+                self._log_undelivered("Telegram")
         elif platform == "vk" and str(uid).isdigit():
             from core import vk_send
             if vk_send.send(uid, text, silent=silent):
                 return
+            if vk_send.enabled():
+                self._log_undelivered("VK")
         # 'local' (самостоятельный веб-чат) и любые прочие каналы, а также откат при
         # неудачной отправке — в файл эмуляции чата (читается страницей /chat).
         from core.chat import add_bot_message
         add_bot_message(uid, text)
+
+    def _log_undelivered(self, platform_label: str):
+        """Уведомление не доставлено в настроенный канал (бот заблокирован игроком,
+        сетевой сбой и т.п.) — в ADMIN LOG, чтобы админ видел «глухих» игроков (TODO 85).
+        Только для реального сбоя: если бот просто выключен/без токена — не логируем."""
+        from core import admin_log
+        who = self.get_name() or self.get_username() or self.get_platform_uid()
+        admin_log.log(f"❌ Уведомление игроку {who} ({platform_label}) не доставлено "
+                      "(бот заблокирован или недоступен).")

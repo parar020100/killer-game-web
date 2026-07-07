@@ -84,6 +84,9 @@ def link_identity(identity: Identity, target_user_id: int):
         execute("DELETE FROM user WHERE id = ?", (source_id,))
     target = User.by_id(target_user_id)
     label = identity.label()
+    # Успешное объединение каналов — в ADMIN LOG (TODO 85; раньше логировалась только отвязка).
+    from core import admin_log
+    admin_log.log(f"🔗 Канал {label} привязан к аккаунту «{target.get_name()}»")
     return True, f"✅ Канал привязан к аккаунту «{target.get_name()}»: {label}"
 
 
