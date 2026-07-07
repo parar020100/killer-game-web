@@ -1838,7 +1838,7 @@ def _notify_retargets(before, reason_key=None):
         new = u.get_target_id()
         if new and before.get(u.id) != new:
             if reason:
-                u.notify(reason + "\n🎯 Откройте приложение, чтобы увидеть новую цель.")
+                u.notify(reason + "\n🎯 Откройте приложение, чтобы узнать новую цель.")
             else:
                 notify_target(u, changed=True)
 
