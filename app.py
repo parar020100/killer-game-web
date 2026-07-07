@@ -390,7 +390,7 @@ def _player_action_buttons(user: User, game: Game):
     """Единый постоянный набор игровых кнопок игрока/не-игрока.
 
     Всегда одни и те же слоты; недоступные по состоянию — бледно-серые с подсказкой.
-    Различается только смысл главного слота: не в игре — «Зарегистрироваться»,
+    Различается только смысл главного слота: не в игре — «Присоединиться к игре»,
     в игре — «Сообщить о поимке цели» (как в боте b_join / b_gotcha).
     """
     is_player = user.is_player()
@@ -400,10 +400,10 @@ def _player_action_buttons(user: User, game: Game):
     # Главный слот — на всю ширину.
     if not is_player:
         if game.is_registration_open():
-            b.append(_btn("🟢 Зарегистрироваться", href="/app/join",
+            b.append(_btn("🟢 Присоединиться к игре", href="/app/join",
                           kind="primary", full=True))
         else:
-            b.append(_btn("🟢 Зарегистрироваться", disabled=True, full=True,
+            b.append(_btn("🟢 Присоединиться к игре", disabled=True, full=True,
                           note="Регистрация сейчас закрыта — дождитесь, когда "
                                "организаторы её откроют."))
     elif not started:
