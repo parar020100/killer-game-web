@@ -417,7 +417,7 @@ def _player_action_buttons(user: User, game: Game):
         b.append(_btn(mode.t("report_btn"), disabled=True, full=True,
                       note="Вы выбыли из игры — ловить цель больше нельзя."))
     elif user.is_awaiting_confirmation():
-        b.append(_btn("✖️ Отменить заявку", "cancel_capture", full=True))
+        b.append(_btn(mode.t("cancel_capture_btn"), "cancel_capture", full=True))
     elif user.get_target_user():
         # Если включён фото-пруф — ведём на страницу с загрузкой фото, иначе
         # обычная кнопка-действие (мгновенная заявка).
@@ -447,7 +447,7 @@ def _player_game_split(user: User):
              f"💚 Живых игроков: <strong>{game.count_alive()}</strong>"]
     if not user.is_alive():
         lines.append("")
-        lines.append("☠️ <em>Вы выбыли из игры.</em> Спасибо за участие!")
+        lines.append(mode.t("status_out"))
         return lines, ""
     # На паузе цель не показывается (как в боте): игровые действия заморожены.
     if game.is_paused():
@@ -918,9 +918,10 @@ def apply_action(action: str, user: User, count: int = 5) -> str:
             return "ℹ️ Вы и так не участвуете в игре."
         was_alive = user.is_alive()
         before = _snapshot_targets()
+        score = user.get_score()   # до leave(): он обнуляет счёт
         user.leave()
         admin_log.log(f"➖ {who} вышел(ла) из игры")
-        user.notify("🚪 Вы вышли из игры.")
+        user.notify(mode.t("leave_self", score=score))
         # Если игра шла, а игрок был жив — чинить круг (в боте выход НЕ оживляет
         # очередь): пересобрать цели, уведомить «охотника» выбывшего о смене цели и
         # проверить конец игры.

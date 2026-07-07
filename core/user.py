@@ -386,8 +386,13 @@ class User:
         if not self.is_alive():
             return False, "Вы выбыли из игры."
         victim = self.get_target_user()
-        if victim is None or not victim.is_alive():
+        if victim is None:
             return False, "Сейчас у вас нет активной цели."
+        if not victim.is_alive():
+            # Цель уже выбыла (напр. устранена админом до пересборки круга): как в
+            # боте — сообщаем и тут же освежаем свою цель на следующего живого.
+            self.update_target_quiet()
+            return False, mode.t("target_already_dead")
         if victim.is_being_caught():
             return False, mode.t("err_already_pending")
 
