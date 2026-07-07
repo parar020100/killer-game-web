@@ -615,8 +615,15 @@ class User:
         return f"Игрок {self.get_name()} добавлен в очередь на оживление."
 
     def take_life(self, admin: "User") -> str:
+        # Как give_life_cancel в боте: проверить, что игрок реально ждёт возрождения,
+        # и уведомить его об отмене.
+        if self.is_alive():
+            return "Игрок в игре — он не в очереди на возрождение."
+        if not self.is_queued_for_revival():
+            return f"Игрок {self.get_name()} не в очереди на оживление."
         self.revive_queue_remove()
         self._log(f"🚫 {admin.get_name()} отменил(а) шанс возрождения игроку {self.get_name()}")
+        self.notify("☠️ Администратор отменил ваш шанс на возрождение в игре.")
         return f"Игрок {self.get_name()} убран из очереди на оживление."
 
     def delete_from_system(self, admin: "User") -> str:

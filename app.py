@@ -591,7 +591,8 @@ def admin_management_buttons(user: User):
     end_note = "Завершить или сбросить игру можно только во время паузы — сначала поставьте паузу."
     b.append(_btn("🏁 Завершить игру", "end_game" if paused else None, "danger",
                   disabled=not paused, note=end_note,
-                  confirm="Завершить игру и разослать итоги всем?"))
+                  confirm="Завершить игру: разослать итоги всем и сбросить игру? "
+                          "Все игроки будут сняты с игры."))
     b.append(_btn("♻️ Сбросить игру", "reset_game" if paused else None, "danger",
                   disabled=not paused, note=end_note,
                   confirm="Сбросить игру? Все игроки будут сняты с игры."))
@@ -838,6 +839,8 @@ def apply_action(action: str, user: User, count: int = 5) -> str:
             return "⛔ Это действие доступно только организаторам."
 
     if action == "open_reg":
+        if game.is_registration_open():
+            return "ℹ️ Регистрация уже открыта."
         if game.is_started() and not game.is_paused():
             return "⚠️ Открыть регистрацию нельзя, пока идёт игра. Поставьте паузу."
         game.open_registration()
@@ -900,11 +903,13 @@ def apply_action(action: str, user: User, count: int = 5) -> str:
     elif action == "end_game":
         if not game.is_paused():
             return "⚠️ Завершить игру можно только во время паузы — сначала поставьте паузу."
-        game.pause()
+        # Как в боте (admin_end_game): разослать итоги ВСЕМ, затем сбросить игру.
+        results = results_text()   # считаем ДО сброса — потом игроков не будет
         admin_log.log(f"🏁 {who} завершил(а) игру, разосланы итоги")
-        _broadcast("🏁 Игра завершена! Итоги:\n\n" + results_text(),
-                   players_only=False)
-        return "🏁 Игра завершена, итоги разосланы всем."
+        _broadcast("🏁 Игра завершена! Итоги:\n\n" + results, players_only=False)
+        game.reset()
+        admin_log.log("♻️ Игра автоматически сброшена после завершения")
+        return "🏁 Игра завершена, итоги разосланы, игра сброшена."
     elif action == "leave":
         if not user.is_player():
             return "ℹ️ Вы и так не участвуете в игре."
