@@ -71,5 +71,75 @@
       <button type="submit" class="btn">{{ report_label }}</button>
     </form>
   </main>
+
+  <script>
+  // Сжимаем фото в браузере перед отправкой: уменьшаем до MAX по длинной стороне и
+  // перекодируем в JPEG. Иначе крупные снимки с телефона (5–15 МБ) упираются в лимит
+  // тела запроса nginx (client_max_body_size) и падают с «Entity too large» (413).
+  // Отправка остаётся обычной multipart-формой (серверный код не меняется): просто
+  // подменяем содержимое <input type=file> сжатым файлом. Если сжать не удалось
+  // (напр. браузер не декодировал формат) — уходит оригинал, поведение как раньше.
+  (function () {
+    var form = document.querySelector('form.card');
+    var input = form.querySelector('input[type=file][name=photo]');
+    var btn = form.querySelector('button[type=submit]');
+    var MAX = 1600;        // макс. сторона, px
+    var QUALITY = 0.8;     // качество JPEG
+    var busy = false, done = false;
+
+    form.addEventListener('submit', function (e) {
+      if (done || busy) return;                          // уже сжато / в процессе
+      var file = input.files && input.files[0];
+      if (!file || !/^image\//.test(file.type)) return;  // нет фото — обычная отправка
+      e.preventDefault();
+      busy = true;
+      var orig = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Сжатие фото…';
+
+      compress(file).then(function (blob) {
+        if (blob && blob.size < file.size) setFile(blob);
+      }).catch(function () {
+        /* не удалось сжать — отправим оригинал */
+      }).then(function () {
+        done = true; busy = false;
+        btn.disabled = false;
+        btn.textContent = orig;
+        if (form.requestSubmit) form.requestSubmit(); else form.submit();
+      });
+    });
+
+    function setFile(blob) {
+      try {
+        var dt = new DataTransfer();
+        dt.items.add(new File([blob], 'proof.jpg', { type: 'image/jpeg' }));
+        input.files = dt.files;
+      } catch (_) { /* старый браузер — оставляем оригинал */ }
+    }
+
+    function compress(file) {
+      return new Promise(function (resolve, reject) {
+        var url = URL.createObjectURL(file);
+        var img = new Image();
+        img.onload = function () {
+          URL.revokeObjectURL(url);
+          var w = img.naturalWidth, h = img.naturalHeight;
+          if (!w || !h) return reject();
+          var scale = Math.min(1, MAX / Math.max(w, h));
+          var canvas = document.createElement('canvas');
+          canvas.width = Math.round(w * scale);
+          canvas.height = Math.round(h * scale);
+          var ctx = canvas.getContext('2d');
+          if (!ctx) return reject();
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          canvas.toBlob(function (blob) { blob ? resolve(blob) : reject(); },
+                        'image/jpeg', QUALITY);
+        };
+        img.onerror = function () { URL.revokeObjectURL(url); reject(); };
+        img.src = url;
+      });
+    }
+  })();
+  </script>
 </body>
 </html>
