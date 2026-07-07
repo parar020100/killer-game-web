@@ -49,12 +49,10 @@ def send(chat_id, text: str, with_menu: bool = True, silent: bool = False) -> bo
 
 def _reply_markup(chat_id) -> dict:
     """Inline-клавиатура под каждым уведомлением: «открыть меню» (ссылка с постоянным
-    токеном получателя — сразу открывает игру) и «новая ссылка для входа» (callback →
-    обрабатывает tg_bot.py)."""
+    токеном получателя — сразу открывает игру в его аккаунте)."""
     from core import botcommon
     return {"inline_keyboard": [
         [{"text": botcommon.MENU_BUTTON, "url": botcommon.menu_url_for("tg", chat_id)}],
-        [{"text": botcommon.NEW_LINK_BUTTON, "callback_data": botcommon.NEW_LINK_CALLBACK}],
     ]}
 
 

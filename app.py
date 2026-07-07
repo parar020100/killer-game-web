@@ -1048,21 +1048,20 @@ def chat_start(request: Request, username: str):
     # у него могут быть отдельные ссылки и для Telegram/VK — это разные аккаунты,
     # пока их явно не объединят кодом привязки («Настройки профиля»).
     ident = user.identity("local")
-    reissued = auth.has_permanent_token(ident.id)
-    chat.add_user_message(username, "/start")
-    token = auth.set_permanent_token(ident.id)
+    chat.add_user_message(username, "Начать")
+    # /start НЕ сбрасывает ссылку — переиспользуем существующий токен (смена — в профиле).
+    token = auth.get_or_create_permanent_token(ident.id) or auth.set_permanent_token(ident.id)
     link = f"{request.base_url}login?token={token}"
-    note = "Прежняя ссылка больше не работает.\n" if reissued else ""
     # В историю (файл) пишем текст без самой ссылки — токен туда попадать не должен
     # (add_bot_message замаскирует любой token=..., а мы и вовсе не даём ссылку).
     # Настоящую ссылку показываем один раз через сессию (см. chat_view).
     chat.add_bot_message(
         username,
-        "Ваша постоянная ссылка для входа в игру «Папарацци» отправлена ниже.\n"
-        f"{note}Она работает всегда и не имеет срока, но в истории переписки "
-        "не сохраняется (в целях безопасности). Никому её не пересылайте — по ней "
-        "входят в вашу учётку. Нажмёте /start ещё раз — будет выдана новая, "
-        "а старая перестанет работать.",
+        "🕵️ Добро пожаловать в игру «Киллер / Папарацци»!\n"
+        "Ссылка для входа отправлена ниже (в истории переписки не сохраняется — "
+        "в целях безопасности).\n"
+        "Не давайте ссылку другим — по ней входят в вашу учётку.\n"
+        "Сменить ссылку можно на сайте в «Настройках профиля».",
     )
     request.session["fresh_link"] = {"u": username, "link": link}
     return RedirectResponse(url=f"/chat/{username}", status_code=303)

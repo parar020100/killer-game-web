@@ -83,8 +83,8 @@ def handle_message(from_id, text: str):
     ident = user.identity("vk")
 
     if low in _START_WORDS or botcommon.is_login_request(text):
-        link, reissued = botcommon.issue_login_link(ident)
-        _send(from_id, botcommon.welcome_text(link, reissued))
+        link = botcommon.login_link(ident)
+        _send(from_id, botcommon.welcome_text(link))
         log.info("start: user id=%s vk=%s", user.id, from_id)
         return
     if low.startswith("/link"):

@@ -96,13 +96,13 @@
       {% endfor %}
     </div>
     {% else %}
-    <div class="empty">Сообщений пока нет.<br>Нажмите <b>/start</b>, чтобы бот прислал ссылку для входа.</div>
+    <div class="empty">Сообщений пока нет.<br>Нажмите <b>«Начать»</b>, чтобы бот прислал ссылку для входа.</div>
     {% endif %}
     </div>
 
     <div class="composer">
       <form method="post" action="/chat/{{ username }}/start">
-        <button type="submit" class="cmd" title="получить постоянную ссылку для входа">🔗 /start</button>
+        <button type="submit" class="cmd" title="получить ссылку для входа">▶️ Начать</button>
       </form>
     </div>
     {% include "_footer.html" %}

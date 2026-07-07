@@ -26,14 +26,11 @@ def enabled() -> bool:
 
 def _menu_keyboard(user_id) -> str:
     """Inline-клавиатура под уведомлением: «открыть меню» (ссылка с постоянным токеном
-    получателя — сразу открывает игру) и «новая ссылка для входа» (text-кнопка — её
-    нажатие бот принимает как запрос новой ссылки)."""
+    получателя — сразу открывает игру в его аккаунте)."""
     from core import botcommon
     return json.dumps({"inline": True, "buttons": [
         [{"action": {"type": "open_link", "link": botcommon.menu_url_for("vk", user_id),
                      "label": botcommon.MENU_BUTTON}}],
-        [{"action": {"type": "text", "label": botcommon.NEW_LINK_BUTTON,
-                     "payload": "{}"}}],
     ]}, ensure_ascii=False)
 
 

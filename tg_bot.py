@@ -20,8 +20,7 @@ import logging
 
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
-    Application, CommandHandler, MessageHandler, CallbackQueryHandler,
-    ContextTypes, filters,
+    Application, CommandHandler, MessageHandler, ContextTypes, filters,
 )
 
 import config
@@ -49,25 +48,13 @@ def _ensure_user(tg_user):
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/start — привязать identity и выдать постоянную ссылку входа."""
+    """/start — привязать identity и показать ссылку входа (не сбрасывая её)."""
     tg = update.effective_user
     user = _ensure_user(tg)
-    link, reissued = botcommon.issue_login_link(user.identity("tg"))
+    link = botcommon.login_link(user.identity("tg"))
     await update.effective_message.reply_text(
-        botcommon.welcome_text(link, reissued), reply_markup=_KB)
+        botcommon.welcome_text(link), reply_markup=_KB)
     log.info("start: user id=%s tg=%s (@%s)", user.id, tg.id, tg.username)
-
-
-async def new_link_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Нажата inline-кнопка «Новая ссылка для входа» под уведомлением — перевыпуск."""
-    query = update.callback_query
-    await query.answer()
-    tg = update.effective_user
-    user = _ensure_user(tg)
-    link, reissued = botcommon.issue_login_link(user.identity("tg"))
-    await query.message.reply_text(
-        botcommon.welcome_text(link, reissued), reply_markup=_KB)
-    log.info("new_link: user id=%s tg=%s", user.id, tg.id)
 
 
 async def link_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -95,9 +82,20 @@ async def forward_to_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "(нет администраторов).", reply_markup=_KB)
 
 
+# Приветствие на пустом экране чата (кнопка «Начать» в Telegram запускает /start).
+_GREETING = ("🕵️ Игра «Киллер / Папарацци».\n"
+             "Нажмите «Начать», чтобы получить ссылку для входа на сайт.")
+
+
 async def _announce_connected(application):
     """Вызывается после подключения — печатаем явную индикацию, что бот на связи."""
     me = await application.bot.get_me()
+    # Текст на экране пустого чата (до первого /start) — предлагает нажать «Начать».
+    try:
+        await application.bot.set_my_description(_GREETING)
+        await application.bot.set_my_short_description(_GREETING)
+    except Exception as exc:  # noqa: BLE001 — приветствие не критично для работы
+        log.warning("не удалось задать описание бота: %s", exc)
     log.info("✅ Telegram-бот успешно подключён: @%s (id %s). Ожидаю сообщения…",
              me.username, me.id)
 
@@ -112,8 +110,6 @@ def main():
            .post_init(_announce_connected).build())
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("link", link_cmd))
-    app.add_handler(CallbackQueryHandler(
-        new_link_cb, pattern=f"^{botcommon.NEW_LINK_CALLBACK}$"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_to_admins))
     log.info("Telegram-бот запускается (long polling)… Ctrl+C для остановки.")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
