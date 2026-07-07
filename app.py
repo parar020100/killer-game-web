@@ -914,13 +914,14 @@ def apply_action(action: str, user: User, count: int = 5) -> str:
         if not user.is_player():
             return "ℹ️ Вы и так не участвуете в игре."
         was_alive = user.is_alive()
+        freed_order = user.get_game_order_raw()   # слот до сброса в leave()
         user.leave()
         admin_log.log(f"➖ {who} вышел(ла) из игры")
         user.notify("🚪 Вы вышли из игры.")
-        # Если игра шла, а игрок был жив — чинить круг: пересобрать цели,
-        # подтянуть очередь возрождения и проверить конец игры.
+        # Если игра шла, а игрок был жив — чинить круг: вернуть одного из очереди в
+        # освободившийся слот, пересобрать цели и проверить конец игры.
         if was_alive and game.is_started():
-            game.try_revive_one()
+            game.try_revive_one(at_order=freed_order)
             game.reassign_targets()
             if game.check_finished():
                 game.announce_winner()

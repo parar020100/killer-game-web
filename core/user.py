@@ -450,7 +450,9 @@ class User:
 
         from core.game import Game
         game = Game()
-        game.try_revive_one()      # освободилось место — вернём одного из очереди
+        # Освободилось место убитого — вернём одного из очереди В ЕГО СЛОТ, чтобы
+        # киллер (self) получил целью воскрешённого (как в боте).
+        game.try_revive_one(at_order=victim.get_game_order_raw())
         game.reassign_targets()
         finished = game.check_finished()
 
@@ -475,12 +477,16 @@ class User:
 
     # --- действия администратора над игроком ------------------------------
 
-    def _finish_structural_change(self, was_alive: bool):
-        """Общий хвост админ-действий, меняющих состав живых: возрождение/круг/итог."""
+    def _finish_structural_change(self, was_alive: bool, at_order=None):
+        """Общий хвост админ-действий, меняющих состав живых: возрождение/круг/итог.
+
+        `at_order` — освободившийся слот в круге (game_order выбывшего), чтобы
+        воскрешённого поставить на его место (см. `Game.try_revive_one`).
+        """
         from core.game import Game
         game = Game()
         if was_alive and game.is_started():
-            game.try_revive_one()      # освободилось место — вернём одного из очереди
+            game.try_revive_one(at_order=at_order)   # вернём одного из очереди в слот
             game.reassign_targets()
             if game.check_finished():
                 game.announce_winner()
@@ -491,12 +497,13 @@ class User:
             return "Пользователь не участвует в игре."
         from core import mode
         was_alive = self.is_alive()
+        freed_order = self.get_game_order_raw()   # слот убитого — для воскрешения в него
         self._log(mode.t("admin_kill_log", admin=admin.get_name(), name=self.get_name()))
         self.notify(mode.t("admin_kill_notify"))
         self.set_alive(False)
         self.set_target_id(None)
         self.set_murderer(None)
-        self._finish_structural_change(was_alive)
+        self._finish_structural_change(was_alive, at_order=freed_order)
         return f"Игрок {self.get_name()} устранён из игры."
 
     def admin_revive(self, admin: "User") -> str:
@@ -523,10 +530,11 @@ class User:
         if not self.is_player():
             return "Пользователь и так не в игре."
         was_alive = self.is_alive()
+        freed_order = self.get_game_order_raw()   # слот до сброса в leave()
         self._log(f"👋 {admin.get_name()} удалил(а) игрока {self.get_name()} из игры")
         self.notify("👋 Администратор удалил вас из игры.")
         self.leave()
-        self._finish_structural_change(was_alive)
+        self._finish_structural_change(was_alive, at_order=freed_order)
         return f"Игрок {self.get_name()} удалён из игры."
 
     def admin_set_score(self, admin: "User", value: int) -> str:
@@ -630,11 +638,12 @@ class User:
         """Удалить пользователя из БД (identity/логин каскадно, ссылки — обнулить)."""
         name = self.get_name()
         was_alive = self.is_alive()
+        freed_order = self.get_game_order_raw()
         self._log(f"🗑️ {admin.get_name()} удалил(а) пользователя {name} из системы")
         execute("UPDATE user SET target = NULL WHERE target = ?", (self.id,))
         execute("UPDATE user SET killed_by = NULL WHERE killed_by = ?", (self.id,))
         execute("DELETE FROM user WHERE id = ?", (self.id,))
-        self._finish_structural_change(was_alive)
+        self._finish_structural_change(was_alive, at_order=freed_order)
         return f"Пользователь {name} удалён из системы."
 
     # --- самообслуживание учётки («забыть меня») --------------------------

@@ -142,8 +142,16 @@ class Game:
             "WHERE u.is_alive = 0 AND u.is_player = 1 ORDER BY rq.id ASC LIMIT 1")
         return User(row["user_id"]) if row else None
 
-    def try_revive_one(self):
-        """Вернуть в игру одного игрока из очереди (при выбытии освободилось место)."""
+    def try_revive_one(self, at_order=None):
+        """Вернуть в игру одного игрока из очереди (при выбытии освободилось место).
+
+        `at_order` — `game_order` только что выбывшего игрока (освободившийся «слот»
+        в круге). Воскрешённого ставим В ЭТОТ слот (со сдвигом при конфликте), чтобы
+        он занял место выбывшего, а «киллер» выбывшего получил целью именно
+        воскрешённого — как в боте (`try_revive_all_queued_players` вставляет
+        оживлённого в разрыв на месте убитого). Без `at_order` (совместимость) —
+        воскрешённый остаётся на своей прежней позиции.
+        """
         p = self.revive_queue_next()
         if p is None:
             return None
@@ -151,7 +159,9 @@ class Game:
         p.set_alive(True)
         p.set_murderer(None)
         p.revive_queue_remove()
-        if p.get_game_order_raw() is None:
+        if at_order is not None:
+            p.set_game_order(at_order, increase=True)   # занять слот выбывшего
+        elif p.get_game_order_raw() is None:
             p.randomize_game_order()
         self.reassign_targets()
         admin_log.log(f"🧟 Игрок {p.get_name()} автоматически возрождён из очереди.")
