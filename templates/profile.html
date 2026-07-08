@@ -102,8 +102,8 @@
       <p class="hint">Имя видят организаторы в списке участников. Меняйте, если ошиблись
          при регистрации.</p>
       <label>
-        Имя и фамилия
-        <input type="text" name="real_name" value="{{ values.real_name }}" placeholder="Настоящее имя и фамилия" maxlength="60">
+        Настоящее имя и фамилия
+        <input type="text" name="real_name" value="{{ values.real_name }}" placeholder="Например: Иван Иванов" maxlength="60">
       </label>
       {% if errors.real_name %}<div class="err">{{ errors.real_name }}</div>{% endif %}
       {% for f in extra_fields %}

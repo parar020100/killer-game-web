@@ -63,9 +63,9 @@
 
     <form method="post" action="{{ link('/app/join') }}" autocomplete="off" style="display:flex;flex-direction:column;gap:16px;">
       <label class="{{ 'bad' if errors.real_name else '' }}">
-        Имя и фамилия
+        Настоящее имя и фамилия
         <input type="text" name="real_name" value="{{ values.real_name or '' }}"
-               placeholder="Настоящее имя и фамилия" maxlength="50" autofocus>
+               placeholder="Например: Иван Иванов" maxlength="50" autofocus>
         {% if errors.real_name %}<span class="err">{{ errors.real_name }}</span>{% endif %}
       </label>
 
