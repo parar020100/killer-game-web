@@ -26,7 +26,7 @@
       {% if u.order is not none %}<div><dt>🔢 Позиция</dt><dd>{{ u.order }}</dd></div>{% endif %}
       {% if u.kills is not none %}<div><dt>{{ game_icon }} Поймал целей</dt><dd>{{ u.kills }}</dd></div>{% endif %}
       {% if u.killed_by %}<div><dt>{{ '⏳ Заявка о поимке' if u.kill_pending else '☠️ Кем пойман' }}</dt><dd><a class="kb-link" data-jump="{{ u.killed_by_id }}" role="button" tabindex="0" title="перейти к этому игроку">{{ u.killed_by }}</a></dd></div>{% endif %}
-      {% if u.real_name %}<div><dt>🧑 Настоящее имя</dt><dd>{{ u.real_name }}</dd></div>{% endif %}
+      {% if u.real_name %}<div><dt>🧑 Настоящее имя и фамилия</dt><dd>{{ u.real_name }}</dd></div>{% endif %}
       {# привязанные профили разных типов: сначала Telegram, потом VK #}
       {% for a in u.accounts %}
       <div><dt>{{ a.icon }} {{ a.platform }}</dt><dd>{% if a.username %}@{{ a.username }}{% endif %}{% if a.name %}{{ ' · ' if a.username else '' }}{{ a.name }}{% endif %}{% if not a.username and not a.name %}—{% endif %}</dd></div>
