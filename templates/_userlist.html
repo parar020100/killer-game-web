@@ -164,7 +164,7 @@
   </div>
 {%- endmacro %}
 
-{% macro userlist(players, non_players, back) -%}
+{% macro userlist(players, non_players, back, stats=None) -%}
   {# живой поиск: применяется по мере ввода; Enter и стрелки ‹/› листают совпадения
      (см. _search.html) #}
   <div class="usearch-row">
@@ -188,6 +188,8 @@
   </div>{# /.ulist-scroll #}
 
   <p class="usearch-empty" hidden>Никто не найден.</p>
+  {# Бледная строка-счётчик пользователей по каналам — вне прокрутки, всегда видна. #}
+  {% if stats %}<p class="ucount">Всего: {{ stats.total }} · только TG: {{ stats.only_tg }} · только VK: {{ stats.only_vk }} · TG+VK: {{ stats.both }} · тестовых: {{ stats.test }}</p>{% endif %}
   {# Легенда статусов: эмодзи одни и те же, подписи зависят от режима (см. mode.py). #}
   <p class="legend">{{ legend }}</p>
 {%- endmacro %}

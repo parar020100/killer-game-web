@@ -337,6 +337,7 @@
     background: var(--btn-bg); border-radius: 12px;
   }
   .upanel-body .legend { font-size: 11.5px; color: var(--text-dim); margin: 2px; line-height: 1.7; }
+  .upanel-body .ucount { font-size: 11px; color: var(--text-dim); opacity: .7; margin: 4px 2px 0; text-align: center; }
   /* поле живого поиска над списком + кнопки перехода по совпадениям */
   .usearch-row { display: flex; gap: 6px; align-items: stretch; }
   .usearch {
@@ -583,7 +584,7 @@
   <aside class="userpanel">
     <div data-live="5000" style="display:contents">
     <div class="upanel-body">
-      {% if is_admin and user_list %}{{ ul.userlist(user_list.players, user_list.non_players, '/app') }}{% endif %}
+      {% if is_admin and user_list %}{{ ul.userlist(user_list.players, user_list.non_players, '/app', user_list.stats) }}{% endif %}
     </div>
     </div>
   </aside>

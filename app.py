@@ -1812,10 +1812,26 @@ def secret_page(request: Request):
         return RedirectResponse(url="/", status_code=303)
     # Кто полез в «секрет» — в ADMIN LOG (видно админам, TODO 85).
     admin_log.log(f"🤫 {user.get_name()} открыл(а) «Узнать секрет»")
-    return templates.TemplateResponse(
-        request, "secret.html",
-        _ctx(request, youtube=SECRET_YOUTUBE, rutube=SECRET_RUTUBE),
-    )
+    return templates.TemplateResponse(request, "secret.html", _ctx(request))
+
+
+# Выбор площадки в «секрете» ведёт через сервер (лог, какую именно открыли) и
+# редиректит на внешнее видео. Ключи коротки — 'yt'/'rt'.
+_SECRET_LINKS = {"yt": (SECRET_YOUTUBE, "YouTube"), "rt": (SECRET_RUTUBE, "RuTube")}
+
+
+@app.get("/app/secret/{platform}")
+def secret_open(request: Request, platform: str):
+    user = current_user(request)
+    if user is None:
+        return RedirectResponse(url="/", status_code=303)
+    if platform not in _SECRET_LINKS:
+        return _redirect(request, "/app/secret")
+    url, label = _SECRET_LINKS[platform]
+    # Логируем выбор площадки (но не на префетч — чтобы спекулятивная загрузка не врала).
+    if not _is_prefetch(request):
+        admin_log.log(f"🤫 {user.get_name()} открыл(а) секрет в {label}")
+    return RedirectResponse(url=url, status_code=303)
 
 
 def user_menu_buttons(target: User):
@@ -2146,6 +2162,22 @@ def _user_list_data():
     # Неподтверждённые поимки показываются inline — красной строкой-заявкой прямо
     # над карточкой «жертвы» в списке (по данным карточки: kill_pending + killed_by),
     # см. _userlist.html. Отдельный список pending больше не нужен.
+    # Счётчик пользователей по каналам (для бледной строки под списком): всего,
+    # только TG, только VK, TG+VK, тестовые. Тестовые — это 'local' (без tg/vk),
+    # поэтому в tg/vk-корзины не попадают.
+    only_tg = only_vk = both = test = 0
+    for u in all_users:
+        if _is_test_user(u):
+            test += 1
+        plats = {i.get_platform() for i in u.identities()}
+        has_tg, has_vk = "tg" in plats, "vk" in plats
+        if has_tg and has_vk:
+            both += 1
+        elif has_tg:
+            only_tg += 1
+        elif has_vk:
+            only_vk += 1
+
     return {
         "total_users": len(all_users),
         "total_players": len(players),
@@ -2153,6 +2185,8 @@ def _user_list_data():
         "game_paused": game.is_paused(),
         "players": [row(u) for u in players],
         "non_players": [row(u) for u in non_players],
+        "stats": {"total": len(all_users), "only_tg": only_tg,
+                  "only_vk": only_vk, "both": both, "test": test},
     }
 
 
