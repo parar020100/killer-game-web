@@ -67,7 +67,9 @@
       <p class="hint">Приложите фотографию (селфи) с целью как доказательство поимки.
          Фото сохранится у организаторов. После отправки цель должна будет подтвердить поимку.</p>
       {% if error %}<div class="err">{{ error }}</div>{% endif %}
-      <input type="file" name="photo" accept="image/*" capture="environment" required>
+      {# без capture — на телефоне даёт выбор «снять на камеру ИЛИ выбрать готовое фото»;
+         с capture="environment" мобильный браузер открывал только камеру (см. поддержку). #}
+      <input type="file" name="photo" accept="image/*" required>
       <button type="submit" class="btn">{{ report_label }}</button>
     </form>
   </main>
