@@ -442,7 +442,13 @@ def player_section(user: User):
 
     if not user.is_player():
         status.append("❌ <em>Вы пока не участвуете в игре</em>")
-        status.append(f"👥 Игроков: <strong>{game.count_players()}</strong>")
+        # Во время игры показываем и число живых (админ/зритель раньше его не видел).
+        if game.is_started():
+            status.append(
+                f"💚 {mode.t('alive_count_label')}: <strong>{game.count_alive()}</strong> "
+                f"из {game.count_players()}")
+        else:
+            status.append(f"👥 Игроков: <strong>{game.count_players()}</strong>")
     elif not game.is_started():
         status.append("✅ <em>Вы зарегистрированы, ждём старта игры</em>")
         status.append(f"👥 Игроков: <strong>{game.count_players()}</strong>")
