@@ -332,25 +332,28 @@ def linkify(text: str) -> Markup:
     return Markup(out.replace("\n", "<br>"))
 
 
-# Маркер фото-пруфа в тексте лога: «[фото:<uid охотника>]» — рендерится кнопкой
-# «📷 Открыть фото» (ведёт на фото поимки этого игрока). Ставится там, где логируется
-# приложенное фото поимки (см. capture_submit), чтобы админ мог перепроверить снимок
-# прямо из журнала — в т.ч. при отклонении поимки.
-_PHOTO_MARKER_RE = re.compile(r"\[фото:(\d+)\]")
+# Записи журнала о поимке/заявке начинаются с «<эмодзи> <имя охотника> заявил(а) о
+# поимке/об убийстве …» или «… поймал(а)/убил(а) …». По имени охотника подставляем
+# кнопку «📷 Открыть фото» (если у него есть сохранённый фото-пруф) — работает и для
+# СТАРЫХ записей, т.к. не требует пометок в тексте лога. Имя — до глагола (не жадно).
+_CAPTURE_HUNTER_RE = re.compile(
+    r"^(?:🔪|📸)\s+(.+?)\s+(?:заявил\(а\) о поимке|заявил\(а\) об убийстве|"
+    r"поймал\(а\)|убил\(а\))(?=\s)")
 
 
-def render_log_html(body: str) -> Markup:
-    """Отрисовать строку журнала: ссылки кликабельны + маркер [фото:N] → кнопка фото."""
-    parts, last = [], 0
-    for mo in _PHOTO_MARKER_RE.finditer(body or ""):
-        parts.append(str(linkify(body[last:mo.start()])))
-        uid = mo.group(1)
-        parts.append(
-            f'<a class="logphoto" href="/app/users/{uid}/photo" '
-            f'target="_blank" rel="noopener">📷 Открыть фото</a>')
-        last = mo.end()
-    parts.append(str(linkify(body[last:])))
-    return Markup("".join(parts))
+def render_log_html(body: str, photo_by_name=None) -> Markup:
+    """Отрисовать строку журнала: ссылки кликабельны; у записей о поимке/заявке —
+    кнопка «Открыть фото», если у охотника есть фото-пруф (photo_by_name = {имя: uid})."""
+    body = body or ""
+    html = str(linkify(body))
+    if photo_by_name:
+        m = _CAPTURE_HUNTER_RE.match(body)
+        if m:
+            uid = photo_by_name.get(m.group(1).strip())
+            if uid:
+                html += (f'<a class="logphoto" href="/app/users/{uid}/photo" '
+                         f'target="_blank" rel="noopener">📷 Открыть фото</a>')
+    return Markup(html)
 
 
 # ---------------------------------------------------------------------------
@@ -573,9 +576,10 @@ def game_log_entries(limit: int = 40):
 
     Возвращает список {ts, html} от новых к старым (read_messages уже новые сверху).
     """
+    photo_by_name = _photo_hunters()
     out = []
     for m in admin_log.read_messages()[:limit]:
-        out.append({"ts": m["ts"], "html": render_log_html(m["body"])})
+        out.append({"ts": m["ts"], "html": render_log_html(m["body"], photo_by_name)})
     return out
 
 
@@ -1764,6 +1768,23 @@ def _latest_capture_photo(user: User):
     return files[0] if files else None
 
 
+def _photo_hunters() -> dict:
+    """{имя игрока: uid} для тех, у кого есть сохранённый фото-пруф поимки.
+
+    Используется, чтобы в записях журнала о поимке/заявке показать кнопку «Открыть
+    фото» (в т.ч. у старых записей). Директорию фото читаем один раз."""
+    d = _photos_dir()
+    if not d.is_dir():
+        return {}
+    names = [p.name for p in d.iterdir() if p.is_file()]
+    out = {}
+    for u in User.all():
+        prefix = _photo_prefix(u) + "_"
+        if any(n.startswith(prefix) for n in names):
+            out[u.get_name()] = u.id
+    return out
+
+
 def _save_capture_photo(user: User, upload) -> bool:
     """Сохранить фото-пруф поимки в data/photos/ (как файлы бота). True при успехе."""
     if upload is None or not getattr(upload, "filename", ""):
@@ -1820,9 +1841,7 @@ async def capture_submit(request: Request):
             _ctx(request, target_name=target.get_name(), report_label=mode.t("report_btn"),
                  error=mode.t("photo_required")),
         )
-    # Маркер [фото:uid] → кнопка «Открыть фото» в журнале (для перепроверки при отклонении).
-    admin_log.log(f"🖼️ {user.get_name()} приложил(а) фото-пруф поимки "
-                  f"(цель: {target.get_name()}) [фото:{user.id}]")
+    admin_log.log(f"🖼️ {user.get_name()} приложил(а) фото-пруф поимки цели")
     ok, msg = user.attempt_capture()
     request.session["flash"] = ("✅ " if ok else "⚠️ ") + msg
     return _redirect(request, "/app")
@@ -2365,7 +2384,8 @@ def admin_log_view(request: Request):
     user = current_user(request)
     if user is None or not user.is_admin():
         return _redirect(request, "/app")
-    messages = [{"ts": m["ts"], "html": render_log_html(m["body"])}
+    photo_by_name = _photo_hunters()
+    messages = [{"ts": m["ts"], "html": render_log_html(m["body"], photo_by_name)}
                 for m in admin_log.read_messages()]
     return templates.TemplateResponse(
         request, "admin_log.html", _ctx(request, messages=messages),
