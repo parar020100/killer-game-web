@@ -14,8 +14,10 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-# [время] или [время] тег  — тег опционален (используется чатом: bot / user)
-_HEAD_RE = re.compile(r"^\[(.*?)\](?:\s+(\S+))?$")
+# Строка-заголовок записи: [YYYY-MM-DD HH:MM:SS] с опциональным тегом (bot / user).
+# Формат метки времени строгий — чтобы такая же строка ВНУТРИ сообщения (например в
+# рассылке) не была принята за начало новой записи.
+_HEAD_RE = re.compile(r"^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\](?:\s+(\S+))?$")
 
 
 def append(path: Path, text: str, tag: str = None):
@@ -29,20 +31,22 @@ def append(path: Path, text: str, tag: str = None):
 
 
 def read(path: Path):
-    """Список записей, новые сверху: [{'ts':.., 'tag':.., 'body':..}, ...]."""
+    """Список записей, новые сверху: [{'ts':.., 'tag':.., 'body':..}, ...].
+
+    Записи режутся по строкам-заголовкам `[время]`, а НЕ по пустым строкам — иначе
+    сообщение с пустой строкой внутри (например рассылка) разрывалось бы на части.
+    """
     if not path.exists():
         return []
-    msgs = []
-    for chunk in path.read_text(encoding="utf-8").split("\n\n"):
-        chunk = chunk.strip("\n")
-        if not chunk:
-            continue
-        lines = chunk.split("\n")
-        m = _HEAD_RE.match(lines[0])
+    records = []          # (ts, tag, [строки тела])
+    for line in path.read_text(encoding="utf-8").split("\n"):
+        m = _HEAD_RE.match(line)
         if m:
-            msgs.append({"ts": m.group(1), "tag": m.group(2),
-                         "body": "\n".join(lines[1:]).strip()})
-        else:
-            msgs.append({"ts": "", "tag": None, "body": chunk})
+            records.append([m.group(1), m.group(2), []])
+        elif records:
+            records[-1][2].append(line)
+        # строки до первого заголовка (маловероятно) игнорируем
+    msgs = [{"ts": ts, "tag": tag, "body": "\n".join(body).strip("\n")}
+            for ts, tag, body in records]
     msgs.reverse()
     return msgs
