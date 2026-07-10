@@ -442,22 +442,23 @@ def player_section(user: User):
 
     if not user.is_player():
         status.append("❌ <em>Вы пока не участвуете в игре</em>")
-        # Во время игры показываем и число живых (админ/зритель раньше его не видел).
-        if game.is_started():
-            status.append(
-                f"💚 {mode.t('alive_count_label')}: <strong>{game.count_alive()}</strong> "
-                f"из {game.count_players()}")
-        else:
-            status.append(f"👥 Игроков: <strong>{game.count_players()}</strong>")
     elif not game.is_started():
         status.append("✅ <em>Вы зарегистрированы, ждём старта игры</em>")
-        status.append(f"👥 Игроков: <strong>{game.count_players()}</strong>")
     else:
         # Игра идёт (в т.ч. на паузе) — показываем игровое состояние игрока.
         # Пауза — это НЕ конец игры, поэтому итоги игроку здесь не показываем
         # (их рассылает админ при завершении). Промежуточные итоги — только у админа.
         status_extra, target_html = _player_game_split(user)
         status += status_extra
+
+    # Счётчик игроков — как в статусе бота, виден ВСЕМ (в т.ч. админу/зрителю):
+    # во время игры — всего и сколько живых; при открытой регистрации — сколько
+    # зарегистрировалось; вне игры без регистрации — не показываем.
+    if game.is_started():
+        status.append(f"👥 Игроков: <strong>{game.count_players()}</strong> "
+                      f"(живы: <strong>{game.count_alive()}</strong>)")
+    elif game.is_registration_open():
+        status.append(f"👥 Зарегистрировалось игроков: <strong>{game.count_players()}</strong>")
 
     # Единый постоянный набор игровых кнопок (недоступные — серые, с подсказкой),
     # одинаковый для игрока и не-игрока.
@@ -521,12 +522,12 @@ def _player_action_buttons(user: User, game: Game):
 def _player_game_split(user: User):
     """(строки-статуса-слева, html-цели-справа) для игрока в идущей игре."""
     game = Game()
-    lines = [mode.t("score_line", score=user.get_score()),
-             f"💚 {mode.t('alive_count_label')}: <strong>{game.count_alive()}</strong>"]
     if not user.is_alive():
-        lines.append("")
-        lines.append(mode.t("status_out"))
-        return lines, ""
+        # Выбывший: статус «вы выбыли» + личный счёт (общее число живых — в счётчике ниже).
+        return [mode.t("status_out"), mode.t("score_line", score=user.get_score())], ""
+    # Живой участник: явный статус участия + личный счёт (как в статусе бота).
+    lines = ["💚 <em>Вы участвуете в игре</em>",
+             mode.t("score_line", score=user.get_score())]
     # На паузе цель не показывается (как в боте): игровые действия заморожены.
     if game.is_paused():
         right = ('<span class="divider">══ 🎯 Ваша цель ══</span>\n'

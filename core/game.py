@@ -227,6 +227,9 @@ class Game:
         if self.is_started():
             if self.is_paused():
                 base = "⏸️ Игра <strong><em>на паузе</em></strong>"
+                # Во время паузы может быть открыта дополнительная регистрация (как в боте).
+                if self.is_registration_open():
+                    base += "\n🟡 <strong><em>Разрешена регистрация</em></strong> на игру"
             else:
                 base = "🟢 Игра <strong><em>запущена</em></strong>"
         elif self.is_registration_open():
