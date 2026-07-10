@@ -2147,7 +2147,11 @@ def _user_list_data():
         r["buttons"] = user_menu_buttons(u)
         r["can_set_score"] = can_set_score(u, game)
         r["can_set_order"] = can_set_order(u, game)
-        r["can_reassign_kill"] = u.is_player() and not u.is_alive() and bool(u.get_murderer())
+        # «Засчитать другому» — для ЛЮБОГО выбывшего игрока, даже без «убийцы»:
+        # основной кейс — игрок устранён админом (killed_by = None), и поимку нужно
+        # засчитать реальному охотнику. admin_reassign_kill сам корректно работает
+        # без прежнего убийцы (списание очка — только если он был).
+        r["can_reassign_kill"] = u.is_player() and not u.is_alive()
         r["score"] = u.get_score()
         # Фото-пруф поимки (item 37): показываем кнопку только когда фото-пруф
         # включён и у «убийцы» этого игрока есть сохранённое фото. Ведёт на снимок
