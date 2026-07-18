@@ -28,11 +28,11 @@ from telegram.ext import (
 
 import config
 import db  # noqa: F401 — импорт инициализирует БД (таблицы)
-from core import botcommon
+from core import botcommon, bot_register
 from core.user import User
 
-# Постоянная кнопка под полем ввода — её нажатие равносильно команде /start.
-_KB = ReplyKeyboardMarkup([[botcommon.LOGIN_BUTTON]],
+# Постоянная кнопка под полем ввода: «Начать» (=/start) и «Регистрация в игре».
+_KB = ReplyKeyboardMarkup([[botcommon.LOGIN_BUTTON, botcommon.REGISTER_BUTTON]],
                           resize_keyboard=True, is_persistent=True)
 
 logging.basicConfig(
@@ -78,14 +78,45 @@ async def link_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     log.info("link: user id=%s tg=%s code=%r", user.id, tg.id, code)
 
 
+async def register_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/register — начать диалоговую регистрацию в игре прямо из бота."""
+    tg = update.effective_user
+    user = _ensure_user(tg)
+    reply = bot_register.start(user, user.identity("tg"))
+    await update.effective_message.reply_text(reply, reply_markup=_KB)
+    log.info("register start: user id=%s tg=%s", user.id, tg.id)
+
+
+async def cancel_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/cancel — прервать текущую регистрацию (если идёт)."""
+    tg = update.effective_user
+    user = _ensure_user(tg)
+    if bot_register.in_progress(user.id):
+        reply = bot_register.handle(user, user.identity("tg"), "отмена")
+    else:
+        reply = "Сейчас нечего отменять."
+    await update.effective_message.reply_text(reply, reply_markup=_KB)
+
+
 async def forward_to_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Текстовые сообщения игрока: нажатие кнопки-«/start» → /start, иначе — админам."""
+    """Текстовые сообщения игрока: шаг регистрации (если идёт) → автомату; «Начать» →
+    /start; «Регистрация» → старт регистрации; иначе — авто-ответ (+ пересылка админам)."""
     text = (update.effective_message.text or "").strip()
+    tg = update.effective_user
+    user = _ensure_user(tg)
+    # Идёт диалог регистрации — очередной ответ отдаём автомату (проверяем ПЕРВЫМ,
+    # чтобы ответы не перехватывались как «Начать»/пересылка).
+    if bot_register.in_progress(user.id):
+        reply = bot_register.handle(user, user.identity("tg"), text)
+        if reply is not None:
+            await update.effective_message.reply_text(reply, reply_markup=_KB)
+        return
     if botcommon.is_login_request(text):
         await start(update, context)
         return
-    tg = update.effective_user
-    user = User.by_tg(str(tg.id))
+    if botcommon.is_register_request(text):
+        await register_cmd(update, context)
+        return
     # Пересылаем админам (best-effort) и всегда отвечаем игроку авто-ответом: сообщения
     # боту могут быть не прочитаны, управление — на сайте, за поддержкой — контакт (TODO 86).
     botcommon.forward_to_admins(user, "Telegram", text)
@@ -106,6 +137,8 @@ async def _announce_connected(application):
         await application.bot.set_my_short_description(_SHORT_DESC)
         await application.bot.set_my_commands([
             BotCommand("start", "получить ссылку для входа"),
+            BotCommand("register", "зарегистрироваться в игре"),
+            BotCommand("cancel", "прервать текущую регистрацию"),
             BotCommand("link", "привязать этот чат к аккаунту (код из профиля)"),
         ])
     except Exception as exc:  # noqa: BLE001 — приветствие не критично для работы
@@ -123,6 +156,8 @@ def main():
     app = (Application.builder().token(token)
            .post_init(_announce_connected).build())
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("register", register_cmd))
+    app.add_handler(CommandHandler("cancel", cancel_cmd))
     app.add_handler(CommandHandler("link", link_cmd))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_to_admins))
     log.info("Telegram-бот запускается (long polling)… Ctrl+C для остановки.")

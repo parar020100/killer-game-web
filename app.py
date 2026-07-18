@@ -27,6 +27,7 @@ import os
 import config
 import db  # noqa: F401 — импорт инициализирует БД
 from core import chat, auth, admin_log, bot_log, mode, settings as app_settings, version
+from core import registration
 from core.game import Game
 from core.user import User
 
@@ -92,29 +93,17 @@ if not os.getenv("NO_INITDB"):
     if _build_change:
         admin_log.log(f"🆙 Сборка обновлена: {_build_change[0]} → {_build_change[1]}")
 
-_NAME_RE = re.compile(r"^[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё \-]*$")
-
 
 # --- доп. вопросы регистрации: хранение ответов ----------------------------
 # Ответы игрока на (возможно несколько) доп. вопросов храним в user.extra_info как
 # JSON-словарь {метка: ответ}. Старый одиночный ответ строкой читаем как legacy.
 
 def get_extra_answers(user: User) -> dict:
-    raw = (user.get_extra_info() or "").strip()
-    if not raw:
-        return {}
-    try:
-        data = json.loads(raw)
-        if isinstance(data, dict):
-            return data
-    except ValueError:
-        pass
-    questions = app_settings.extra_questions()
-    return {questions[0][0]: raw} if questions else {"Доп. вопрос": raw}
+    return registration.get_extra_answers(user)
 
 
 def set_extra_answers(user: User, answers: dict):
-    user.set_extra_info(json.dumps(answers, ensure_ascii=False) if answers else "")
+    registration.set_extra_answers(user, answers)
 
 
 def extra_answer_pairs(user: User):
@@ -154,13 +143,9 @@ def _read_extra(form):
 
 
 def validate_real_name(raw: str):
-    """Вернуть (имя, None) при успехе или (None, текст_ошибки)."""
-    name = " ".join((raw or "").split())  # схлопнуть пробелы
-    if not (config.NAME_MIN_LEN <= len(name) <= config.NAME_MAX_LEN):
-        return None, f"Имя должно быть от {config.NAME_MIN_LEN} до {config.NAME_MAX_LEN} символов."
-    if not _NAME_RE.match(name):
-        return None, "Имя может содержать только буквы, пробел и дефис."
-    return name, None
+    """Вернуть (имя, None) при успехе или (None, текст_ошибки). Общая логика — в
+    core.registration (тот же код у веб-формы и у регистрации через бота)."""
+    return registration.validate_name(raw)
 
 
 # ---------------------------------------------------------------------------
@@ -854,10 +839,7 @@ BROADCAST_AUDIENCES = {
 
 def do_join(user: User):
     """Завести игрока в игру (после успешной валидации формы регистрации)."""
-    game = Game()
-    user.join(alive=not game.is_started())
-    admin_log.log(f"➕ {user.get_name()} зарегистрировал(ся/ась) в игре")
-    user.notify(mode.t("joined"))
+    registration.join_player(user)
 
 
 _MEDALS = ["🥇", "🥈", "🥉"]

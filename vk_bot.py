@@ -24,7 +24,7 @@ import httpx
 
 import config
 import db  # noqa: F401 — инициализация БД
-from core import botcommon
+from core import botcommon, bot_register
 from core.user import User
 
 logging.basicConfig(
@@ -43,9 +43,10 @@ def _api(method: str, **params):
     return r["response"]
 
 
-# Постоянная клавиатура сообщества с кнопкой-«/start» (не одноразовая).
+# Постоянная клавиатура сообщества: «Начать» (=/start) и «Регистрация в игре».
 _PERSISTENT_KB = json.dumps({"one_time": False, "buttons": [[
-    {"action": {"type": "text", "label": botcommon.LOGIN_BUTTON}}]]},
+    {"action": {"type": "text", "label": botcommon.LOGIN_BUTTON}},
+    {"action": {"type": "text", "label": botcommon.REGISTER_BUTTON}}]]},
     ensure_ascii=False)
 
 
@@ -92,6 +93,19 @@ def handle_message(from_id, text: str):
     low = text.lower()
     user = _ensure_user(from_id)
     ident = user.identity("vk")
+
+    # Идёт диалог регистрации — очередной ответ отдаём автомату (проверяем ПЕРВЫМ,
+    # чтобы ответы не перехватывались как «Начать»/пересылка).
+    if bot_register.in_progress(user.id):
+        reply = bot_register.handle(user, ident, text)
+        if reply is not None:
+            _send(from_id, reply)
+        log.info("register step: user id=%s vk=%s", user.id, from_id)
+        return
+    if botcommon.is_register_request(text):
+        _send(from_id, bot_register.start(user, ident))
+        log.info("register start: user id=%s vk=%s", user.id, from_id)
+        return
 
     if low in _START_WORDS or botcommon.is_login_request(text):
         link = botcommon.login_link(ident)

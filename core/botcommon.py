@@ -53,6 +53,18 @@ def is_login_request(text: str) -> bool:
     return (text or "").strip() in (LOGIN_BUTTON, "Начать")
 
 
+# Кнопка/команда «зарегистрироваться в игре» — базовое участие прямо из бота, когда
+# сайт недоступен (диалоговая регистрация, см. core/bot_register.py).
+REGISTER_BUTTON = "📝 Регистрация в игре"
+_REGISTER_WORDS = {"/register", "register", "регистрация", "зарегистрироваться"}
+
+
+def is_register_request(text: str) -> bool:
+    """True, если текст — команда/кнопка начала регистрации в игре."""
+    t = (text or "").strip().lower()
+    return t in _REGISTER_WORDS or t == REGISTER_BUTTON.lower()
+
+
 def menu_url() -> str:
     """Ссылка на игровое меню (дашборд). Внутри веб-вью бота, где пользователь уже
     вошёл по ссылке /start, откроется его дашборд; иначе — предложит войти."""
