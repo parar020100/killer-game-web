@@ -56,6 +56,9 @@ def handle(user, identity, text: str):
     if t.lower() in _CANCEL_WORDS:
         _sessions.pop(user.id, None)
         return "❌ Регистрация отменена. Чтобы начать заново — «Регистрация» или /register."
+    # Случайное нажатие кнопок «Начать»/«Регистрация» во время диалога — не ответ на вопрос.
+    if t == botcommon.LOGIN_BUTTON or t == botcommon.REGISTER_BUTTON:
+        return "Идёт регистрация. Ответьте на вопрос выше или напишите «отмена»."
 
     game = Game()
     step = s["step"]

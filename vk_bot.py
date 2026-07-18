@@ -43,24 +43,36 @@ def _api(method: str, **params):
     return r["response"]
 
 
-# Постоянная клавиатура сообщества: «Начать» (=/start) и «Регистрация в игре».
-_PERSISTENT_KB = json.dumps({"one_time": False, "buttons": [[
-    {"action": {"type": "text", "label": botcommon.LOGIN_BUTTON}},
-    {"action": {"type": "text", "label": botcommon.REGISTER_BUTTON}}]]},
-    ensure_ascii=False)
-
-
-def _welcome_kb(user_id) -> str:
-    """Inline-кнопки под приветствием: «Открыть меню игры» (сразу в аккаунт) и «Правила»."""
-    return json.dumps({"inline": True, "buttons": [
+def _action_rows(user_id):
+    """Единый набор действий бота (в две строки): текстовые «Начать» и «Регистрация»,
+    ссылки «Открыть меню игры» и «Правила». Используется и нижней клавиатурой, и inline-
+    «меню» — чтобы все действия были доступны в обоих местах."""
+    return [
+        [{"action": {"type": "text", "label": botcommon.LOGIN_BUTTON}},
+         {"action": {"type": "text", "label": botcommon.REGISTER_BUTTON}}],
         [{"action": {"type": "open_link", "link": botcommon.menu_url_for("vk", user_id),
-                     "label": botcommon.MENU_BUTTON}}],
-        [{"action": {"type": "open_link", "link": botcommon.rules_url(),
+                     "label": botcommon.MENU_BUTTON}},
+         {"action": {"type": "open_link", "link": botcommon.rules_url(),
                      "label": botcommon.RULES_BUTTON}}],
-    ]}, ensure_ascii=False)
+    ]
 
 
-def _send(user_id, text: str, keyboard: str = _PERSISTENT_KB):
+def _main_kb(user_id) -> str:
+    """Нижняя постоянная клавиатура (держится, пока не пришлём новую; видна после ответа
+    бота). Раньше приветствие слало только inline — нижняя клавиатура не появлялась."""
+    return json.dumps({"one_time": False, "buttons": _action_rows(user_id)},
+                      ensure_ascii=False)
+
+
+def _inline_kb(user_id) -> str:
+    """Inline-«меню» под сообщением — те же действия, что и в нижней клавиатуре."""
+    return json.dumps({"inline": True, "buttons": _action_rows(user_id)},
+                      ensure_ascii=False)
+
+
+def _send(user_id, text: str, keyboard: str = None):
+    if keyboard is None:
+        keyboard = _main_kb(user_id)
     try:
         params = dict(user_id=user_id, message=text,
                       random_id=random.randint(1, 2_000_000_000))
@@ -109,7 +121,10 @@ def handle_message(from_id, text: str):
 
     if low in _START_WORDS or botcommon.is_login_request(text):
         link = botcommon.login_link(ident)
-        _send(from_id, botcommon.welcome_text(link), keyboard=_welcome_kb(from_id))
+        # 1) приветствие с нижней клавиатурой (persist), 2) inline-«меню» под сообщением —
+        # так все действия видны и в нижней клавиатуре, и в меню.
+        _send(from_id, botcommon.welcome_text(link))
+        _send(from_id, "📋 Меню — быстрые действия:", keyboard=_inline_kb(from_id))
         log.info("start: user id=%s vk=%s", user.id, from_id)
         return
     if low.startswith("/link"):
@@ -121,7 +136,7 @@ def handle_message(from_id, text: str):
     # прочее: пересылаем админам (best-effort) и всегда отвечаем игроку авто-ответом —
     # сообщения боту могут быть не прочитаны, управление на сайте, поддержка (TODO 86).
     botcommon.forward_to_admins(user, "VK", text)
-    _send(from_id, botcommon.auto_reply_text(), keyboard=_welcome_kb(from_id))
+    _send(from_id, botcommon.auto_reply_text())
 
 
 def _write_intro_file():
