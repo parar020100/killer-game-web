@@ -141,7 +141,9 @@
    «жертвы» (u.kill_pending), с кнопками «Засчитать» / «Отклонить» #}
 {% macro pending_row(u, back) -%}
   <div class="prow">
-    <span class="ptxt">{{ game_icon }} <strong>{{ u.killed_by }}</strong> → {{ u.name }}{% if u.order is not none %} <span class="unick">#{{ u.order }}</span>{% endif %} — ждёт подтверждения</span>
+    <span class="ptxt">{{ game_icon }} <strong>{{ u.killed_by }}</strong> → {{ u.name }}{% if u.order is not none %} <span class="unick">#{{ u.order }}</span>{% endif %} — ждёт подтверждения
+      {#- когда заявили и сколько заявка висит: видно, что пора вмешаться -#}
+      {% if u.caught_time %}<span class="pwhen" title="заявка подана в {{ u.caught_time }}">🕒 {{ u.caught_time }} · {{ u.caught_ago }} назад</span>{% else %}<span class="pwhen" title="заявка подана до появления учёта времени">🕒 время неизвестно</span>{% endif %}</span>
     {% if u.capture_photo_uid %}<a class="btn chip" href="{{ link('/app/users/' ~ u.capture_photo_uid ~ '/photo') }}" data-photo="{{ link('/app/users/' ~ u.capture_photo_uid ~ '/photo') }}" target="_blank" rel="noopener" title="фото поимки — наведите для превью">📷 Фото</a>{% endif %}
     <form method="post" action="{{ link('/app/users/' ~ u.id ~ '/act') }}">
       <input type="hidden" name="action" value="force_accept">

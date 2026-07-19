@@ -100,7 +100,7 @@ class Game:
         self.set_registration_open(False)
         execute("DELETE FROM revive_queue")
         execute("UPDATE user SET is_player = 0, is_alive = 0, kill_count = 0, "
-                "killed_by = NULL, game_order = NULL, target = NULL")
+                "killed_by = NULL, caught_at = NULL, game_order = NULL, target = NULL")
         return True, "Игра сброшена."
 
     # --- счётчики ---------------------------------------------------------

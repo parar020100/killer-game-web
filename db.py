@@ -231,12 +231,19 @@ def init_db():
         game_order   INTEGER UNIQUE,             -- позиция в круге целей
         target       INTEGER REFERENCES user(id),
         killed_by    INTEGER REFERENCES user(id),
+        caught_at    TIMESTAMP,                  -- когда заявили о поимке (ждёт ответа)
 
         is_admin     BOOLEAN NOT NULL DEFAULT 0,
 
         created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """)
+    # caught_at — время подачи заявки о поимке: админ видит в списке игроков, когда
+    # заявка подана и сколько она висит. Для БД, созданных до этого поля, добавляем
+    # колонку на месте (у уже висящих заявок времени нет — покажем «неизвестно»).
+    _ucols = {r["name"] for r in cur.execute("PRAGMA table_info(user)")}
+    if "caught_at" not in _ucols:
+        cur.execute("ALTER TABLE user ADD COLUMN caught_at TIMESTAMP")
 
     # Идентичности — привязки профиля к каналам связи.
     #   platform     : 'tg' | 'vk'
@@ -355,6 +362,7 @@ CREATE TABLE IF NOT EXISTS "user" (
     game_order   INTEGER UNIQUE,
     target       INTEGER REFERENCES "user"(id),
     killed_by    INTEGER REFERENCES "user"(id),
+    caught_at    TIMESTAMP,
     is_admin     INTEGER NOT NULL DEFAULT 0,
     created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

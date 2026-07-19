@@ -23,6 +23,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 import json
 import os
+from datetime import datetime
 
 import config
 import db  # noqa: F401 — импорт инициализирует БД
@@ -724,9 +725,42 @@ def _account_list(user: User):
     return out
 
 
+def _human_ago(stamp: str) -> str:
+    """«2 ч 15 мин» — сколько времени прошло с отметки 'ГГГГ-ММ-ДД ЧЧ:ММ:СС'."""
+    try:
+        then = datetime.strptime(stamp, "%Y-%m-%d %H:%M:%S")
+    except (TypeError, ValueError):
+        return ""
+    secs = int((datetime.now() - then).total_seconds())
+    if secs < 0:
+        secs = 0
+    if secs < 60:
+        return "меньше минуты"
+    mins, hours = (secs // 60) % 60, secs // 3600
+    days, hours = hours // 24, hours % 24
+    if days:
+        return f"{days} дн {hours} ч" if hours else f"{days} дн"
+    if hours:
+        return f"{hours} ч {mins} мин" if mins else f"{hours} ч"
+    return f"{mins} мин"
+
+
+def _caught_time_label(stamp: str) -> str:
+    """Время заявки для показа: «14:32», а если не сегодня — «17.07 14:32»."""
+    try:
+        then = datetime.strptime(stamp, "%Y-%m-%d %H:%M:%S")
+    except (TypeError, ValueError):
+        return ""
+    if then.date() == datetime.now().date():
+        return then.strftime("%H:%M")
+    return then.strftime("%d.%m %H:%M")
+
+
 def user_row(user: User, game: Game) -> dict:
     un = user.get_username()
     murderer = user.get_murderer()
+    # Время подачи заявки о поимке: админу видно, когда заявили и сколько она висит.
+    caught_at = user.get_caught_at() if murderer and user.is_alive() else None
     return {
         "id": user.id,
         "status": bot_status_emoji(user) + game_status_emoji(user, game),
@@ -740,6 +774,9 @@ def user_row(user: User, game: Game) -> dict:
         "killed_by": murderer.get_name() if murderer else None,
         "killed_by_id": murderer.id if murderer else None,
         "kill_pending": bool(murderer) and user.is_alive(),
+        # «HH:MM» подачи заявки (и дата, если не сегодня) + сколько прошло
+        "caught_time": _caught_time_label(caught_at),
+        "caught_ago": _human_ago(caught_at) if caught_at else "",
         # полный набор полей для раскрытой карточки (как в .txt-списке бота)
         "real_name": user.get_real_name(),
         "extra": extra_answer_pairs(user),  # [(метка, ответ)] доп. вопросов

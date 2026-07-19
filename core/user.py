@@ -5,6 +5,7 @@
 несколько идентичностей; уведомления доставляются в каждую неприглушённую.
 """
 import random
+from datetime import datetime
 
 from db import query_one, query_all, execute
 from core.identity import Identity
@@ -383,8 +384,22 @@ class User:
         k = self._get("killed_by")
         return User.by_id(k) if k else None
 
+    def get_caught_at(self):
+        """Когда заявили о поимке (строка 'ГГГГ-ММ-ДД ЧЧ:ММ:СС', местное время).
+
+        Нужно админу: в списке игроков видно, когда заявка подана и сколько висит.
+        У заявок, поданных до появления поля, значения нет — вернётся None.
+        """
+        return self._get("caught_at")
+
     def set_murderer(self, user):
-        self._set("killed_by", user.id if user else None)
+        """Назначить/снять «охотника». Время заявки пишется/сбрасывается вместе с ним."""
+        if user is None:
+            execute("UPDATE user SET killed_by = NULL, caught_at = NULL WHERE id = ?",
+                    (self.id,))
+        else:
+            execute("UPDATE user SET killed_by = ?, caught_at = ? WHERE id = ?",
+                    (user.id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), self.id))
 
     def is_being_caught(self) -> bool:
         """Жив, но кто-то уже заявил о его поимке (ждёт подтверждения)."""
@@ -686,7 +701,8 @@ class User:
         freed_order = self.get_game_order_raw()
         self._log(f"🗑️ {admin.get_name()} удалил(а) пользователя {name} из системы")
         execute("UPDATE user SET target = NULL WHERE target = ?", (self.id,))
-        execute("UPDATE user SET killed_by = NULL WHERE killed_by = ?", (self.id,))
+        execute("UPDATE user SET killed_by = NULL, caught_at = NULL "
+                "WHERE killed_by = ?", (self.id,))
         execute("DELETE FROM user WHERE id = ?", (self.id,))
         self._finish_structural_change(was_alive, at_order=freed_order)
         return f"Пользователь {name} удалён из системы."
@@ -714,7 +730,8 @@ class User:
         was_alive = self.is_alive()
         self._log(f"🗑️ {name} удалил(а) свою учётную запись («забыть меня»)")
         execute("UPDATE user SET target = NULL WHERE target = ?", (self.id,))
-        execute("UPDATE user SET killed_by = NULL WHERE killed_by = ?", (self.id,))
+        execute("UPDATE user SET killed_by = NULL, caught_at = NULL "
+                "WHERE killed_by = ?", (self.id,))
         execute("DELETE FROM user WHERE id = ?", (self.id,))
         self._finish_structural_change(was_alive)
         return True
@@ -736,7 +753,7 @@ class User:
         self.set_player(True)
         self.set_alive(alive)
         self._set("kill_count", 0)
-        self._set("killed_by", None)
+        self.set_murderer(None)
         self._set("target", None)
         # Позицию в круге назначаем сразу (цель раздаётся при старте игры).
         self.randomize_game_order()
@@ -747,4 +764,4 @@ class User:
         self._set("kill_count", 0)
         self._set("game_order", None)
         self._set("target", None)
-        self._set("killed_by", None)
+        self.set_murderer(None)
