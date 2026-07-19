@@ -30,13 +30,21 @@ from html import escape
 
 import config
 import db  # noqa: F401 — импорт инициализирует БД (таблицы)
-from core import botcommon, bot_register, bot_game
+from core import botcommon, bot_register, bot_game, photos
 from core.user import User
 
-# Постоянная клавиатура под полем ввода: «Начать» (=/start), «Регистрация», «Моя цель».
-_KB = ReplyKeyboardMarkup(
-    [[botcommon.LOGIN_BUTTON, botcommon.REGISTER_BUTTON], [botcommon.TARGET_BUTTON]],
-    resize_keyboard=True, is_persistent=True)
+def _kb() -> ReplyKeyboardMarkup:
+    """Постоянная клавиатура под полем ввода — все действия игрока, как на сайте.
+
+    Собирается на каждый ответ: подпись «сообщить о поимке/убийстве» зависит от
+    текущего режима игры (Киллер/Папарацци) и может смениться на лету.
+    """
+    return ReplyKeyboardMarkup(
+        [[botcommon.LOGIN_BUTTON, botcommon.REGISTER_BUTTON],
+         [botcommon.TARGET_BUTTON, botcommon.report_button()],
+         [botcommon.CONFIRM_BUTTON, botcommon.DENY_BUTTON],
+         [botcommon.STATUS_BUTTON, botcommon.LEAVE_BUTTON]],
+        resize_keyboard=True, is_persistent=True)
 
 logging.basicConfig(
     format="%(asctime)s [tg_bot] %(levelname)s: %(message)s", level=logging.INFO)
@@ -53,6 +61,12 @@ def _ensure_user(tg_user):
         str(tg_user.id), username=tg_user.username or None, name=_tg_name(tg_user))
 
 
+async def _reply(update: Update, user, text: str, markup=None):
+    """Ответить игроку, добавив к сообщению блок статуса игры (как на дашборде)."""
+    await update.effective_message.reply_text(
+        bot_game.with_status(user, text), reply_markup=markup or _kb())
+
+
 def _welcome_markup(tg_id) -> InlineKeyboardMarkup:
     """Inline-кнопки под приветствием: «Открыть меню игры» (сразу в аккаунт) и «Правила»."""
     return InlineKeyboardMarkup([
@@ -66,8 +80,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tg = update.effective_user
     user = _ensure_user(tg)
     link = botcommon.login_link(user.identity("tg"))
+    # Два сообщения: приветствие со ссылками-кнопками и статус с постоянной
+    # клавиатурой действий (одно сообщение — одна разметка).
     await update.effective_message.reply_text(
         botcommon.welcome_text(link), reply_markup=_welcome_markup(tg.id))
+    await _reply(update, user, "")
     log.info("start: user id=%s tg=%s (@%s)", user.id, tg.id, tg.username)
 
 
@@ -77,7 +94,7 @@ async def link_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = _ensure_user(tg)
     code = context.args[0] if context.args else ""
     reply = botcommon.do_link(user.identity("tg"), code)
-    await update.effective_message.reply_text(reply, reply_markup=_KB)
+    await _reply(update, user, reply)
     log.info("link: user id=%s tg=%s code=%r", user.id, tg.id, code)
 
 
@@ -86,19 +103,21 @@ async def register_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tg = update.effective_user
     user = _ensure_user(tg)
     reply = bot_register.start(user, user.identity("tg"))
-    await update.effective_message.reply_text(reply, reply_markup=_KB)
+    await _reply(update, user, reply)
     log.info("register start: user id=%s tg=%s", user.id, tg.id)
 
 
 async def cancel_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/cancel — прервать текущую регистрацию (если идёт)."""
+    """/cancel — прервать текущий диалог (регистрация, фото, причина, выход)."""
     tg = update.effective_user
     user = _ensure_user(tg)
     if bot_register.in_progress(user.id):
         reply = bot_register.handle(user, user.identity("tg"), "отмена")
+    elif bot_game.in_progress(user.id):
+        reply = bot_game.handle(user, "отмена")
     else:
         reply = "Сейчас нечего отменять."
-    await update.effective_message.reply_text(reply, reply_markup=_KB)
+    await _reply(update, user, reply)
 
 
 async def target_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -108,13 +127,75 @@ async def target_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kind, payload = bot_game.target_status(user)
     if kind == "target":
         # Имя цели прячем под Telegram-спойлер (HTML <tg-spoiler>), экранируя текст.
+        body = ("🎯 Ваша цель (нажмите, чтобы раскрыть):\n"
+                f"<tg-spoiler>{escape(payload)}</tg-spoiler>")
+        # Статус добавляем тем же сообщением — он тоже уходит как HTML, поэтому
+        # экранируем его целиком (в именах игроков могут быть < и &).
         await update.effective_message.reply_text(
-            f"🎯 Ваша цель (нажмите, чтобы раскрыть):\n"
-            f"<tg-spoiler>{escape(payload)}</tg-spoiler>",
-            parse_mode="HTML", reply_markup=_KB)
+            body + "\n\n———\n" + escape(bot_game.status_text(user)),
+            parse_mode="HTML", reply_markup=_kb())
     else:
-        await update.effective_message.reply_text(payload, reply_markup=_KB)
+        await _reply(update, user, payload)
     log.info("target: user id=%s tg=%s kind=%s", user.id, tg.id, kind)
+
+
+async def status_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/status — статус игры (он же добавляется к каждому сообщению бота)."""
+    user = _ensure_user(update.effective_user)
+    await _reply(update, user, "")
+
+
+async def report_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/kill (=/catch) — заявить о поимке цели; при включённом фото-пруфе спросит фото."""
+    tg = update.effective_user
+    user = _ensure_user(tg)
+    await _reply(update, user, bot_game.report(user))
+    log.info("report: user id=%s tg=%s", user.id, tg.id)
+
+
+async def accept_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/accept — подтвердить, что вас поймали."""
+    tg = update.effective_user
+    user = _ensure_user(tg)
+    await _reply(update, user, bot_game.confirm(user))
+    log.info("accept: user id=%s tg=%s", user.id, tg.id)
+
+
+async def deny_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/deny — не подтвердить поимку (бот спросит причину)."""
+    tg = update.effective_user
+    user = _ensure_user(tg)
+    await _reply(update, user, bot_game.deny(user))
+    log.info("deny: user id=%s tg=%s", user.id, tg.id)
+
+
+async def leave_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/leave — выйти из игры (с подтверждением, как модальное окно на сайте)."""
+    tg = update.effective_user
+    user = _ensure_user(tg)
+    await _reply(update, user, bot_game.leave(user))
+    log.info("leave: user id=%s tg=%s", user.id, tg.id)
+
+
+async def photo_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Фотография от игрока — фото-пруф поимки, если бот его сейчас ждёт."""
+    tg = update.effective_user
+    user = _ensure_user(tg)
+    msg = update.effective_message
+    if not bot_game.in_progress(user.id):
+        await _reply(update, user, botcommon.auto_reply_text())
+        return
+    if msg.photo:
+        tg_file = await msg.photo[-1].get_file()
+        ext = ".jpg"
+    else:  # фото прислали файлом (без сжатия)
+        doc = msg.document
+        tg_file = await doc.get_file()
+        ext = photos.EXTS.get(doc.mime_type or "", ".jpg")
+    data = bytes(await tg_file.download_as_bytearray())
+    reply = bot_game.handle_photo(user, data, ext)
+    await _reply(update, user, reply or botcommon.auto_reply_text())
+    log.info("photo: user id=%s tg=%s bytes=%s", user.id, tg.id, len(data))
 
 
 async def forward_to_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -123,13 +204,18 @@ async def forward_to_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (update.effective_message.text or "").strip()
     tg = update.effective_user
     user = _ensure_user(tg)
-    # Идёт диалог регистрации — очередной ответ отдаём автомату (проверяем ПЕРВЫМ,
-    # чтобы ответы не перехватывались как «Начать»/пересылка).
+    # Идут диалоги (регистрация / причина отказа / подтверждение выхода) — очередной
+    # ответ отдаём автомату ПЕРВЫМ, чтобы он не перехватывался кнопками/пересылкой.
     if bot_register.in_progress(user.id):
         reply = bot_register.handle(user, user.identity("tg"), text)
         if reply is not None:
-            await update.effective_message.reply_text(reply, reply_markup=_KB)
+            await _reply(update, user, reply)
         return
+    if bot_game.in_progress(user.id):
+        reply = bot_game.handle(user, text)
+        if reply is not None:
+            await _reply(update, user, reply)
+            return
     if botcommon.is_login_request(text):
         await start(update, context)
         return
@@ -139,11 +225,25 @@ async def forward_to_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if botcommon.is_target_request(text):
         await target_cmd(update, context)
         return
+    if botcommon.is_report_request(text):
+        await report_cmd(update, context)
+        return
+    if botcommon.is_confirm_request(text):
+        await accept_cmd(update, context)
+        return
+    if botcommon.is_deny_request(text):
+        await deny_cmd(update, context)
+        return
+    if botcommon.is_status_request(text):
+        await status_cmd(update, context)
+        return
+    if botcommon.is_leave_request(text):
+        await leave_cmd(update, context)
+        return
     # Пересылаем админам (best-effort) и всегда отвечаем игроку авто-ответом: сообщения
     # боту могут быть не прочитаны, управление — на сайте, за поддержкой — контакт (TODO 86).
     botcommon.forward_to_admins(user, "Telegram", text)
-    await update.effective_message.reply_text(
-        botcommon.auto_reply_text(), reply_markup=_welcome_markup(tg.id))
+    await _reply(update, user, botcommon.auto_reply_text())
 
 
 # Короткое описание на странице профиля бота (лимит Telegram — 120 символов).
@@ -159,9 +259,14 @@ async def _announce_connected(application):
         await application.bot.set_my_short_description(_SHORT_DESC)
         await application.bot.set_my_commands([
             BotCommand("start", "получить ссылку для входа"),
+            BotCommand("status", "статус игры"),
             BotCommand("register", "зарегистрироваться в игре"),
             BotCommand("target", "узнать свою цель (при активной игре)"),
-            BotCommand("cancel", "прервать текущую регистрацию"),
+            BotCommand("kill", "сообщить о поимке / убийстве цели"),
+            BotCommand("accept", "подтвердить свою поимку"),
+            BotCommand("deny", "не подтвердить поимку (с причиной)"),
+            BotCommand("leave", "выйти из игры"),
+            BotCommand("cancel", "прервать текущий диалог"),
             BotCommand("link", "привязать этот чат к аккаунту (код из профиля)"),
         ])
     except Exception as exc:  # noqa: BLE001 — приветствие не критично для работы
@@ -179,10 +284,17 @@ def main():
     app = (Application.builder().token(token)
            .post_init(_announce_connected).build())
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("status", status_cmd))
     app.add_handler(CommandHandler("register", register_cmd))
     app.add_handler(CommandHandler("target", target_cmd))
+    # kill/catch — одно и то же действие, подпись зависит от режима игры.
+    app.add_handler(CommandHandler(["kill", "catch"], report_cmd))
+    app.add_handler(CommandHandler("accept", accept_cmd))
+    app.add_handler(CommandHandler("deny", deny_cmd))
+    app.add_handler(CommandHandler("leave", leave_cmd))
     app.add_handler(CommandHandler("cancel", cancel_cmd))
     app.add_handler(CommandHandler("link", link_cmd))
+    app.add_handler(MessageHandler(filters.PHOTO | filters.Document.IMAGE, photo_message))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_to_admins))
     log.info("Telegram-бот запускается (long polling)… Ctrl+C для остановки.")
     app.run_polling(allowed_updates=Update.ALL_TYPES)

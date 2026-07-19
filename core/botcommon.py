@@ -76,6 +76,59 @@ def is_target_request(text: str) -> bool:
     return t in _TARGET_WORDS or t == TARGET_BUTTON.lower()
 
 
+# --- игровые действия в боте (аналог кнопок дашборда) ------------------------
+# Подпись «сообщить о поимке» зависит от режима игры (Киллер/Папарацци), поэтому
+# берётся из mode. Распознаём нажатие в ОБОИХ вариантах — режим могли переключить
+# между показом клавиатуры и ответом игрока.
+
+CONFIRM_BUTTON = "✅ Подтвердить"
+DENY_BUTTON = "🚫 Это не так"
+STATUS_BUTTON = "📋 Статус игры"
+LEAVE_BUTTON = "🚪 Выйти из игры"
+
+_REPORT_WORDS = {"/kill", "/catch", "kill", "catch", "убить", "поймать"}
+_CONFIRM_WORDS = {"/accept", "accept", "подтвердить"}
+_DENY_WORDS = {"/deny", "deny", "отклонить", "это не так"}
+_STATUS_WORDS = {"/status", "status", "статус", "статус игры"}
+_LEAVE_WORDS = {"/leave", "leave", "выйти из игры"}
+
+
+def report_button() -> str:
+    """Подпись кнопки «сообщить о поимке/убийстве» для текущего режима игры."""
+    from core import mode
+    return mode.t("report_btn")
+
+
+def _report_labels() -> set:
+    from core import mode
+    return {v.lower() for v in mode.MESSAGES["report_btn"]}
+
+
+def _match(text: str, words: set, labels=None) -> bool:
+    t = (text or "").strip().lower()
+    return bool(t) and (t in words or (labels is not None and t in labels))
+
+
+def is_report_request(text: str) -> bool:
+    return _match(text, _REPORT_WORDS, _report_labels())
+
+
+def is_confirm_request(text: str) -> bool:
+    return _match(text, _CONFIRM_WORDS, {CONFIRM_BUTTON.lower()})
+
+
+def is_deny_request(text: str) -> bool:
+    return _match(text, _DENY_WORDS, {DENY_BUTTON.lower()})
+
+
+def is_status_request(text: str) -> bool:
+    return _match(text, _STATUS_WORDS, {STATUS_BUTTON.lower()})
+
+
+def is_leave_request(text: str) -> bool:
+    return _match(text, _LEAVE_WORDS, {LEAVE_BUTTON.lower()})
+
+
 def menu_url() -> str:
     """Ссылка на игровое меню (дашборд). Внутри веб-вью бота, где пользователь уже
     вошёл по ссылке /start, откроется его дашборд; иначе — предложит войти."""

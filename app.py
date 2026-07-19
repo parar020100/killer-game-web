@@ -27,7 +27,7 @@ import os
 import config
 import db  # noqa: F401 — импорт инициализирует БД
 from core import chat, auth, admin_log, bot_log, mode, settings as app_settings, version
-from core import registration
+from core import registration, gameflow, photos
 from core.game import Game
 from core.user import User
 
@@ -399,16 +399,9 @@ def read_rules_html():
         return None
 
 
-def notify_target(user: User, changed: bool = False):
-    """Уведомить игрока, что цель назначена/изменилась (БЕЗ раскрытия имени).
-
-    Имя цели показывается только в интерфейсе игры (под спойлером на дашборде),
-    поэтому в уведомление оно не попадает — лишь факт и приглашение открыть сайт.
-    ``changed=True`` — цель сменилась (переназначение), иначе — первично назначена.
-    """
-    target = user.get_target_user()
-    if target:
-        user.notify(mode.t("target_changed" if changed else "target_assigned"))
+# Уведомление о назначенной/сменившейся цели — общая реализация с ботами
+# (core/gameflow.py), имя цели в уведомление не попадает.
+notify_target = gameflow.notify_target
 
 
 def player_section(user: User):
@@ -989,23 +982,8 @@ def apply_action(action: str, user: User, count: int = 5, reason: str = "") -> s
         admin_log.log("♻️ Игра автоматически сброшена после завершения")
         return "🏁 Игра завершена, итоги разосланы, игра сброшена."
     elif action == "leave":
-        if not user.is_player():
-            return "ℹ️ Вы и так не участвуете в игре."
-        was_alive = user.is_alive()
-        before = _snapshot_targets()
-        score = user.get_score()   # до leave(): он обнуляет счёт
-        user.leave()
-        admin_log.log(f"➖ {who} вышел(ла) из игры")
-        user.notify(mode.t("leave_self", score=score))
-        # Если игра шла, а игрок был жив — чинить круг (в боте выход НЕ оживляет
-        # очередь): пересобрать цели, уведомить «охотника» выбывшего о смене цели и
-        # проверить конец игры.
-        if was_alive and game.is_started():
-            game.reassign_targets()
-            _notify_retargets(before, "retarget_left")
-            if game.check_finished():
-                game.announce_winner()
-        return "🚪 Вы вышли из игры."
+        _ok, msg = gameflow.leave_game(user)
+        return msg
     elif action in ("add_test_users", "add_test_players"):
         n = _create_test_users(count, join=(action == "add_test_players"))
         kind_word = "игроков" if action == "add_test_players" else "пользователей"
@@ -1021,22 +999,20 @@ def apply_action(action: str, user: User, count: int = 5, reason: str = "") -> s
         return f"🧪 Удалено тестовых пользователей: {n}."
     elif action in ("report_capture", "cancel_capture", "confirm_capture",
                     "deny_capture"):
-        # Проверки состояния как в боте (h_user.kill/accept/deny): игра запущена,
-        # не на паузе, игрок участвует. Серверно, а не только скрытием кнопок.
-        if not game.is_started():
-            return "⛔ Игра ещё не началась."
-        if game.is_paused():
-            return "⏸️ Игра на паузе — действие сейчас недоступно."
-        if not user.is_player():
-            return "❌ Вы не участвуете в игре."
+        # Проверки состояния и сами действия — в core/gameflow.py, общем с ботами
+        # (игра запущена, не на паузе, игрок участвует). Серверно, а не только
+        # скрытием кнопок.
+        blocked = gameflow.capture_block_reason(user)
+        if blocked:
+            return blocked
         if action == "report_capture":
-            ok, msg = user.attempt_capture()
+            ok, msg = gameflow.report_capture(user)
         elif action == "cancel_capture":
-            ok, msg = user.cancel_capture()
+            ok, msg = gameflow.cancel_capture(user)
         elif action == "confirm_capture":
-            ok, msg = user.confirm_capture()
+            ok, msg = gameflow.confirm_capture(user)
         else:
-            ok, msg = user.deny_capture(reason)
+            ok, msg = gameflow.deny_capture(user, reason)
         return ("✅ " if ok else "⚠️ ") + msg
     # "noop" / незнакомое — просто перерисовать без плашки
     return ""
@@ -1739,64 +1715,21 @@ async def profile_save(request: Request):
                            get_extra_answers(user))
 
 
-_PHOTO_EXTS = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp",
-               "image/gif": ".gif", "image/heic": ".heic"}
-
-
-def _photo_prefix(user: User) -> str:
-    """Безопасный префикс имени файла фото-пруфа для пользователя (охотника)."""
-    un = user.get_username() or f"id{user.id}"
-    return re.sub(r"[^A-Za-z0-9_.-]", "_", un)
-
-
-def _photos_dir():
-    return db.DATA_DIR / "photos"
-
-
-def _latest_capture_photo(user: User):
-    """Путь к самому свежему фото-пруфу этого игрока (охотника) или None."""
-    if user is None:
-        return None
-    d = _photos_dir()
-    if not d.is_dir():
-        return None
-    files = sorted(d.glob(f"{_photo_prefix(user)}_*"),
-                   key=lambda p: p.stat().st_mtime, reverse=True)
-    return files[0] if files else None
-
-
-def _photo_hunters() -> dict:
-    """{имя игрока: uid} для тех, у кого есть сохранённый фото-пруф поимки.
-
-    Используется, чтобы в записях журнала о поимке/заявке показать кнопку «Открыть
-    фото» (в т.ч. у старых записей). Директорию фото читаем один раз."""
-    d = _photos_dir()
-    if not d.is_dir():
-        return {}
-    names = [p.name for p in d.iterdir() if p.is_file()]
-    out = {}
-    for u in User.all():
-        prefix = _photo_prefix(u) + "_"
-        if any(n.startswith(prefix) for n in names):
-            out[u.get_name()] = u.id
-    return out
+# Хранилище фото-пруфов общее с ботами (core/photos.py) — одна папка и одна
+# схема имён файлов, чтобы фото из бота и с сайта лежали вместе.
+_photo_prefix = photos.prefix
+_photos_dir = photos.photos_dir
+_latest_capture_photo = photos.latest
+_photo_hunters = photos.hunters
 
 
 def _save_capture_photo(user: User, upload) -> bool:
-    """Сохранить фото-пруф поимки в data/photos/ (как файлы бота). True при успехе."""
+    """Сохранить фото-пруф поимки из веб-формы (multipart). True при успехе."""
     if upload is None or not getattr(upload, "filename", ""):
         return False
     ct = getattr(upload, "content_type", "") or ""
-    ext = _PHOTO_EXTS.get(ct) or (Path(upload.filename).suffix.lower() or ".jpg")
-    photos_dir = _photos_dir()
-    photos_dir.mkdir(parents=True, exist_ok=True)
-    import time
-    dest = photos_dir / f"{_photo_prefix(user)}_{int(time.time())}{ext}"
-    data = upload.file.read()
-    if not data:
-        return False
-    dest.write_bytes(data)
-    return True
+    ext = photos.EXTS.get(ct) or (Path(upload.filename).suffix.lower() or ".jpg")
+    return photos.save_bytes(user, upload.file.read(), ext)
 
 
 @app.get("/app/capture", response_class=HTMLResponse)
@@ -2013,25 +1946,9 @@ def _game_state_error(action: str, game: Game) -> str:
     return ""
 
 
-def _snapshot_targets():
-    return {u.id: u.get_target_id() for u in User.alive_players()}
-
-
-def _notify_retargets(before, reason_key=None):
-    """Уведомить о смене цели тех живых игроков, у кого она изменилась (без имени).
-
-    `reason_key` (напр. "retarget_left") — объяснить ПРИЧИНУ смены формулировкой из
-    бота; без него — нейтральное «цель изменилась». Хвост «откройте приложение»
-    добавляем здесь, т.к. в вебе имя цели скрыто.
-    """
-    reason = mode.t(reason_key) if reason_key else None
-    for u in User.alive_players():
-        new = u.get_target_id()
-        if new and before.get(u.id) != new:
-            if reason:
-                u.notify(reason + "\n🎯 Откройте приложение, чтобы узнать новую цель.")
-            else:
-                notify_target(u, changed=True)
+# Снимок целей и уведомления о их смене — общие с ботами (core/gameflow.py).
+_snapshot_targets = gameflow.snapshot_targets
+_notify_retargets = gameflow.notify_retargets
 
 
 # Действие над игроком → причина смены цели у затронутых (формулировки бота).
