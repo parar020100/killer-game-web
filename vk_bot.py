@@ -6,6 +6,9 @@ Poll API сообщества, без внешних библиотек (тол�
   • «Начать» / /start — создаёт/привязывает identity (platform='vk',
     platform_uid = числовой VK-id), выдаёт постоянную ссылку входа на сайт;
   • /link КОД — привязывает этот VK-канал к аккаунту с сайта (объединение tg+vk);
+  • кнопки игровых действий (регистрация, статус, цель, заявка о поимке с фото,
+    подтвердить/отклонить, выйти) — базовое участие без сайта; действия выполняет
+    общий с сайтом core/gameflow.py, статус игры идёт под каждым ответом;
   • любое сообщение — пересылает администраторам;
   • исходящие уведомления шлёт сам веб-процесс через messages.send
     (см. core/vk_send.py и Identity.deliver).
@@ -49,9 +52,12 @@ def _action_rows(user_id):
     inline-«меню» — чтобы все действия были доступны в обоих местах."""
     def txt(label):
         return {"action": {"type": "text", "label": label}}
+    # Подпись главной кнопки зависит от режима игры и состояния игрока (заявка →
+    # «отменить») — как главный слот на дашборде.
+    user = User.by_vk(str(user_id))
     return [
         [txt(botcommon.LOGIN_BUTTON), txt(botcommon.REGISTER_BUTTON)],
-        [txt(botcommon.TARGET_BUTTON), txt(botcommon.report_button())],
+        [txt(botcommon.TARGET_BUTTON), txt(botcommon.report_button(user))],
         [txt(botcommon.CONFIRM_BUTTON), txt(botcommon.DENY_BUTTON)],
         [txt(botcommon.STATUS_BUTTON), txt(botcommon.LEAVE_BUTTON)],
         [{"action": {"type": "open_link", "link": botcommon.menu_url_for("vk", user_id),

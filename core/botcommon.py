@@ -93,15 +93,23 @@ _STATUS_WORDS = {"/status", "status", "статус", "статус игры"}
 _LEAVE_WORDS = {"/leave", "leave", "выйти из игры"}
 
 
-def report_button() -> str:
-    """Подпись кнопки «сообщить о поимке/убийстве» для текущего режима игры."""
+def report_button(user=None) -> str:
+    """Подпись главной игровой кнопки для текущего режима игры.
+
+    Как и главный слот на дашборде: если игрок уже подал заявку и ждёт ответа цели —
+    та же кнопка становится «отменить заявку» (см. `_player_action_buttons`).
+    """
     from core import mode
+    if user is not None and user.is_awaiting_confirmation():
+        return mode.t("cancel_capture_btn")
     return mode.t("report_btn")
 
 
 def _report_labels() -> set:
+    """Подписи главной кнопки во всех режимах и в обоих состояниях (заявка/отмена)."""
     from core import mode
-    return {v.lower() for v in mode.MESSAGES["report_btn"]}
+    return {v.lower() for v in
+            mode.MESSAGES["report_btn"] + mode.MESSAGES["cancel_capture_btn"]}
 
 
 def _match(text: str, words: set, labels=None) -> bool:

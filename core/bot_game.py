@@ -115,9 +115,10 @@ def target_status(user):
 # --- заявка о поимке / устранении --------------------------------------------
 
 def report(user) -> str:
-    """Кнопка «Сообщить о поимке». Если включён фото-пруф — сначала просим фото.
+    """Главная игровая кнопка. Если включён фото-пруф — сначала просим фото.
 
-    Проверки — те же, что открывают страницу /app/capture на сайте.
+    Повторяет главный слот дашборда: пока заявка ждёт ответа цели, та же кнопка
+    отзывает заявку. Проверки — те же, что открывают страницу /app/capture.
     """
     blocked = gameflow.capture_block_reason(user)
     if blocked:
@@ -125,7 +126,8 @@ def report(user) -> str:
     if not user.is_alive():
         return "🗿 Вы выбыли из игры — ловить цель больше нельзя."
     if user.is_awaiting_confirmation():
-        return "⏳ Вы уже заявили о поимке — ждём подтверждения цели."
+        ok, msg = gameflow.cancel_capture(user)
+        return ("✅ " if ok else "⚠️ ") + msg
     if user.get_target_user() is None:
         return "Сейчас у вас нет активной цели."
 

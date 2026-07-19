@@ -7,11 +7,16 @@ Telegram-сторону:
     Telegram-id), выдаёт постоянную ссылку входа на сайт (magic-link);
   • /link КОД — привязывает этот Telegram-канал к аккаунту с сайта (объединение
     tg+vk под одним пользователем; код берётся в «Настройках профиля»);
+  • /register, /status, /target, /kill (=/catch), /accept, /deny, /leave — базовое
+    участие в игре прямо из бота, на случай недоступности сайта (core/bot_game.py,
+    core/bot_register.py); статус игры добавляется к каждому ответу;
   • любое текстовое сообщение — пересылает администраторам;
   • исходящие игровые уведомления шлёт сам веб-процесс через Bot API
     (см. core/tg_send.py и Identity.deliver) — здесь их обрабатывать не нужно.
 
-Весь игровой интерфейс — на сайте, поэтому бот намеренно минимальный.
+Полный интерфейс (админка, история, профиль) — на сайте; бот даёт минимум,
+необходимый игроку. Сами игровые действия выполняет общий с сайтом core/gameflow.py,
+поэтому механика и условия совпадают.
 
 Запуск (из папки проекта, отдельно от веб-сервера):
     .venv/Scripts/python.exe tg_bot.py
@@ -33,15 +38,16 @@ import db  # noqa: F401 — импорт инициализирует БД (та
 from core import botcommon, bot_register, bot_game, photos
 from core.user import User
 
-def _kb() -> ReplyKeyboardMarkup:
+
+def _kb(user=None) -> ReplyKeyboardMarkup:
     """Постоянная клавиатура под полем ввода — все действия игрока, как на сайте.
 
-    Собирается на каждый ответ: подпись «сообщить о поимке/убийстве» зависит от
-    текущего режима игры (Киллер/Папарацци) и может смениться на лету.
+    Собирается на каждый ответ: подпись главной кнопки зависит от режима игры
+    (Киллер/Папарацци) и от состояния игрока (заявка → «отменить»), как на дашборде.
     """
     return ReplyKeyboardMarkup(
         [[botcommon.LOGIN_BUTTON, botcommon.REGISTER_BUTTON],
-         [botcommon.TARGET_BUTTON, botcommon.report_button()],
+         [botcommon.TARGET_BUTTON, botcommon.report_button(user)],
          [botcommon.CONFIRM_BUTTON, botcommon.DENY_BUTTON],
          [botcommon.STATUS_BUTTON, botcommon.LEAVE_BUTTON]],
         resize_keyboard=True, is_persistent=True)
@@ -64,7 +70,7 @@ def _ensure_user(tg_user):
 async def _reply(update: Update, user, text: str, markup=None):
     """Ответить игроку, добавив к сообщению блок статуса игры (как на дашборде)."""
     await update.effective_message.reply_text(
-        bot_game.with_status(user, text), reply_markup=markup or _kb())
+        bot_game.with_status(user, text), reply_markup=markup or _kb(user))
 
 
 def _welcome_markup(tg_id) -> InlineKeyboardMarkup:
@@ -133,7 +139,7 @@ async def target_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # экранируем его целиком (в именах игроков могут быть < и &).
         await update.effective_message.reply_text(
             body + "\n\n———\n" + escape(bot_game.status_text(user)),
-            parse_mode="HTML", reply_markup=_kb())
+            parse_mode="HTML", reply_markup=_kb(user))
     else:
         await _reply(update, user, payload)
     log.info("target: user id=%s tg=%s kind=%s", user.id, tg.id, kind)
