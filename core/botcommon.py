@@ -65,6 +65,17 @@ def is_register_request(text: str) -> bool:
     return t in _REGISTER_WORDS or t == REGISTER_BUTTON.lower()
 
 
+# Кнопка/команда «узнать свою цель» при активной игре (в TG прячется под спойлер).
+TARGET_BUTTON = "🎯 Моя цель"
+_TARGET_WORDS = {"/target", "target", "цель", "моя цель"}
+
+
+def is_target_request(text: str) -> bool:
+    """True, если текст — команда/кнопка «узнать цель»."""
+    t = (text or "").strip().lower()
+    return t in _TARGET_WORDS or t == TARGET_BUTTON.lower()
+
+
 def menu_url() -> str:
     """Ссылка на игровое меню (дашборд). Внутри веб-вью бота, где пользователь уже
     вошёл по ссылке /start, откроется его дашборд; иначе — предложит войти."""

@@ -24,7 +24,7 @@ import httpx
 
 import config
 import db  # noqa: F401 — инициализация БД
-from core import botcommon, bot_register
+from core import botcommon, bot_register, bot_game
 from core.user import User
 
 logging.basicConfig(
@@ -50,6 +50,7 @@ def _action_rows(user_id):
     return [
         [{"action": {"type": "text", "label": botcommon.LOGIN_BUTTON}},
          {"action": {"type": "text", "label": botcommon.REGISTER_BUTTON}}],
+        [{"action": {"type": "text", "label": botcommon.TARGET_BUTTON}}],
         [{"action": {"type": "open_link", "link": botcommon.menu_url_for("vk", user_id),
                      "label": botcommon.MENU_BUTTON}},
          {"action": {"type": "open_link", "link": botcommon.rules_url(),
@@ -117,6 +118,12 @@ def handle_message(from_id, text: str):
     if botcommon.is_register_request(text):
         _send(from_id, bot_register.start(user, ident))
         log.info("register start: user id=%s vk=%s", user.id, from_id)
+        return
+    if botcommon.is_target_request(text):
+        kind, payload = bot_game.target_status(user)
+        # В VK спойлеров нет — имя цели показываем как есть.
+        _send(from_id, f"🎯 Ваша цель: {payload}" if kind == "target" else payload)
+        log.info("target: user id=%s vk=%s kind=%s", user.id, from_id, kind)
         return
 
     if low in _START_WORDS or botcommon.is_login_request(text):

@@ -26,14 +26,17 @@ from telegram.ext import (
     Application, CommandHandler, MessageHandler, ContextTypes, filters,
 )
 
+from html import escape
+
 import config
 import db  # noqa: F401 — импорт инициализирует БД (таблицы)
-from core import botcommon, bot_register
+from core import botcommon, bot_register, bot_game
 from core.user import User
 
-# Постоянная кнопка под полем ввода: «Начать» (=/start) и «Регистрация в игре».
-_KB = ReplyKeyboardMarkup([[botcommon.LOGIN_BUTTON, botcommon.REGISTER_BUTTON]],
-                          resize_keyboard=True, is_persistent=True)
+# Постоянная клавиатура под полем ввода: «Начать» (=/start), «Регистрация», «Моя цель».
+_KB = ReplyKeyboardMarkup(
+    [[botcommon.LOGIN_BUTTON, botcommon.REGISTER_BUTTON], [botcommon.TARGET_BUTTON]],
+    resize_keyboard=True, is_persistent=True)
 
 logging.basicConfig(
     format="%(asctime)s [tg_bot] %(levelname)s: %(message)s", level=logging.INFO)
@@ -98,6 +101,22 @@ async def cancel_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.effective_message.reply_text(reply, reply_markup=_KB)
 
 
+async def target_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/target — показать свою цель при активной игре (имя — под спойлером)."""
+    tg = update.effective_user
+    user = _ensure_user(tg)
+    kind, payload = bot_game.target_status(user)
+    if kind == "target":
+        # Имя цели прячем под Telegram-спойлер (HTML <tg-spoiler>), экранируя текст.
+        await update.effective_message.reply_text(
+            f"🎯 Ваша цель (нажмите, чтобы раскрыть):\n"
+            f"<tg-spoiler>{escape(payload)}</tg-spoiler>",
+            parse_mode="HTML", reply_markup=_KB)
+    else:
+        await update.effective_message.reply_text(payload, reply_markup=_KB)
+    log.info("target: user id=%s tg=%s kind=%s", user.id, tg.id, kind)
+
+
 async def forward_to_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Текстовые сообщения игрока: шаг регистрации (если идёт) → автомату; «Начать» →
     /start; «Регистрация» → старт регистрации; иначе — авто-ответ (+ пересылка админам)."""
@@ -116,6 +135,9 @@ async def forward_to_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if botcommon.is_register_request(text):
         await register_cmd(update, context)
+        return
+    if botcommon.is_target_request(text):
+        await target_cmd(update, context)
         return
     # Пересылаем админам (best-effort) и всегда отвечаем игроку авто-ответом: сообщения
     # боту могут быть не прочитаны, управление — на сайте, за поддержкой — контакт (TODO 86).
@@ -138,6 +160,7 @@ async def _announce_connected(application):
         await application.bot.set_my_commands([
             BotCommand("start", "получить ссылку для входа"),
             BotCommand("register", "зарегистрироваться в игре"),
+            BotCommand("target", "узнать свою цель (при активной игре)"),
             BotCommand("cancel", "прервать текущую регистрацию"),
             BotCommand("link", "привязать этот чат к аккаунту (код из профиля)"),
         ])
@@ -157,6 +180,7 @@ def main():
            .post_init(_announce_connected).build())
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("register", register_cmd))
+    app.add_handler(CommandHandler("target", target_cmd))
     app.add_handler(CommandHandler("cancel", cancel_cmd))
     app.add_handler(CommandHandler("link", link_cmd))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_to_admins))
