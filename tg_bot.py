@@ -28,7 +28,8 @@ from telegram import (
     BotCommand,
 )
 from telegram.ext import (
-    Application, CommandHandler, MessageHandler, ContextTypes, filters,
+    Application, CallbackQueryHandler, CommandHandler, MessageHandler,
+    ContextTypes, filters,
 )
 
 from html import escape
@@ -39,20 +40,52 @@ from core import botcommon, bot_register, bot_game, photos
 from core.user import User
 
 
-def _kb(user=None) -> ReplyKeyboardMarkup:
-    """Постоянная клавиатура под полем ввода — все действия игрока, как на сайте.
+def _kb() -> ReplyKeyboardMarkup:
+    """Нижняя постоянная клавиатура — короткая, тот же состав, что в VK-боте.
 
-    Собирается на каждый ответ: подпись главной кнопки зависит от режима игры
-    (Киллер/Папарацци) и от состояния игрока (заявка → «отменить»), как на дашборде.
+    Только «Начать», «Статус игры», «Открыть меню игры» и «Правила игры». В VK
+    последние две — кнопки-ссылки; нижняя клавиатура Telegram ссылок не умеет,
+    поэтому здесь это обычные кнопки, а бот в ответ присылает ссылку.
     """
-    rows = [[botcommon.LOGIN_BUTTON, botcommon.REGISTER_BUTTON],
-            [botcommon.TARGET_BUTTON, botcommon.report_button(user)]]
-    # «Подтвердить» / «Это не так» — только когда о поимке этого игрока заявили и
-    # ответа ждут от него (как секция «вас поймали» на дашборде).
+    return ReplyKeyboardMarkup(
+        [[botcommon.LOGIN_BUTTON, botcommon.STATUS_BUTTON],
+         [botcommon.MENU_BUTTON, botcommon.RULES_BUTTON]],
+        resize_keyboard=True, is_persistent=True)
+
+
+# Inline-«меню» действий: прикрепляется к КАЖДОМУ ответу бота, состав — как в VK.
+_CB_PREFIX = "act:"
+
+
+def _menu_markup(user=None, extra_rows=None) -> InlineKeyboardMarkup:
+    """Inline-меню под сообщением — полный набор игровых действий (как в VK-боте).
+
+    Состав зависит от состояния игрока, как кнопки на дашборде: главная кнопка
+    подписана «сообщить о поимке» либо «отменить заявку», а «Подтвердить» /
+    «Это не так» появляются ТОЛЬКО когда о поимке этого игрока заявили и ответа
+    ждут от него.
+    """
+    def btn(label, action):
+        return InlineKeyboardButton(label, callback_data=_CB_PREFIX + action)
+
+    rows = list(extra_rows or [])
+    rows.append([btn(botcommon.REGISTER_BUTTON, "register"),
+                 btn(botcommon.TARGET_BUTTON, "target")])
+    rows.append([btn(botcommon.report_button(user), "report")])
     if user is not None and user.is_being_caught():
-        rows.append([botcommon.CONFIRM_BUTTON, botcommon.DENY_BUTTON])
-    rows.append([botcommon.STATUS_BUTTON, botcommon.LEAVE_BUTTON])
-    return ReplyKeyboardMarkup(rows, resize_keyboard=True, is_persistent=True)
+        rows.append([btn(botcommon.CONFIRM_BUTTON, "confirm"),
+                     btn(botcommon.DENY_BUTTON, "deny")])
+    rows.append([btn(botcommon.LEAVE_BUTTON, "leave")])
+    return InlineKeyboardMarkup(rows)
+
+
+def _link_row(kind: str, tg_id):
+    """Строка-ссылка для ответа на «Открыть меню игры» / «Правила игры»."""
+    if kind == "menu":
+        return [InlineKeyboardButton(botcommon.MENU_BUTTON,
+                                     url=botcommon.menu_url_for("tg", tg_id))]
+    return [InlineKeyboardButton(botcommon.RULES_BUTTON, url=botcommon.rules_url())]
+
 
 logging.basicConfig(
     format="%(asctime)s [tg_bot] %(levelname)s: %(message)s", level=logging.INFO)
@@ -69,18 +102,15 @@ def _ensure_user(tg_user):
         str(tg_user.id), username=tg_user.username or None, name=_tg_name(tg_user))
 
 
-async def _reply(update: Update, user, text: str, markup=None):
-    """Ответить игроку, добавив к сообщению блок статуса игры (как на дашборде)."""
-    await update.effective_message.reply_text(
-        bot_game.with_status(user, text), reply_markup=markup or _kb(user))
+async def _reply(update: Update, user, text: str, extra_rows=None):
+    """Ответить игроку: текст + блок статуса игры + актуальное inline-меню действий.
 
-
-def _welcome_markup(tg_id) -> InlineKeyboardMarkup:
-    """Inline-кнопки под приветствием: «Открыть меню игры» (сразу в аккаунт) и «Правила»."""
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton(botcommon.MENU_BUTTON, url=botcommon.menu_url_for("tg", tg_id))],
-        [InlineKeyboardButton(botcommon.RULES_BUTTON, url=botcommon.rules_url())],
-    ])
+    Меню собирается заново на каждый ответ, поэтому кнопки всегда соответствуют
+    текущему состоянию игрока (как кнопки на дашборде).
+    """
+    msg = update.effective_message or update.callback_query.message
+    await msg.reply_text(bot_game.with_status(user, text),
+                         reply_markup=_menu_markup(user, extra_rows))
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -88,12 +118,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tg = update.effective_user
     user = _ensure_user(tg)
     link = botcommon.login_link(user.identity("tg"))
-    # Два сообщения: приветствие со ссылками-кнопками и статус с постоянной
-    # клавиатурой действий (одно сообщение — одна разметка).
+    # Два сообщения: приветствие ставит нижнюю клавиатуру, второе несёт статус и
+    # inline-меню действий (одно сообщение — одна разметка).
     await update.effective_message.reply_text(
-        botcommon.welcome_text(link), reply_markup=_welcome_markup(tg.id))
+        botcommon.welcome_text(link), reply_markup=_kb())
     await _reply(update, user, "")
     log.info("start: user id=%s tg=%s (@%s)", user.id, tg.id, tg.username)
+
+
+async def menu_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """«🎮 Открыть меню игры» — ссылка входа сразу в аккаунт (кнопкой над меню)."""
+    tg = update.effective_user
+    user = _ensure_user(tg)
+    await _reply(update, user, "🎮 Меню игры на сайте:", [_link_row("menu", tg.id)])
+
+
+async def rules_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """«📖 Правила игры» — ссылка на страницу правил."""
+    tg = update.effective_user
+    user = _ensure_user(tg)
+    await _reply(update, user, "📖 Правила игры:", [_link_row("rules", tg.id)])
 
 
 async def link_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -139,9 +183,10 @@ async def target_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"<tg-spoiler>{escape(payload)}</tg-spoiler>")
         # Статус добавляем тем же сообщением — он тоже уходит как HTML, поэтому
         # экранируем его целиком (в именах игроков могут быть < и &).
-        await update.effective_message.reply_text(
+        msg = update.effective_message or update.callback_query.message
+        await msg.reply_text(
             body + "\n\n———\n" + escape(bot_game.status_text(user)),
-            parse_mode="HTML", reply_markup=_kb(user))
+            parse_mode="HTML", reply_markup=_menu_markup(user))
     else:
         await _reply(update, user, payload)
     log.info("target: user id=%s tg=%s kind=%s", user.id, tg.id, kind)
@@ -206,6 +251,33 @@ async def photo_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     log.info("photo: user id=%s tg=%s bytes=%s", user.id, tg.id, len(data))
 
 
+async def on_menu_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Нажата кнопка inline-меню. Действия — те же функции, что и у команд/текста."""
+    query = update.callback_query
+    await query.answer()          # убрать «часики» на кнопке
+    tg = query.from_user
+    user = _ensure_user(tg)
+    action = (query.data or "").removeprefix(_CB_PREFIX)
+
+    if action == "target":
+        await target_cmd(update, context)
+        return
+    if action == "register":
+        reply = bot_register.start(user, user.identity("tg"))
+    elif action == "report":
+        reply = bot_game.report(user)
+    elif action == "confirm":
+        reply = bot_game.confirm(user)
+    elif action == "deny":
+        reply = bot_game.deny(user)
+    elif action == "leave":
+        reply = bot_game.leave(user)
+    else:
+        reply = ""
+    await _reply(update, user, reply)
+    log.info("menu click: user id=%s tg=%s action=%r", user.id, tg.id, action)
+
+
 async def forward_to_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Текстовые сообщения игрока: шаг регистрации (если идёт) → автомату; «Начать» →
     /start; «Регистрация» → старт регистрации; иначе — авто-ответ (+ пересылка админам)."""
@@ -248,6 +320,13 @@ async def forward_to_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if botcommon.is_leave_request(text):
         await leave_cmd(update, context)
         return
+    # В VK это кнопки-ссылки; здесь — обычные кнопки нижней клавиатуры, отвечаем ссылкой.
+    if botcommon.is_menu_request(text):
+        await menu_cmd(update, context)
+        return
+    if botcommon.is_rules_request(text):
+        await rules_cmd(update, context)
+        return
     # Пересылаем админам (best-effort) и всегда отвечаем игроку авто-ответом: сообщения
     # боту могут быть не прочитаны, управление — на сайте, за поддержкой — контакт (TODO 86).
     botcommon.forward_to_admins(user, "Telegram", text)
@@ -275,6 +354,8 @@ async def _announce_connected(application):
             BotCommand("deny", "не подтвердить поимку (с причиной)"),
             BotCommand("leave", "выйти из игры"),
             BotCommand("cancel", "прервать текущий диалог"),
+            BotCommand("menu", "ссылка на меню игры на сайте"),
+            BotCommand("rules", "правила игры"),
             BotCommand("link", "привязать этот чат к аккаунту (код из профиля)"),
         ])
     except Exception as exc:  # noqa: BLE001 — приветствие не критично для работы
@@ -302,6 +383,10 @@ def main():
     app.add_handler(CommandHandler("leave", leave_cmd))
     app.add_handler(CommandHandler("cancel", cancel_cmd))
     app.add_handler(CommandHandler("link", link_cmd))
+    app.add_handler(CommandHandler("menu", menu_cmd))
+    app.add_handler(CommandHandler("rules", rules_cmd))
+    # Нажатия кнопок inline-меню (оно прикреплено к каждому сообщению бота).
+    app.add_handler(CallbackQueryHandler(on_menu_click, pattern="^" + _CB_PREFIX))
     app.add_handler(MessageHandler(filters.PHOTO | filters.Document.IMAGE, photo_message))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_to_admins))
     log.info("Telegram-бот запускается (long polling)… Ctrl+C для остановки.")

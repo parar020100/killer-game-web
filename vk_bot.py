@@ -85,8 +85,11 @@ def _inline_kb(user_id) -> str:
 
 
 def _send(user_id, text: str, keyboard: str = None):
+    """Отправить сообщение. По умолчанию к нему прикрепляется inline-меню действий —
+    оно собирается заново каждый раз, поэтому кнопки всегда актуальны. Нижняя
+    клавиатура ставится отдельно (в приветствии) и держится сама."""
     if keyboard is None:
-        keyboard = _main_kb(user_id)
+        keyboard = _inline_kb(user_id)
     try:
         params = dict(user_id=user_id, message=text,
                       random_id=random.randint(1, 2_000_000_000))
@@ -208,10 +211,10 @@ def handle_message(from_id, text: str, attachments=None):
 
     if low in _START_WORDS or botcommon.is_login_request(text):
         link = botcommon.login_link(ident)
-        # 1) приветствие с нижней клавиатурой (persist), 2) inline-«меню» под сообщением —
-        # так все действия видны и в нижней клавиатуре, и в меню.
-        _send(from_id, botcommon.welcome_text(link))
-        reply("📋 Меню — быстрые действия:", keyboard=_inline_kb(from_id))
+        # 1) приветствие СТАВИТ нижнюю клавиатуру (она держится сама, пока не пришлём
+        # новую), 2) статус с inline-«меню» — оно прикрепляется и ко всем ответам ниже.
+        _send(from_id, botcommon.welcome_text(link), keyboard=_main_kb(from_id))
+        reply("📋 Меню — быстрые действия:")
         log.info("start: user id=%s vk=%s", user.id, from_id)
         return
     if low.startswith("/link"):

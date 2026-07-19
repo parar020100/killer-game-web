@@ -137,6 +137,21 @@ def is_leave_request(text: str) -> bool:
     return _match(text, _LEAVE_WORDS, {LEAVE_BUTTON.lower()})
 
 
+# «Открыть меню игры» и «Правила» в VK — кнопки-ссылки (нажатие боту не приходит).
+# В Telegram нижняя клавиатура ссылок не умеет, поэтому там это обычные кнопки, и
+# бот отвечает сообщением со ссылкой — распознаём их нажатие по подписи.
+_MENU_WORDS = {"/menu", "menu", "меню"}
+_RULES_WORDS = {"/rules", "rules", "правила"}
+
+
+def is_menu_request(text: str) -> bool:
+    return _match(text, _MENU_WORDS, {MENU_BUTTON.lower()})
+
+
+def is_rules_request(text: str) -> bool:
+    return _match(text, _RULES_WORDS, {RULES_BUTTON.lower()})
+
+
 def menu_url() -> str:
     """Ссылка на игровое меню (дашборд). Внутри веб-вью бота, где пользователь уже
     вошёл по ссылке /start, откроется его дашборд; иначе — предложит войти."""

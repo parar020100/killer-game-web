@@ -59,7 +59,8 @@ def handle(user, identity, text: str):
     # Случайное нажатие кнопок клавиатуры во время диалога — не ответ на вопрос.
     if t in (botcommon.LOGIN_BUTTON, botcommon.REGISTER_BUTTON, botcommon.TARGET_BUTTON,
              botcommon.CONFIRM_BUTTON, botcommon.DENY_BUTTON, botcommon.STATUS_BUTTON,
-             botcommon.LEAVE_BUTTON) or t == botcommon.report_button():
+             botcommon.LEAVE_BUTTON, botcommon.MENU_BUTTON, botcommon.RULES_BUTTON
+             ) or t == botcommon.report_button():
         return "Идёт регистрация. Ответьте на вопрос выше или напишите «отмена»."
 
     game = Game()
