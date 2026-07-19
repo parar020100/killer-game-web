@@ -1274,31 +1274,39 @@ def dashboard(request: Request):
 
 @app.post("/app/users/{uid}/open")
 def open_as_user(request: Request, uid: int):
-    """Админ: войти под дебаг-пользователем (веб-чат) в этой вкладке.
+    """Админ: открыть меню игры от имени ЛЮБОГО пользователя (в новой вкладке).
 
-    Генерирует пользователю токен (как дебаг-чат) и проходит обычный вход по нему:
-    аккаунт добавляется в набор сессии, вкладка привязывается к нему (?user=<uid>).
-    Открывать в новой вкладке (target=_blank). Только для админа и только для
-    пользователей с веб-каналом ('local') — реальные tg/vk-ссылки не трогаем.
+    Работает для всех аккаунтов — и реальных Telegram/VK, и веб-чата: не зависит от
+    канала связи и от каких-либо дебаг-настроек.
+
+    Реализовано через «грант входа»: этому браузеру выдаётся отдельный грант на аккаунт
+    игрока, и uid добавляется в набор сессии — вкладка открывается как `?user=<uid>`.
+    Постоянную ссылку игрока при этом НЕ трогаем (не создаём и не перевыпускаем его
+    токен), поэтому импперсонация не ломает вход самому игроку. Закончить — обычным
+    «выйти» из этого аккаунта (отзовёт только выданный грант).
 
     ВАЖНО: это POST, а не GET. Раньше был GET-ссылкой на каждого пользователя, и любой
     префетч/сканер ссылок (спекулятивный prefetch браузера, антивирус, превью-боты) слал
-    её с cookie админа → молча логинил админа под всеми local-пользователями, и они
+    её с cookie админа → молча логинил админа под всеми пользователями, и они
     всплывали в списке аккаунтов входа. POST такие автозапросы не триггерят.
     """
     actor = current_user(request)
     if actor is None or not actor.is_admin():
         return RedirectResponse(url="/app", status_code=303)
     target = User.by_id(uid)
-    ident = target.identity("local") if target else None
-    if ident is None:
+    if target is None:
         return RedirectResponse(url="/app", status_code=303)
     # Импперсонация — заметное админское действие, пишем в ADMIN LOG (TODO 85).
     admin_log.log(f"🕵️ {actor.get_name()} открыл(а) меню под пользователем {target.get_name()}")
-    # Переиспользуем постоянный токен канала (не перевыпускаем — чтобы не рвать уже
-    # выданную ссылку этого пользователя, TODO 76).
-    token = auth.get_or_create_permanent_token(ident.id)
-    return RedirectResponse(url=f"/login?token={token}", status_code=303)
+    uids = _authed_uids(request)
+    if uid not in uids:
+        uids.append(uid)
+    request.session["uids"] = uids
+    grants = dict(request.session.get("grants") or {})
+    grants[str(uid)] = auth.create_grant(uid)
+    request.session["grants"] = grants
+    request.session.pop("uid", None)   # уходим со старой одиночной схемы
+    return RedirectResponse(url=f"/app?user={uid}", status_code=303)
 
 
 @app.get("/app/users/{uid}/photo")

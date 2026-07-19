@@ -131,7 +131,8 @@
       {% if u.is_local and u.username %}<a class="btn chip" href="/chat/{{ u.username }}" target="_blank" rel="noopener" title="эмуляция чата с этим пользователем (только для админа)">🐛 Дебаг-чат</a>{% endif %}
       {# POST, а не ссылка: GET логинил бы админа под этим пользователем, и префетч/сканер
          ссылок молча добавлял бы всех local-пользователей в список входа (см. open_as_user). #}
-      {% if u.is_local %}<form method="post" action="{{ link('/app/users/' ~ u.id ~ '/open') }}" target="_blank" style="display:inline"><button type="submit" class="btn chip" title="сгенерировать токен и открыть меню от имени этого пользователя (только для админа)">🚪 Открыть меню</button></form>{% endif %}
+      {# Доступно для ЛЮБОГО пользователя (не только веб-чата) и не зависит от дебаг-настроек. #}
+      <form method="post" action="{{ link('/app/users/' ~ u.id ~ '/open') }}" target="_blank" style="display:inline"><button type="submit" class="btn chip" title="открыть меню игры от имени этого пользователя в новой вкладке (только для админа; его ссылку входа не меняет)">🚪 Открыть меню</button></form>
     </div>
   </details>
 {%- endmacro %}
