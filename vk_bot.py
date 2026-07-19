@@ -46,38 +46,42 @@ def _api(method: str, **params):
     return r["response"]
 
 
-def _action_rows(user_id):
-    """Единый набор действий бота: все игровые кнопки (как на дашборде сайта) плюс
-    ссылки «Открыть меню игры» и «Правила». Используется и нижней клавиатурой, и
-    inline-«меню» — чтобы все действия были доступны в обоих местах."""
-    def txt(label):
-        return {"action": {"type": "text", "label": label}}
-    # Подпись главной кнопки зависит от режима игры и состояния игрока (заявка →
-    # «отменить») — как главный слот на дашборде.
-    user = User.by_vk(str(user_id))
-    return [
-        [txt(botcommon.LOGIN_BUTTON), txt(botcommon.REGISTER_BUTTON)],
-        [txt(botcommon.TARGET_BUTTON), txt(botcommon.report_button(user))],
-        [txt(botcommon.CONFIRM_BUTTON), txt(botcommon.DENY_BUTTON)],
-        [txt(botcommon.STATUS_BUTTON), txt(botcommon.LEAVE_BUTTON)],
+def _txt_btn(label):
+    return {"action": {"type": "text", "label": label}}
+
+
+def _main_kb(user_id) -> str:
+    """Нижняя постоянная клавиатура — намеренно короткая (она висит всегда).
+
+    Только «Начать», «Меню», «Статус» и ссылка на правила. Остальные игровые
+    действия висят на inline-меню под сообщением от кнопки «Начать» (`_inline_kb`),
+    чтобы нижняя клавиатура не превращалась в стену кнопок.
+    """
+    rows = [
+        [_txt_btn(botcommon.LOGIN_BUTTON), _txt_btn(botcommon.STATUS_BUTTON)],
         [{"action": {"type": "open_link", "link": botcommon.menu_url_for("vk", user_id),
                      "label": botcommon.MENU_BUTTON}},
          {"action": {"type": "open_link", "link": botcommon.rules_url(),
                      "label": botcommon.RULES_BUTTON}}],
     ]
-
-
-def _main_kb(user_id) -> str:
-    """Нижняя постоянная клавиатура (держится, пока не пришлём новую; видна после ответа
-    бота). Раньше приветствие слало только inline — нижняя клавиатура не появлялась."""
-    return json.dumps({"one_time": False, "buttons": _action_rows(user_id)},
-                      ensure_ascii=False)
+    return json.dumps({"one_time": False, "buttons": rows}, ensure_ascii=False)
 
 
 def _inline_kb(user_id) -> str:
-    """Inline-«меню» под сообщением — те же действия, что и в нижней клавиатуре."""
-    return json.dumps({"inline": True, "buttons": _action_rows(user_id)},
-                      ensure_ascii=False)
+    """Inline-«меню» под сообщением «Начать» — полный набор игровых действий.
+
+    Состав зависит от состояния игрока, как кнопки на дашборде: главная кнопка
+    подписана «сообщить о поимке» либо «отменить заявку», а «Подтвердить» /
+    «Это не так» появляются ТОЛЬКО когда о поимке этого игрока заявили и ответа
+    ждут от него.
+    """
+    user = User.by_vk(str(user_id))
+    rows = [[_txt_btn(botcommon.REGISTER_BUTTON), _txt_btn(botcommon.TARGET_BUTTON)],
+            [_txt_btn(botcommon.report_button(user))]]
+    if user is not None and user.is_being_caught():
+        rows.append([_txt_btn(botcommon.CONFIRM_BUTTON), _txt_btn(botcommon.DENY_BUTTON)])
+    rows.append([_txt_btn(botcommon.LEAVE_BUTTON)])
+    return json.dumps({"inline": True, "buttons": rows}, ensure_ascii=False)
 
 
 def _send(user_id, text: str, keyboard: str = None):

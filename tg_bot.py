@@ -45,12 +45,14 @@ def _kb(user=None) -> ReplyKeyboardMarkup:
     Собирается на каждый ответ: подпись главной кнопки зависит от режима игры
     (Киллер/Папарацци) и от состояния игрока (заявка → «отменить»), как на дашборде.
     """
-    return ReplyKeyboardMarkup(
-        [[botcommon.LOGIN_BUTTON, botcommon.REGISTER_BUTTON],
-         [botcommon.TARGET_BUTTON, botcommon.report_button(user)],
-         [botcommon.CONFIRM_BUTTON, botcommon.DENY_BUTTON],
-         [botcommon.STATUS_BUTTON, botcommon.LEAVE_BUTTON]],
-        resize_keyboard=True, is_persistent=True)
+    rows = [[botcommon.LOGIN_BUTTON, botcommon.REGISTER_BUTTON],
+            [botcommon.TARGET_BUTTON, botcommon.report_button(user)]]
+    # «Подтвердить» / «Это не так» — только когда о поимке этого игрока заявили и
+    # ответа ждут от него (как секция «вас поймали» на дашборде).
+    if user is not None and user.is_being_caught():
+        rows.append([botcommon.CONFIRM_BUTTON, botcommon.DENY_BUTTON])
+    rows.append([botcommon.STATUS_BUTTON, botcommon.LEAVE_BUTTON])
+    return ReplyKeyboardMarkup(rows, resize_keyboard=True, is_persistent=True)
 
 logging.basicConfig(
     format="%(asctime)s [tg_bot] %(levelname)s: %(message)s", level=logging.INFO)
