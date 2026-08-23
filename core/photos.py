@@ -104,6 +104,47 @@ def for_capture(hunter, victim=None, ts=None):
     return files[-1]
 
 
+def all_entries():
+    """Все загруженные фото-пруфы для галереи (новые сверху): список словарей
+    {filename, mtime, hunter, victim}. hunter/victim — имена (или None, если канал
+    не сопоставился). Включает ВСЕ файлы папки — в т.ч. фото отклонённых/отменённых
+    заявок: снимки сохраняются в момент заявки и не удаляются."""
+    from core.user import User
+    d = photos_dir()
+    if not d.is_dir():
+        return []
+    users = User.all()
+    # Префиксы длиннее — раньше, чтобы точнее сопоставить охотника по имени файла
+    # (например «ivan» и «ivan_2» не путались).
+    pref_map = sorted(((prefix(u), u) for u in users), key=lambda t: -len(t[0]))
+    uid_map = {u.id: u for u in users}
+    out = []
+    for p in sorted((f for f in d.iterdir() if f.is_file()),
+                    key=lambda f: f.stat().st_mtime, reverse=True):
+        name = p.name
+        hunter = next((u for pref, u in pref_map if name.startswith(pref + "_")), None)
+        vid = _victim_id(name)
+        victim = uid_map.get(vid) if vid else None
+        out.append({
+            "filename": name,
+            "mtime": p.stat().st_mtime,
+            "hunter": hunter.get_name() if hunter else None,
+            "victim": victim.get_name() if victim else None,
+        })
+    return out
+
+
+def by_filename(name: str):
+    """Путь к фото по имени файла — строго внутри папки photos (без побега по путям).
+    None, если имя некорректно или файла нет."""
+    from pathlib import Path
+    if not name or name != Path(name).name or "/" in name or "\\" in name:
+        return None
+    d = photos_dir()
+    p = d / name
+    return p if (d.is_dir() and p.is_file()) else None
+
+
 def hunters() -> dict:
     """{имя игрока: uid} для тех, у кого есть сохранённый фото-пруф поимки.
 

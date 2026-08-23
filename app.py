@@ -707,6 +707,7 @@ def admin_management_buttons(user: User):
     # переключателем «Показать лог игры» и на странице /admin-log из настроек.)
     # «Тестовые пользователи» — компактная кнопка слева от «Настройки игры» (п.64).
     b.append(_btn("📢 Рассылка", href="/broadcast"))
+    b.append(_btn("🖼️ Галерея фото", href="/app/gallery"))
     b.append(_btn("🧪 Тестовые пользователи", popover="testusers"))
     b.append(_btn("⚙️ Настройки игры", href="/app/settings"))
     return b
@@ -1397,6 +1398,38 @@ def _ts_to_epoch(ts: str):
         return datetime.strptime(ts, "%Y-%m-%d %H:%M:%S").timestamp()
     except (TypeError, ValueError):
         return None
+
+
+@app.get("/app/gallery", response_class=HTMLResponse)
+def gallery(request: Request):
+    """Галерея для админа: все загруженные фото-пруфы (в т.ч. отклонённых заявок)."""
+    user = current_user(request)
+    if user is None or not user.is_admin():
+        return _redirect(request, "/app")
+    items = []
+    for e in photos.all_entries():
+        items.append({
+            "filename": e["filename"],
+            "hunter": e["hunter"],
+            "victim": e["victim"],
+            "when": datetime.fromtimestamp(e["mtime"]).strftime("%Y-%m-%d %H:%M"),
+        })
+    return templates.TemplateResponse(
+        request, "gallery.html", _ctx(request, photos=items),
+    )
+
+
+@app.get("/app/gallery/{name}")
+def gallery_photo(request: Request, name: str):
+    """Отдать один файл галереи по имени. Только админу; путь строго внутри photos."""
+    user = current_user(request)
+    if user is None or not user.is_admin():
+        return RedirectResponse(url="/app", status_code=303)
+    path = photos.by_filename(name)
+    if path is None:
+        return HTMLResponse("<h3>Фото не найдено.</h3>", status_code=404)
+    from starlette.responses import FileResponse
+    return FileResponse(str(path))
 
 
 @app.get("/app/results", response_class=HTMLResponse)
