@@ -222,10 +222,10 @@ async def leave_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def accept_invite_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/accept_invite — принять приглашение в идущую игру (войти выбывшим)."""
+    """/accept_invite — принять приглашение и пройти регистрацию в игре."""
     tg = update.effective_user
     user = _ensure_user(tg)
-    await _reply(update, user, bot_game.accept_invite(user))
+    await _reply(update, user, bot_game.accept_invite(user, user.identity("tg")))
     log.info("accept_invite: user id=%s tg=%s", user.id, tg.id)
 
 
@@ -278,7 +278,7 @@ async def on_menu_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif action == "deny":
         reply = bot_game.deny(user)
     elif action == "accept_invite":
-        reply = bot_game.accept_invite(user)
+        reply = bot_game.accept_invite(user, user.identity("tg"))
     elif action == "reject_invite":
         reply = bot_game.reject_invite(user)
     elif action == "leave":

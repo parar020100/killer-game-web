@@ -189,9 +189,20 @@ def deny(user) -> str:
 
 # --- приглашение в игру (accept/reject) --------------------------------------
 
-def accept_invite(user) -> str:
-    ok, msg = gameflow.accept_invite(user)
-    return msg if ok else "⚠️ " + msg   # успешный текст уже начинается с «✅ …»
+def accept_invite(user, identity) -> str:
+    """Принять приглашение → запустить ПОЛНУЮ регистрацию в игре (диалог bot_register).
+
+    Приглашение служит разрешением зарегистрироваться при закрытой общей регистрации
+    и снимается по завершении (в User.join). identity нужен, чтобы по итогу выдать
+    ссылку входа для этого канала."""
+    from core import bot_register
+    if user.is_player():
+        user.remove_game_invite()
+        return "✅ Вы уже участвуете в игре."
+    if not user.has_game_invite():
+        return "⚠️ Активного приглашения в игру нет."
+    admin_log.log(f"✅ {user.get_name()} принял(а) приглашение — начал(а) регистрацию")
+    return bot_register.start(user, identity)
 
 
 def reject_invite(user) -> str:

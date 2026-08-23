@@ -630,11 +630,13 @@ def invite_prompt(user: User):
     return {
         "hint": "— приглашение в игру —",
         "message": ("✉️ <strong>Организаторы приглашают вас в игру.</strong>\n"
-                    "Если примете — присоединитесь выбывшим и сможете вернуться "
-                    "в игру позже."),
+                    "Чтобы присоединиться, заполните анкету регистрации. Вы войдёте "
+                    "выбывшим и сможете вернуться в игру позже."),
         "kind": "alert",
+        # «Присоединиться» ведёт на полную форму регистрации (имя, пароль, доп. вопросы);
+        # приглашение снимется после её успешного заполнения (TODO 94).
         "buttons": [
-            _btn("✅ Присоединиться", "accept_invite", "primary"),
+            _btn("✅ Присоединиться", href="/app/join", kind="primary"),
             _btn("🚫 Отклонить", "reject_invite", "danger"),
         ],
     }
@@ -1088,9 +1090,6 @@ def apply_action(action: str, user: User, count: int = 5, reason: str = "") -> s
             ok, msg = gameflow.confirm_capture(user)
         else:
             ok, msg = gameflow.deny_capture(user, reason)
-        return ("✅ " if ok else "⚠️ ") + msg
-    elif action == "accept_invite":
-        ok, msg = gameflow.accept_invite(user)
         return ("✅ " if ok else "⚠️ ") + msg
     elif action == "reject_invite":
         ok, msg = gameflow.reject_invite(user)
@@ -2316,7 +2315,9 @@ def join_form(request: Request):
     if user is None:
         return RedirectResponse(url="/", status_code=303)
     game = Game()
-    if user.is_player() or not game.is_registration_open():
+    # Приглашённый в идущую игру проходит ту же форму, даже если общая регистрация
+    # закрыта (приглашение = разрешение, TODO 94).
+    if user.is_player() or not registration.registration_allowed(user):
         return _redirect(request, "/app")
     values = {"real_name": user.get_real_name()}
     return _render_register(request, user, game, values, {}, get_extra_answers(user))
@@ -2328,7 +2329,7 @@ async def join_submit(request: Request):
     if user is None:
         return RedirectResponse(url="/", status_code=303)
     game = Game()
-    if user.is_player() or not game.is_registration_open():
+    if user.is_player() or not registration.registration_allowed(user):
         return _redirect(request, "/app")
 
     form = await request.form()

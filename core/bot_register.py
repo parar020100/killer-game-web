@@ -32,10 +32,11 @@ def in_progress(user_id) -> bool:
 
 def start(user, identity) -> str:
     """Начать регистрацию. Вернуть первый вопрос или причину, почему нельзя."""
-    game = Game()
     if user.is_player():
         return "✅ Вы уже зарегистрированы в игре."
-    if not game.is_registration_open():
+    # Разрешено при открытой общей регистрации ИЛИ по персональному приглашению
+    # в идущую игру (accept_invite): приглашение = разрешение (TODO 94).
+    if not registration.registration_allowed(user):
         return ("🚫 Регистрация на игру сейчас закрыта. "
                 "Дождитесь, когда организаторы её откроют.")
     _sessions[user.id] = {"step": "name", "name": "", "answers": {}, "idx": 0}

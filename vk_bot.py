@@ -204,7 +204,7 @@ def handle_message(from_id, text: str, attachments=None):
         log.info("leave: user id=%s vk=%s", user.id, from_id)
         return
     if botcommon.is_accept_invite_request(text):
-        reply(bot_game.accept_invite(user))
+        reply(bot_game.accept_invite(user, ident))
         log.info("accept_invite: user id=%s vk=%s", user.id, from_id)
         return
     if botcommon.is_reject_invite_request(text):
