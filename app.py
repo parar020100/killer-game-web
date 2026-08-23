@@ -318,18 +318,24 @@ def linkify(text: str) -> Markup:
     return Markup(out.replace("\n", "<br>"))
 
 
-# Записи журнала о поимке/заявке начинаются с «<эмодзи> <имя охотника> заявил(а) о
-# поимке/об убийстве …» или «… поймал(а)/убил(а) …». По имени охотника подставляем
-# кнопку «📷 Открыть фото» (если у него есть сохранённый фото-пруф) — работает и для
-# СТАРЫХ записей, т.к. не требует пометок в тексте лога. Имя — до глагола (не жадно).
+# Записи журнала о поимке/заявке: «<эмодзи> <охотник> заявил(а) о поимке/об убийстве
+# <жертва> …» или «… поймал(а)/убил(а) <жертва>». Ловим ОБА имени: охотник → чьё фото,
+# жертва → какой именно снимок (у охотника их несколько). Работает и для СТАРЫХ записей
+# (пометок в тексте не требует). Имена нежадные; хвост в скобках («(ждёт …)») отбрасываем.
 _CAPTURE_HUNTER_RE = re.compile(
     r"^(?:🔪|📸)\s+(.+?)\s+(?:заявил\(а\) о поимке|заявил\(а\) об убийстве|"
-    r"поймал\(а\)|убил\(а\))(?=\s)")
+    r"поймал\(а\)|убил\(а\))\s+(.+?)(?:\s*\([^)]*\))?$")
 
 
-def render_log_html(body: str, photo_by_name=None) -> Markup:
+def render_log_html(body: str, ts: str = "", photo_by_name=None,
+                    name_to_uid=None) -> Markup:
     """Отрисовать строку журнала: ссылки кликабельны; у записей о поимке/заявке —
-    кнопка «Открыть фото», если у охотника есть фото-пруф (photo_by_name = {имя: uid})."""
+    кнопка «Открыть фото» конкретной поимки (если у охотника есть фото-пруф).
+
+    photo_by_name = {имя охотника: uid} — у кого есть фото (видимость кнопки);
+    name_to_uid   = {имя: uid} — резолв жертвы, чтобы ссылка вела на её снимок;
+    ts            — момент записи (для подбора старых фото без метки жертвы).
+    """
     body = body or ""
     html = str(linkify(body))
     if photo_by_name:
@@ -337,7 +343,16 @@ def render_log_html(body: str, photo_by_name=None) -> Markup:
         if m:
             uid = photo_by_name.get(m.group(1).strip())
             if uid:
-                html += (f'<a class="logphoto" href="/app/users/{uid}/photo" '
+                href = f"/app/users/{uid}/photo"
+                params = []
+                vid = (name_to_uid or {}).get(m.group(2).strip())
+                if vid:
+                    params.append(f"victim={vid}")
+                if ts:
+                    params.append(f"ts={quote(ts)}")
+                if params:
+                    href += "?" + "&".join(params)
+                html += (f'<a class="logphoto" href="{href}" '
                          f'target="_blank" rel="noopener">📷 Открыть фото</a>')
     return Markup(html)
 
@@ -563,9 +578,11 @@ def game_log_entries(limit: int = 40):
     Возвращает список {ts, html} от новых к старым (read_messages уже новые сверху).
     """
     photo_by_name = _photo_hunters()
+    name_to_uid = _name_to_uid()
     out = []
     for m in admin_log.read_messages()[:limit]:
-        out.append({"ts": m["ts"], "html": render_log_html(m["body"], photo_by_name)})
+        out.append({"ts": m["ts"], "html": render_log_html(
+            m["body"], m["ts"], photo_by_name, name_to_uid)})
     return out
 
 
@@ -1323,21 +1340,32 @@ def open_as_user(request: Request, uid: int):
 
 
 @app.get("/app/users/{uid}/photo")
-def capture_photo(request: Request, uid: int):
-    """Показать фото-пруф поимки, снятое этим игроком (охотником). Только админу.
+def capture_photo(request: Request, uid: int, victim: int = None, ts: str = ""):
+    """Показать фото-пруф КОНКРЕТНОЙ поимки, снятое охотником (uid). Только админу.
 
-    Отдаёт самый свежий файл из data/photos/ для указанного пользователя. Кнопка
-    ведёт сюда из строки-заявки и из карточки устранённого игрока (по его «убийце»).
+    `victim` — id пойманного (кнопки его передают), `ts` — момент записи журнала
+    («ГГГГ-ММ-ДД ЧЧ:ММ:СС»). По ним `photos.for_capture` отдаёт именно нужный снимок,
+    а не «последнее фото охотника»: если следующая поимка того же охотника «перебивала»
+    бы ссылку — теперь нет. Для старых фото без метки жертвы срабатывает подбор по `ts`.
     """
     user = current_user(request)
     if user is None or not user.is_admin():
         return RedirectResponse(url="/app", status_code=303)
-    target = User.by_id(uid)
-    path = _latest_capture_photo(target) if target else None
+    hunter = User.by_id(uid)
+    victim_user = User.by_id(victim) if victim else None
+    path = photos.for_capture(hunter, victim_user, _ts_to_epoch(ts)) if hunter else None
     if path is None or not path.exists():
         return HTMLResponse("<h3>Фото поимки не найдено.</h3>", status_code=404)
     from starlette.responses import FileResponse
     return FileResponse(str(path))
+
+
+def _ts_to_epoch(ts: str):
+    """«ГГГГ-ММ-ДД ЧЧ:ММ:СС» → epoch-секунды (местное время) или None."""
+    try:
+        return datetime.strptime(ts, "%Y-%m-%d %H:%M:%S").timestamp()
+    except (TypeError, ValueError):
+        return None
 
 
 @app.get("/app/results", response_class=HTMLResponse)
@@ -1760,13 +1788,25 @@ _latest_capture_photo = photos.latest
 _photo_hunters = photos.hunters
 
 
-def _save_capture_photo(user: User, upload) -> bool:
-    """Сохранить фото-пруф поимки из веб-формы (multipart). True при успехе."""
+def _name_to_uid() -> dict:
+    """{имя игрока: uid} по всем пользователям — для резолва жертвы в записи журнала
+    к её снимку. При одинаковых именах берём первого (это лишь выбор фото)."""
+    out = {}
+    for u in User.all():
+        out.setdefault(u.get_name(), u.id)
+    return out
+
+
+def _save_capture_photo(user: User, upload, victim=None) -> bool:
+    """Сохранить фото-пруф поимки из веб-формы (multipart). True при успехе.
+
+    `victim` — кого ловят: пишется в имя файла, чтобы снимок остался привязан именно
+    к этой поимке (иначе следующая поимка того же охотника «перебивала» бы ссылку)."""
     if upload is None or not getattr(upload, "filename", ""):
         return False
     ct = getattr(upload, "content_type", "") or ""
     ext = photos.EXTS.get(ct) or (Path(upload.filename).suffix.lower() or ".jpg")
-    return photos.save_bytes(user, upload.file.read(), ext)
+    return photos.save_bytes(user, upload.file.read(), ext, victim=victim)
 
 
 @app.get("/app/capture", response_class=HTMLResponse)
@@ -1802,7 +1842,7 @@ async def capture_submit(request: Request):
 
     form = await request.form()
     photo = form.get("photo")
-    if not _save_capture_photo(user, photo):
+    if not _save_capture_photo(user, photo, victim=target):
         return templates.TemplateResponse(
             request, "capture.html",
             _ctx(request, target_name=target.get_name(), report_label=mode.t("report_btn"),
@@ -2147,13 +2187,15 @@ def _user_list_data():
         r["can_reassign_kill"] = u.is_player() and not u.is_alive()
         r["score"] = u.get_score()
         # Фото-пруф поимки (item 37): показываем кнопку только когда фото-пруф
-        # включён и у «убийцы» этого игрока есть сохранённое фото. Ведёт на снимок
-        # охотника (u.get_murderer()) — и в строке-заявке, и в карточке выбывшего.
-        r["capture_photo_uid"] = None
+        # включён и у «убийцы» этого игрока есть сохранённое фото. Ссылка ведёт на
+        # снимок КОНКРЕТНОЙ поимки — охотник (u.get_murderer()) + жертва (u), — чтобы
+        # следующая поимка того же охотника не «перебивала» её. И в строке-заявке,
+        # и в карточке выбывшего `u` — это жертва.
+        r["capture_photo_url"] = None
         if app_settings.photo_proof():
             murderer = u.get_murderer()
-            if murderer and _latest_capture_photo(murderer):
-                r["capture_photo_uid"] = murderer.id
+            if murderer and photos.for_capture(murderer, u):
+                r["capture_photo_url"] = f"/app/users/{murderer.id}/photo?victim={u.id}"
         return r
 
     # Неподтверждённые поимки показываются inline — красной строкой-заявкой прямо
@@ -2336,7 +2378,9 @@ def admin_log_view(request: Request):
     if user is None or not user.is_admin():
         return _redirect(request, "/app")
     photo_by_name = _photo_hunters()
-    messages = [{"ts": m["ts"], "html": render_log_html(m["body"], photo_by_name)}
+    name_to_uid = _name_to_uid()
+    messages = [{"ts": m["ts"], "html": render_log_html(
+        m["body"], m["ts"], photo_by_name, name_to_uid)}
                 for m in admin_log.read_messages()]
     return templates.TemplateResponse(
         request, "admin_log.html", _ctx(request, messages=messages),

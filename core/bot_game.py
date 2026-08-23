@@ -141,7 +141,9 @@ def report(user) -> str:
 
 
 def _finish_report_with_photo(user, data: bytes, ext: str) -> str:
-    if not photos.save_bytes(user, data, ext):
+    # Жертву фиксируем в имени файла (до заявки) — чтобы снимок остался привязан
+    # именно к этой поимке, а не «перебивался» следующей поимкой того же охотника.
+    if not photos.save_bytes(user, data, ext, victim=user.get_target_user()):
         return "⚠️ Не удалось сохранить фото. Попробуйте отправить его ещё раз."
     _sessions.pop(user.id, None)
     admin_log.log(f"🖼️ {user.get_name()} приложил(а) фото-пруф поимки цели")
