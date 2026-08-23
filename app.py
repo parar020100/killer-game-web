@@ -1833,6 +1833,27 @@ def _name_to_uid() -> dict:
     return out
 
 
+def _capture_times() -> dict:
+    """{(имя охотника, имя жертвы): ts поимки} — из admin_log, для привязки к фото.
+
+    Нужно, чтобы к фото КОНКРЕТНОЙ поимки в карточке игрока привязать время. Для
+    СТАРЫХ фото (без метки жертвы в имени файла) снимок выбирается по времени, ровно
+    как в логе; без этой метки карточка показывала «последнее фото охотника» (баг).
+
+    Фото снимается в момент ЗАЯВКИ («заявил о поимке»), поэтому её время ближе к mtime
+    файла, чем время подтверждения («поймал»). Приоритет отдаём записи-заявке."""
+    attempt, final = {}, {}
+    for m in admin_log.read_messages():   # новые сверху → первая встреченная = самая новая
+        body = m["body"] or ""
+        mm = _CAPTURE_HUNTER_RE.match(body)
+        if not mm:
+            continue
+        key = (mm.group(1).strip(), mm.group(2).strip())
+        (attempt if "заявил" in body else final).setdefault(key, m["ts"])
+    final.update(attempt)   # время заявки (ближе к съёмке фото) важнее времени зачёта
+    return final
+
+
 def _save_capture_photo(user: User, upload, victim=None) -> bool:
     """Сохранить фото-пруф поимки из веб-формы (multipart). True при успехе.
 
@@ -1972,6 +1993,8 @@ def user_menu_buttons(target: User):
         add("✉️ Пригласить ещё раз", "invite", "",
             note="Приглашение уже отправлено — можно отправить повторно.",
             confirm=f"Отправить {tname} приглашение повторно?")
+        add("🚫 Отозвать приглашение", "revoke_invite", "danger",
+            confirm=f"Отозвать приглашение игроку {tname}?")
     else:
         add("✉️ Пригласить в игру", "invite", "primary",
             confirm=f"Пригласить {tname} присоединиться к игре?")
@@ -2197,6 +2220,9 @@ def user_action(request: Request, uid: int, action: str = Form(...),
     elif action == "invite":
         ok, msg = gameflow.invite_to_game(admin, target)
         flash = ("✉️ " if ok else "⚠️ ") + msg
+    elif action == "revoke_invite":
+        ok, msg = gameflow.revoke_invite(admin, target)
+        flash = ("🚫 " if ok else "⚠️ ") + msg
     elif action == "force_deny":
         # Отклонить заявку о поимке; value — необязательная причина (в лог + охотнику).
         flash = target.admin_force_deny(admin, value)
@@ -2241,6 +2267,9 @@ def _user_list_data():
     players = [u for u in all_users if u.is_player()]
     players.sort(key=lambda u: (u.get_game_order() is None, u.get_game_order() or 0, u.id))
     non_players = [u for u in all_users if not u.is_player()]
+    # Время каждой поимки из журнала — для привязки СТАРЫХ фото (без метки жертвы)
+    # к конкретной поимке в карточке (иначе показывается «последнее фото охотника»).
+    capture_times = _capture_times()
 
     def row(u: User) -> dict:
         r = user_row(u, game)
@@ -2261,8 +2290,14 @@ def _user_list_data():
         r["capture_photo_url"] = None
         if app_settings.photo_proof():
             murderer = u.get_murderer()
-            if murderer and photos.for_capture(murderer, u):
-                r["capture_photo_url"] = f"/app/users/{murderer.id}/photo?victim={u.id}"
+            # ts поимки из журнала — чтобы для старых фото (без метки жертвы) выбрать
+            # правильный снимок по времени, как это делает лог.
+            cap_ts = capture_times.get((murderer.get_name(), u.get_name())) if murderer else None
+            if murderer and photos.for_capture(murderer, u, _ts_to_epoch(cap_ts)):
+                url = f"/app/users/{murderer.id}/photo?victim={u.id}"
+                if cap_ts:
+                    url += f"&ts={quote(cap_ts)}"
+                r["capture_photo_url"] = url
         return r
 
     # Неподтверждённые поимки показываются inline — красной строкой-заявкой прямо
