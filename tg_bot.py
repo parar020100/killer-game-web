@@ -36,7 +36,7 @@ from html import escape
 
 import config
 import db  # noqa: F401 — импорт инициализирует БД (таблицы)
-from core import botcommon, bot_register, bot_game, photos
+from core import botcommon, botmenu, bot_register, bot_game, photos
 from core.user import User
 
 
@@ -54,33 +54,20 @@ def _kb() -> ReplyKeyboardMarkup:
 
 
 # Inline-«меню» действий: прикрепляется к КАЖДОМУ ответу бота, состав — как в VK.
-_CB_PREFIX = "act:"
+# Префикс callback — общий с core.botmenu (логика набора кнопок живёт там).
+_CB_PREFIX = botmenu.CB_PREFIX
 
 
-def _menu_markup(user=None, extra_rows=None) -> InlineKeyboardMarkup:
-    """Inline-меню под сообщением — полный набор игровых действий (как в VK-боте).
-
-    Состав зависит от состояния игрока, как кнопки на дашборде: главная кнопка
-    подписана «сообщить о поимке» либо «отменить заявку», а «Подтвердить» /
-    «Это не так» появляются ТОЛЬКО когда о поимке этого игрока заявили и ответа
-    ждут от него.
-    """
-    def btn(label, action):
-        return InlineKeyboardButton(label, callback_data=_CB_PREFIX + action)
-
+def _menu_markup(user=None, extra_rows=None):
+    """Inline-меню под сообщением. Состав — из общего `core.botmenu.action_rows`
+    (те же кнопки, что и в уведомлениях веб-процесса), т.е. только актуальные сейчас
+    действия. `extra_rows` — дополнительные строки-ссылки (напр. «Открыть меню игры»).
+    Возвращает None, если кнопок нет (тогда сообщение шлётся без клавиатуры)."""
     rows = list(extra_rows or [])
-    # Активное приглашение в игру — заметные кнопки принять/отклонить (TODO 94).
-    if user is not None and not user.is_player() and user.has_game_invite():
-        rows.append([btn(botcommon.ACCEPT_INVITE_BUTTON, "accept_invite"),
-                     btn(botcommon.REJECT_INVITE_BUTTON, "reject_invite")])
-    rows.append([btn(botcommon.REGISTER_BUTTON, "register"),
-                 btn(botcommon.TARGET_BUTTON, "target")])
-    rows.append([btn(botcommon.report_button(user), "report")])
-    if user is not None and user.is_being_caught():
-        rows.append([btn(botcommon.CONFIRM_BUTTON, "confirm"),
-                     btn(botcommon.DENY_BUTTON, "deny")])
-    rows.append([btn(botcommon.LEAVE_BUTTON, "leave")])
-    return InlineKeyboardMarkup(rows)
+    for row in botmenu.action_rows(user):
+        rows.append([InlineKeyboardButton(label, callback_data=_CB_PREFIX + action)
+                     for label, action in row])
+    return InlineKeyboardMarkup(rows) if rows else None
 
 
 def _link_row(kind: str, tg_id):

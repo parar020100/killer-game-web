@@ -27,7 +27,7 @@ import httpx
 
 import config
 import db  # noqa: F401 — инициализация БД
-from core import botcommon, bot_register, bot_game
+from core import botcommon, botmenu, bot_register, bot_game
 from core.user import User
 
 logging.basicConfig(
@@ -68,24 +68,17 @@ def _main_kb(user_id) -> str:
 
 
 def _inline_kb(user_id) -> str:
-    """Inline-«меню» под сообщением «Начать» — полный набор игровых действий.
+    """Inline-«меню» под сообщением — только актуальные сейчас игровые действия.
 
-    Состав зависит от состояния игрока, как кнопки на дашборде: главная кнопка
-    подписана «сообщить о поимке» либо «отменить заявку», а «Подтвердить» /
-    «Это не так» появляются ТОЛЬКО когда о поимке этого игрока заявили и ответа
-    ждут от него.
-    """
+    Состав берётся из общего `core.botmenu` (тот же источник, что и уведомления
+    веб-процесса, и Telegram-меню), поэтому логика «какие кнопки показать» едина.
+    Если актуальных действий нет — отдаём кнопку-ссылку «Открыть меню игры»."""
     user = User.by_vk(str(user_id))
-    rows = []
-    # Активное приглашение в игру — заметные кнопки принять/отклонить (TODO 94).
-    if user is not None and not user.is_player() and user.has_game_invite():
-        rows.append([_txt_btn(botcommon.ACCEPT_INVITE_BUTTON),
-                     _txt_btn(botcommon.REJECT_INVITE_BUTTON)])
-    rows.append([_txt_btn(botcommon.REGISTER_BUTTON), _txt_btn(botcommon.TARGET_BUTTON)])
-    rows.append([_txt_btn(botcommon.report_button(user))])
-    if user is not None and user.is_being_caught():
-        rows.append([_txt_btn(botcommon.CONFIRM_BUTTON), _txt_btn(botcommon.DENY_BUTTON)])
-    rows.append([_txt_btn(botcommon.LEAVE_BUTTON)])
+    rows = botmenu.vk_button_rows(user)
+    if not rows:
+        rows = [[{"action": {"type": "open_link",
+                             "link": botcommon.menu_url_for("vk", user_id),
+                             "label": botcommon.MENU_BUTTON}}]]
     return json.dumps({"inline": True, "buttons": rows}, ensure_ascii=False)
 
 

@@ -24,20 +24,30 @@ def enabled() -> bool:
             and bool((getattr(config, "VK_GROUP_TOKEN", "") or "").strip()))
 
 
-def _menu_keyboard(user_id) -> str:
-    """Inline-клавиатура под уведомлением: «открыть меню» (ссылка с постоянным токеном
-    получателя — сразу открывает игру в его аккаунте)."""
-    from core import botcommon
-    return json.dumps({"inline": True, "buttons": [
-        [{"action": {"type": "open_link", "link": botcommon.menu_url_for("vk", user_id),
-                     "label": botcommon.MENU_BUTTON}}],
-    ]}, ensure_ascii=False)
+def _menu_keyboard(user_id, menu_user=None) -> str:
+    """Inline-клавиатура под уведомлением. С `menu_user` — состояние-зависимое меню
+    действий (принять приглашение, подтвердить поимку и т.п.), собранное общим
+    `core.botmenu` — те же кнопки, что в процессе бота; их нажатие (текст) маршрутизирует
+    процесс бота. Без него — только кнопка-ссылка «Открыть меню игры».
+
+    У VK inline-клавиатуры лимит 6 кнопок, поэтому при полном меню ссылку «Открыть
+    меню» не добавляем (она есть в нижней клавиатуре)."""
+    from core import botcommon, botmenu
+    buttons = botmenu.vk_button_rows(menu_user) if menu_user is not None else []
+    if not buttons:   # нет актуальных действий (или без получателя) — кнопка-ссылка
+        buttons = [[{"action": {"type": "open_link",
+                                "link": botcommon.menu_url_for("vk", user_id),
+                                "label": botcommon.MENU_BUTTON}}]]
+    return json.dumps({"inline": True, "buttons": buttons}, ensure_ascii=False)
 
 
-def send(user_id, text: str, with_menu: bool = True, silent: bool = False) -> bool:
+def send(user_id, text: str, with_menu: bool = True, silent: bool = False,
+         menu_user=None) -> bool:
     """Отправить текст пользователю ВК. True при успехе, False при любой ошибке.
 
-    with_menu=True добавляет к сообщению inline-кнопку «Открыть меню игры».
+    with_menu=True добавляет к сообщению inline-меню действий (те же кнопки, что в
+    процессе бота, по состоянию получателя `menu_user`); без `menu_user` — только
+    кнопка-ссылка «Открыть меню игры».
     silent принимается для единообразия с другими каналами; VK Bots API не
     поддерживает беззвучную доставку — флаг игнорируется.
     """
@@ -52,7 +62,7 @@ def send(user_id, text: str, with_menu: bool = True, silent: bool = False) -> bo
         "random_id": random.randint(1, 2_000_000_000),
     }
     if with_menu:
-        params["keyboard"] = _menu_keyboard(user_id)
+        params["keyboard"] = _menu_keyboard(user_id, menu_user)
     try:
         r = httpx.get(_API, params=params, timeout=10).json()
         if "response" in r:

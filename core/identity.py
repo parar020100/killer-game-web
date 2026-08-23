@@ -96,20 +96,23 @@ class Identity:
 
     # --- доставка сообщения в канал ---------------------------------------
 
-    def deliver(self, text: str, silent: bool = False):
+    def deliver(self, text: str, silent: bool = False, menu_user=None):
+        """Доставить текст в канал. `menu_user` (получатель) — чтобы прикрепить
+        состояние-зависимое inline-меню действий (принять приглашение, подтвердить
+        поимку…), те же кнопки, что в процессе бота; их нажатие обрабатывает бот."""
         platform = self.get_platform()
         uid = self.get_platform_uid()
         # Реальные платформы с числовым id и заданным ключом — в свой API.
         # silent=True — тихое уведомление без звука (там, где платформа поддерживает).
         if platform == "tg" and str(uid).isdigit():
             from core import tg_send
-            if tg_send.send(uid, text, silent=silent):
+            if tg_send.send(uid, text, silent=silent, menu_user=menu_user):
                 return
             if tg_send.enabled():   # бот настроен, но доставка не удалась (блок/ошибка)
                 self._log_undelivered("Telegram")
         elif platform == "vk" and str(uid).isdigit():
             from core import vk_send
-            if vk_send.send(uid, text, silent=silent):
+            if vk_send.send(uid, text, silent=silent, menu_user=menu_user):
                 return
             if vk_send.enabled():
                 self._log_undelivered("VK")

@@ -20,10 +20,15 @@ def enabled() -> bool:
             and bool((getattr(config, "TELEGRAM_BOT_TOKEN", "") or "").strip()))
 
 
-def send(chat_id, text: str, with_menu: bool = True, silent: bool = False) -> bool:
+def send(chat_id, text: str, with_menu: bool = True, silent: bool = False,
+         menu_user=None) -> bool:
     """Отправить текст в чат Telegram. True при успехе, False при любой ошибке.
 
-    with_menu=True добавляет к сообщению inline-кнопку «Открыть меню игры».
+    with_menu=True добавляет к сообщению inline-меню действий (те же кнопки, что и в
+    процессе бота — «Открыть меню игры» + принять приглашение / подтвердить поимку /
+    и т.п., в зависимости от состояния получателя `menu_user`). Нажатие callback-
+    кнопок обрабатывает процесс бота (он запущен независимо). Без `menu_user` (или
+    если его состояние недоступно) — только кнопка-ссылка «Открыть меню игры».
     silent=True — тихое уведомление без звука (Telegram disable_notification).
     """
     if not enabled():
@@ -34,7 +39,7 @@ def send(chat_id, text: str, with_menu: bool = True, silent: bool = False) -> bo
     if silent:
         payload["disable_notification"] = True
     if with_menu:
-        payload["reply_markup"] = _reply_markup(chat_id)
+        payload["reply_markup"] = _reply_markup(chat_id, menu_user)
     try:
         r = httpx.post(_API.format(token=token), json=payload, timeout=10)
         if r.status_code == 200 and r.json().get("ok", False):
@@ -68,10 +73,14 @@ def set_description(text: str) -> bool:
         return False
 
 
-def _reply_markup(chat_id) -> dict:
-    """Inline-клавиатура под каждым уведомлением: «открыть меню» (ссылка с постоянным
-    токеном получателя — сразу открывает игру в его аккаунте)."""
-    from core import botcommon
+def _reply_markup(chat_id, menu_user=None) -> dict:
+    """Inline-клавиатура под уведомлением. С `menu_user` — полное меню действий
+    (кнопка-ссылка «Открыть меню» + состояние-зависимые кнопки: принять приглашение,
+    подтвердить поимку и т.п.), собранное общим `core.botmenu` — те же кнопки, что в
+    процессе бота. Без него — только кнопка-ссылка «Открыть меню игры»."""
+    from core import botcommon, botmenu
+    if menu_user is not None:
+        return botmenu.tg_api_markup(menu_user, menu_uid=chat_id)
     return {"inline_keyboard": [
         [{"text": botcommon.MENU_BUTTON, "url": botcommon.menu_url_for("tg", chat_id)}],
     ]}

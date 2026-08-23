@@ -109,14 +109,17 @@ def invite_to_game(admin: User, user: User):
         return False, "Пригласить в игру можно только когда игра идёт."
     if user.is_player():
         return False, "Пользователь уже участвует в игре."
-    if user.has_game_invite():
-        return False, "Приглашение уже отправлено — ждём ответа игрока."
+    # Повторно приглашать МОЖНО: игрок мог случайно отклонить, а спам не проблема —
+    # пользователь всегда может заблокировать бота. add_game_invite идемпотентно.
+    resent = user.has_game_invite()
     user.add_game_invite()
-    admin_log.log(f"✉️ {admin.get_name()} пригласил(а) {user.get_name()} в игру")
+    verb = "повторно пригласил(а)" if resent else "пригласил(а)"
+    admin_log.log(f"✉️ {admin.get_name()} {verb} {user.get_name()} в игру")
     user.notify("✉️ Организаторы приглашают вас присоединиться к идущей игре!\n"
                 "Если примете — войдёте выбывшим и сможете вернуться в игру позже.\n"
                 "Откройте меню (или бот), чтобы принять или отклонить приглашение.")
-    return True, f"Приглашение отправлено: {user.get_name()}."
+    again = " (повторно)" if resent else ""
+    return True, f"Приглашение отправлено{again}: {user.get_name()}."
 
 
 def accept_invite(user: User):
