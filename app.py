@@ -730,7 +730,8 @@ def game_status_emoji(user: User, game: Game) -> str:
     if not game.is_started():
         return "✅" if user.is_player() else "🔴"
     if not user.is_player():
-        return "👀"
+        # Приглашён в игру (ждёт принятия/отклонения) — отдельный статус, а не зритель.
+        return "⬆️" if user.has_game_invite() else "👀"
     if user.is_alive():
         return "💛" if user.get_killed_by() else "💚"
     return "♻️" if user.is_queued_for_revival() else "☠️"
