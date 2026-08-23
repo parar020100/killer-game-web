@@ -1413,8 +1413,13 @@ def can_set_score(target: User, game: Game) -> bool:
 
 
 def can_set_order(target: User, game: Game) -> bool:
-    """Сменить позицию в круге — на паузе или пока игра не запущена (как в боте)."""
-    return target.is_player() and (game.is_paused() or not game.is_started())
+    """Сменить позицию в круге. Живому игроку — на паузе или до старта (это трогает
+    круг активных целей); МЁРТВОГО можно двигать всегда — в круге целей его нет."""
+    if not target.is_player():
+        return False
+    if not target.is_alive():
+        return True
+    return game.is_paused() or not game.is_started()
 
 
 def _admin_log_enabled(user: User) -> bool:
@@ -1923,15 +1928,16 @@ def user_menu_buttons(target: User):
     # строку-заявку прямо над карточкой «жертвы» в списке (см. _userlist.html),
     # поэтому в наборе кнопок карточки её больше нет.
 
-    # 3) Устранить (живого игрока, на паузе).
+    # 3) Устранить (живого игрока) — теперь можно и во время идущей игры, не только
+    # на паузе: круг активных целей admin_kill пересобирает сам.
     if not is_player:
         kill_note = not_player_note
     elif not alive:
         kill_note = "Игрок уже выбыл из игры."
     else:
-        kill_note = mode.t("note_kill_pause")
+        kill_note = "Устранить игрока можно после старта игры."
     add(mode.t("btn_admin_kill"), "kill", "danger",
-        disabled=not (is_player and alive and paused),
+        disabled=not (is_player and alive and started),
         note=kill_note, confirm=f"Устранить игрока {tname} из игры?")
 
     # 4) Оживить (выбывшего игрока, на паузе).
@@ -1988,20 +1994,25 @@ _USER_ACTIONS = {
 }
 
 
-def _game_state_error(action: str, game: Game) -> str:
+def _game_state_error(action: str, game: Game, target: User = None) -> str:
     """Проверки состояния игры для управляющих действий — как в боте, но серверно.
 
     В боте проверки `is_started`/`is_paused` стоят в обработчике команды, поэтому их
     нельзя обойти. В вебе кнопки лишь скрываются в UI — здесь дублируем проверки на
     сервере, чтобы действие нельзя было выполнить crafted-POST-запросом мимо паузы.
     Возвращает текст ошибки (плашку) или "" — если состояние допускает действие.
+
+    `target` нужен там, где право зависит от состояния игрока: устранять можно и во
+    время идущей игры, а менять позицию МЁРТВОГО игрока — тоже без паузы (живому —
+    только на паузе, т.к. это трогает круг активных целей).
     """
     started, paused = game.is_started(), game.is_paused()
+    target_alive = bool(target and target.is_alive())
     if action == "kill":
         if not started:
             return "⚠️ Игра ещё не началась."
-        if not paused:
-            return "⚠️ Игра должна быть на паузе для мгновенного устранения игрока."
+        # Устранять теперь можно и во время идущей игры (не только на паузе):
+        # круг активных целей admin_kill пересобирает сам.
     elif action == "revive":
         if not started:
             return "⚠️ Игра ещё не началась."
@@ -2018,8 +2029,10 @@ def _game_state_error(action: str, game: Game) -> str:
         if not paused:
             return "⚠️ Менять счёт можно только на паузе."
     elif action in ("set_order", "randomize_order"):
-        if started and not paused:
-            return "⚠️ Менять позицию в круге можно на паузе или до старта игры."
+        # Мёртвого игрока можно двигать всегда (в круге активных целей его нет);
+        # живого — только на паузе или до старта.
+        if started and not paused and target_alive:
+            return "⚠️ Живому игроку менять позицию в круге можно на паузе или до старта."
     return ""
 
 
@@ -2062,7 +2075,7 @@ def user_action(request: Request, uid: int, action: str = Form(...),
     bot_log.log(f"🕹️ {admin.get_name()} → {action} (над {target.get_name()})", "web")
 
     # Серверная проверка состояния игры (как в боте) — не полагаемся только на UI.
-    state_err = _game_state_error(action, Game())
+    state_err = _game_state_error(action, Game(), target)
     if state_err:
         request.session["flash"] = state_err
         return _redirect(request, dest)
