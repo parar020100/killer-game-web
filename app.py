@@ -1439,8 +1439,9 @@ def password_save(request: Request, password: str = Form("")):
 
 
 def can_set_score(target: User, game: Game) -> bool:
-    """Изменить счёт можно только на паузе (как в боте)."""
-    return target.is_player() and game.is_paused()
+    """Изменить счёт можно у любого участника без паузы: kill_count — лишь счётчик
+    таблицы лидеров, он не влияет на круг целей и на статус «жив/выбыл» (безопасно)."""
+    return target.is_player()
 
 
 def can_set_order(target: User, game: Game) -> bool:
@@ -2030,12 +2031,17 @@ def user_menu_buttons(target: User):
         add(mode.t("btn_give_life"), None, disabled=True,
             note=not_player_note if not is_player else "Подарить жизнь можно только выбывшему игроку.")
 
-    # 6) Удалить из игры (игрока, на паузе или до старта).
+    # 6) Удалить из игры. Выбывшего (мёртвого) — можно всегда (его нет в круге целей);
+    # живого — только на паузе или до старта (это трогает круг).
+    if not is_player:
+        kick_note = not_player_note
+    elif alive and started and not paused:
+        kick_note = "Живого игрока удалять из игры можно на паузе или до старта."
+    else:
+        kick_note = ""
     add("👋 Удалить из игры", "kick", "danger",
-        disabled=not (is_player and (paused or not started)),
-        note=not_player_note if not is_player
-             else "Кикнуть игрока можно во время паузы или до старта игры.",
-        confirm=f"Удалить игрока {tname} из игры?")
+        disabled=not (is_player and (not alive or paused or not started)),
+        note=kick_note, confirm=f"Удалить игрока {tname} из игры?")
 
     # 7) Удалить из системы (не-игрока, не root).
     if root:
@@ -2090,8 +2096,10 @@ def _game_state_error(action: str, game: Game, target: User = None) -> str:
         if not paused:
             return "⚠️ Игра должна быть на паузе для воскрешения игрока."
     elif action == "kick":
-        if started and not paused:
-            return "⚠️ Игра должна быть на паузе для удаления игрока."
+        # Выбывшего (мёртвого) игрока можно удалить из игры всегда — в круге активных
+        # целей его нет. Живого — только на паузе или до старта (это трогает круг).
+        if started and not paused and target_alive:
+            return "⚠️ Живого игрока удалять из игры можно на паузе или до старта."
     elif action in ("give_life", "take_life", "force_accept", "force_deny",
                     "reassign_kill"):
         if not started:
@@ -2100,8 +2108,10 @@ def _game_state_error(action: str, game: Game, target: User = None) -> str:
         if not started:
             return "⚠️ Пригласить в игру можно только когда игра идёт."
     elif action == "set_score":
-        if not paused:
-            return "⚠️ Менять счёт можно только на паузе."
+        # Счёт (kill_count) — лишь счётчик таблицы лидеров, не трогает круг/статус,
+        # поэтому паузы не требует; достаточно, чтобы это был участник игры.
+        if not (target and target.is_player()):
+            return "⚠️ Счёт есть только у участников игры."
     elif action in ("set_order", "randomize_order"):
         # Мёртвого игрока можно двигать всегда (в круге активных целей его нет);
         # живого — только на паузе или до старта.
