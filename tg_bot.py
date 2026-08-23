@@ -69,6 +69,10 @@ def _menu_markup(user=None, extra_rows=None) -> InlineKeyboardMarkup:
         return InlineKeyboardButton(label, callback_data=_CB_PREFIX + action)
 
     rows = list(extra_rows or [])
+    # Активное приглашение в игру — заметные кнопки принять/отклонить (TODO 94).
+    if user is not None and not user.is_player() and user.has_game_invite():
+        rows.append([btn(botcommon.ACCEPT_INVITE_BUTTON, "accept_invite"),
+                     btn(botcommon.REJECT_INVITE_BUTTON, "reject_invite")])
     rows.append([btn(botcommon.REGISTER_BUTTON, "register"),
                  btn(botcommon.TARGET_BUTTON, "target")])
     rows.append([btn(botcommon.report_button(user), "report")])
@@ -230,6 +234,22 @@ async def leave_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     log.info("leave: user id=%s tg=%s", user.id, tg.id)
 
 
+async def accept_invite_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/accept_invite — принять приглашение в идущую игру (войти выбывшим)."""
+    tg = update.effective_user
+    user = _ensure_user(tg)
+    await _reply(update, user, bot_game.accept_invite(user))
+    log.info("accept_invite: user id=%s tg=%s", user.id, tg.id)
+
+
+async def reject_invite_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/reject_invite — отклонить приглашение в игру."""
+    tg = update.effective_user
+    user = _ensure_user(tg)
+    await _reply(update, user, bot_game.reject_invite(user))
+    log.info("reject_invite: user id=%s tg=%s", user.id, tg.id)
+
+
 async def photo_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Фотография от игрока — фото-пруф поимки, если бот его сейчас ждёт."""
     tg = update.effective_user
@@ -270,6 +290,10 @@ async def on_menu_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply = bot_game.confirm(user)
     elif action == "deny":
         reply = bot_game.deny(user)
+    elif action == "accept_invite":
+        reply = bot_game.accept_invite(user)
+    elif action == "reject_invite":
+        reply = bot_game.reject_invite(user)
     elif action == "leave":
         reply = bot_game.leave(user)
     else:
@@ -320,6 +344,12 @@ async def forward_to_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if botcommon.is_leave_request(text):
         await leave_cmd(update, context)
         return
+    if botcommon.is_accept_invite_request(text):
+        await accept_invite_cmd(update, context)
+        return
+    if botcommon.is_reject_invite_request(text):
+        await reject_invite_cmd(update, context)
+        return
     # В VK это кнопки-ссылки; здесь — обычные кнопки нижней клавиатуры, отвечаем ссылкой.
     if botcommon.is_menu_request(text):
         await menu_cmd(update, context)
@@ -353,6 +383,8 @@ async def _announce_connected(application):
             BotCommand("accept", "подтвердить свою поимку"),
             BotCommand("deny", "не подтвердить поимку (с причиной)"),
             BotCommand("leave", "выйти из игры"),
+            BotCommand("accept_invite", "принять приглашение в игру"),
+            BotCommand("reject_invite", "отклонить приглашение в игру"),
             BotCommand("cancel", "прервать текущий диалог"),
             BotCommand("menu", "ссылка на меню игры на сайте"),
             BotCommand("rules", "правила игры"),
@@ -381,6 +413,8 @@ def main():
     app.add_handler(CommandHandler("accept", accept_cmd))
     app.add_handler(CommandHandler("deny", deny_cmd))
     app.add_handler(CommandHandler("leave", leave_cmd))
+    app.add_handler(CommandHandler("accept_invite", accept_invite_cmd))
+    app.add_handler(CommandHandler("reject_invite", reject_invite_cmd))
     app.add_handler(CommandHandler("cancel", cancel_cmd))
     app.add_handler(CommandHandler("link", link_cmd))
     app.add_handler(CommandHandler("menu", menu_cmd))

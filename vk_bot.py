@@ -76,8 +76,13 @@ def _inline_kb(user_id) -> str:
     ждут от него.
     """
     user = User.by_vk(str(user_id))
-    rows = [[_txt_btn(botcommon.REGISTER_BUTTON), _txt_btn(botcommon.TARGET_BUTTON)],
-            [_txt_btn(botcommon.report_button(user))]]
+    rows = []
+    # Активное приглашение в игру — заметные кнопки принять/отклонить (TODO 94).
+    if user is not None and not user.is_player() and user.has_game_invite():
+        rows.append([_txt_btn(botcommon.ACCEPT_INVITE_BUTTON),
+                     _txt_btn(botcommon.REJECT_INVITE_BUTTON)])
+    rows.append([_txt_btn(botcommon.REGISTER_BUTTON), _txt_btn(botcommon.TARGET_BUTTON)])
+    rows.append([_txt_btn(botcommon.report_button(user))])
     if user is not None and user.is_being_caught():
         rows.append([_txt_btn(botcommon.CONFIRM_BUTTON), _txt_btn(botcommon.DENY_BUTTON)])
     rows.append([_txt_btn(botcommon.LEAVE_BUTTON)])
@@ -204,6 +209,14 @@ def handle_message(from_id, text: str, attachments=None):
     if botcommon.is_leave_request(text):
         reply(bot_game.leave(user))
         log.info("leave: user id=%s vk=%s", user.id, from_id)
+        return
+    if botcommon.is_accept_invite_request(text):
+        reply(bot_game.accept_invite(user))
+        log.info("accept_invite: user id=%s vk=%s", user.id, from_id)
+        return
+    if botcommon.is_reject_invite_request(text):
+        reply(bot_game.reject_invite(user))
+        log.info("reject_invite: user id=%s vk=%s", user.id, from_id)
         return
     if botcommon.is_status_request(text):
         reply("")

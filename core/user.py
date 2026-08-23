@@ -525,6 +525,23 @@ class User:
     def revive_queue_remove(self):
         execute("DELETE FROM revive_queue WHERE user_id = ?", (self.id,))
 
+    # --- приглашение в идущую игру (accept/reject) ------------------------
+    # Админ зовёт незарегистрированного пользователя в уже идущую игру. Тот
+    # принимает или отклоняет (как подтверждение/опровержение поимки). При приёме
+    # он присоединяется «мёртвым» в случайной позиции круга — без паузы (TODO 94).
+
+    def has_game_invite(self) -> bool:
+        return query_one(
+            "SELECT 1 FROM game_invite WHERE user_id = ? LIMIT 1", (self.id,)
+        ) is not None
+
+    def add_game_invite(self):
+        if not self.has_game_invite():
+            execute("INSERT INTO game_invite (user_id) VALUES (?)", (self.id,))
+
+    def remove_game_invite(self):
+        execute("DELETE FROM game_invite WHERE user_id = ?", (self.id,))
+
     # --- действия администратора над игроком ------------------------------
 
     def _finish_structural_change(self, was_alive: bool, at_order=None, revive=False):
@@ -755,6 +772,7 @@ class User:
         self._set("kill_count", 0)
         self.set_murderer(None)
         self._set("target", None)
+        self.remove_game_invite()   # вошёл в игру — приглашение больше не актуально
         # Позицию в круге назначаем сразу (цель раздаётся при старте игры).
         self.randomize_game_order()
 

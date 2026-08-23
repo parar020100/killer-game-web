@@ -85,12 +85,16 @@ CONFIRM_BUTTON = "✅ Подтвердить"
 DENY_BUTTON = "🚫 Это не так"
 STATUS_BUTTON = "📋 Статус игры"
 LEAVE_BUTTON = "🚪 Выйти из игры"
+ACCEPT_INVITE_BUTTON = "✅ Присоединиться к игре"
+REJECT_INVITE_BUTTON = "🚫 Отклонить приглашение"
 
 _REPORT_WORDS = {"/kill", "/catch", "kill", "catch", "убить", "поймать"}
 _CONFIRM_WORDS = {"/accept", "accept", "подтвердить"}
 _DENY_WORDS = {"/deny", "deny", "отклонить", "это не так"}
 _STATUS_WORDS = {"/status", "status", "статус", "статус игры"}
 _LEAVE_WORDS = {"/leave", "leave", "выйти из игры"}
+_ACCEPT_INVITE_WORDS = {"/accept_invite", "accept_invite", "присоединиться"}
+_REJECT_INVITE_WORDS = {"/reject_invite", "reject_invite"}
 
 
 def report_button(user=None) -> str:
@@ -135,6 +139,14 @@ def is_status_request(text: str) -> bool:
 
 def is_leave_request(text: str) -> bool:
     return _match(text, _LEAVE_WORDS, {LEAVE_BUTTON.lower()})
+
+
+def is_accept_invite_request(text: str) -> bool:
+    return _match(text, _ACCEPT_INVITE_WORDS, {ACCEPT_INVITE_BUTTON.lower()})
+
+
+def is_reject_invite_request(text: str) -> bool:
+    return _match(text, _REJECT_INVITE_WORDS, {REJECT_INVITE_BUTTON.lower()})
 
 
 # «Открыть меню игры» и «Правила» в VK — кнопки-ссылки (нажатие боту не приходит).

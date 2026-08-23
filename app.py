@@ -619,6 +619,27 @@ def capture_prompt(user: User):
     }
 
 
+def invite_prompt(user: User):
+    """Секция «вас приглашают в игру»: сообщение + кнопки принять/отклонить.
+
+    Возвращает dict секции или None, если активного приглашения нет. Аналогично
+    подтверждению поимки — заметная плашка с двумя кнопками (TODO 94).
+    """
+    if user.is_player() or not user.has_game_invite():
+        return None
+    return {
+        "hint": "— приглашение в игру —",
+        "message": ("✉️ <strong>Организаторы приглашают вас в игру.</strong>\n"
+                    "Если примете — присоединитесь выбывшим и сможете вернуться "
+                    "в игру позже."),
+        "kind": "alert",
+        "buttons": [
+            _btn("✅ Присоединиться", "accept_invite", "primary"),
+            _btn("🚫 Отклонить", "reject_invite", "danger"),
+        ],
+    }
+
+
 def admin_management_buttons(user: User):
     """Кнопки раздела «управление игрой» — постоянный набор, по две в ряд.
 
@@ -1068,6 +1089,12 @@ def apply_action(action: str, user: User, count: int = 5, reason: str = "") -> s
         else:
             ok, msg = gameflow.deny_capture(user, reason)
         return ("✅ " if ok else "⚠️ ") + msg
+    elif action == "accept_invite":
+        ok, msg = gameflow.accept_invite(user)
+        return ("✅ " if ok else "⚠️ ") + msg
+    elif action == "reject_invite":
+        ok, msg = gameflow.reject_invite(user)
+        return ("✅ " if ok else "⚠️ ") + msg
     # "noop" / незнакомое — просто перерисовать без плашки
     return ""
 
@@ -1255,6 +1282,11 @@ def dashboard(request: Request):
     prompt = capture_prompt(user)
     if prompt:
         sections.append(prompt)
+
+    # Секция «вас приглашают в игру» — для незарегистрированного с активным приглашением.
+    invite = invite_prompt(user)
+    if invite:
+        sections.append(invite)
 
     # Действия игрока + общие кнопки профиля (правила сверху, у пользователя).
     if has_rules():
@@ -1928,6 +1960,21 @@ def user_menu_buttons(target: User):
     # строку-заявку прямо над карточкой «жертвы» в списке (см. _userlist.html),
     # поэтому в наборе кнопок карточки её больше нет.
 
+    # 2) Пригласить в идущую игру (незарегистрированного) — он примет/отклонит сам,
+    # без паузы; при приёме входит «мёртвым» в случайной позиции (TODO 94).
+    if is_player:
+        add("✉️ Пригласить в игру", None, disabled=True,
+            note="Пользователь уже участвует в игре.")
+    elif not started:
+        add("✉️ Пригласить в игру", None, disabled=True,
+            note="Пригласить в игру можно только когда игра идёт.")
+    elif target.has_game_invite():
+        add("✉️ Приглашение отправлено", None, disabled=True,
+            note="Ждём ответа игрока (принять/отклонить).")
+    else:
+        add("✉️ Пригласить в игру", "invite", "primary",
+            confirm=f"Пригласить {tname} присоединиться к игре?")
+
     # 3) Устранить (живого игрока) — теперь можно и во время идущей игры, не только
     # на паузе: круг активных целей admin_kill пересобирает сам.
     if not is_player:
@@ -2025,6 +2072,9 @@ def _game_state_error(action: str, game: Game, target: User = None) -> str:
                     "reassign_kill"):
         if not started:
             return "⚠️ Игра ещё не началась."
+    elif action == "invite":
+        if not started:
+            return "⚠️ Пригласить в игру можно только когда игра идёт."
     elif action == "set_score":
         if not paused:
             return "⚠️ Менять счёт можно только на паузе."
@@ -2143,6 +2193,9 @@ def user_action(request: Request, uid: int, action: str = Form(...),
                 flash = f"⚠️ Игрок с позицией №{value} не найден — поимка не переназначена."
             else:
                 flash = target.admin_reassign_kill(admin, new_m)
+    elif action == "invite":
+        ok, msg = gameflow.invite_to_game(admin, target)
+        flash = ("✉️ " if ok else "⚠️ ") + msg
     elif action == "force_deny":
         # Отклонить заявку о поимке; value — необязательная причина (в лог + охотнику).
         flash = target.admin_force_deny(admin, value)

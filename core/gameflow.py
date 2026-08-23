@@ -9,7 +9,7 @@
 
 Все функции возвращают `(ok, сообщение)`; сообщение — готовый текст для игрока.
 """
-from core import admin_log, mode
+from core import admin_log, mode, registration
 from core.game import Game
 from core.user import User
 
@@ -96,6 +96,51 @@ def deny_capture(user: User, reason: str = ""):
     if err:
         return False, err
     return user.deny_capture(reason)
+
+
+# --- приглашение незарегистрированного в идущую игру (TODO 94) ---------------
+# Админ зовёт пользователя, тот принимает/отклоняет (как подтверждение поимки).
+# При приёме — присоединяется «мёртвым» в случайной позиции круга, без паузы.
+
+def invite_to_game(admin: User, user: User):
+    """Админ приглашает незарегистрированного пользователя в идущую игру."""
+    game = Game()
+    if not game.is_started():
+        return False, "Пригласить в игру можно только когда игра идёт."
+    if user.is_player():
+        return False, "Пользователь уже участвует в игре."
+    if user.has_game_invite():
+        return False, "Приглашение уже отправлено — ждём ответа игрока."
+    user.add_game_invite()
+    admin_log.log(f"✉️ {admin.get_name()} пригласил(а) {user.get_name()} в игру")
+    user.notify("✉️ Организаторы приглашают вас присоединиться к идущей игре!\n"
+                "Если примете — войдёте выбывшим и сможете вернуться в игру позже.\n"
+                "Откройте меню (или бот), чтобы принять или отклонить приглашение.")
+    return True, f"Приглашение отправлено: {user.get_name()}."
+
+
+def accept_invite(user: User):
+    """Пользователь принимает приглашение → присоединяется «мёртвым» в случайной
+    позиции идущей игры (join_player сам ставит alive=False при запущенной игре)."""
+    if not user.has_game_invite():
+        return False, "Активного приглашения в игру нет."
+    if user.is_player():
+        user.remove_game_invite()
+        return False, "Вы уже участвуете в игре."
+    user.remove_game_invite()
+    admin_log.log(f"✅ {user.get_name()} принял(а) приглашение в игру")
+    registration.join_player(user)   # заводит игрока (мёртвым при идущей игре) + лог
+    return True, ("✅ Вы присоединились к игре! Вы начинаете выбывшим — дождитесь, "
+                  "когда организаторы вернут вас в игру.")
+
+
+def reject_invite(user: User):
+    """Пользователь отклоняет приглашение."""
+    if not user.has_game_invite():
+        return False, "Активного приглашения в игру нет."
+    user.remove_game_invite()
+    admin_log.log(f"🚫 {user.get_name()} отклонил(а) приглашение в игру")
+    return True, "Приглашение отклонено."
 
 
 # --- выход из игры -----------------------------------------------------------

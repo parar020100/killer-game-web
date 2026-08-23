@@ -275,6 +275,16 @@ def init_db():
     );
     """)
 
+    # Приглашения в идущую игру: админ зовёт незарегистрированного пользователя,
+    # тот принимает/отклоняет (accept/reject). При приёме — становится «мёртвым»
+    # игроком в случайной позиции круга, без паузы (TODO 94).
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS game_invite (
+        user_id  INTEGER PRIMARY KEY REFERENCES user(id) ON DELETE CASCADE,
+        added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+
     # Постоянная (переиспользуемая) ссылка входа — по одной на КАНАЛ (identity),
     # т.к. у пользователя может быть и Telegram, и VK, каждый со своей ссылкой.
     # Работает всегда, без срока; хранится только SHA-256-хеш токена; перевыпуск
@@ -382,6 +392,10 @@ CREATE INDEX IF NOT EXISTS idx_identity_user ON identity(user_id);
 CREATE TABLE IF NOT EXISTS revive_queue (
     id       SERIAL PRIMARY KEY,
     user_id  INTEGER NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS game_invite (
+    user_id  INTEGER PRIMARY KEY REFERENCES "user"(id) ON DELETE CASCADE,
     added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS persistent_login (
@@ -517,7 +531,7 @@ def drop_db():
         try:
             with conn.cursor() as cur:
                 cur.execute('DROP TABLE IF EXISTS auth_grant, link_code, persistent_login, '
-                            'revive_queue, identity, setting, "user", game CASCADE')
+                            'revive_queue, game_invite, identity, setting, "user", game CASCADE')
             conn.commit()
         finally:
             conn.close()

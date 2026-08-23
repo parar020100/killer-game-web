@@ -52,6 +52,9 @@ def status_text(user) -> str:
 
     if not user.is_player():
         lines.append("❌ Вы пока не участвуете в игре")
+        if game.is_started() and user.has_game_invite():
+            lines.append("✉️ Вас пригласили в игру — примите или отклоните "
+                         "приглашение кнопками ниже.")
     elif not game.is_started():
         lines.append("✅ Вы зарегистрированы, ждём старта игры")
     elif not user.is_alive():
@@ -182,6 +185,18 @@ def deny(user) -> str:
     return ("✍️ Напишите причину, почему вы не подтверждаете это "
             "(её увидят организаторы и заявивший игрок).\n"
             "Если причины нет — напишите «-». Чтобы прервать — «отмена».")
+
+
+# --- приглашение в игру (accept/reject) --------------------------------------
+
+def accept_invite(user) -> str:
+    ok, msg = gameflow.accept_invite(user)
+    return msg if ok else "⚠️ " + msg   # успешный текст уже начинается с «✅ …»
+
+
+def reject_invite(user) -> str:
+    ok, msg = gameflow.reject_invite(user)
+    return ("✅ " if ok else "⚠️ ") + msg
 
 
 # --- выход из игры ------------------------------------------------------------
